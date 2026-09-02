@@ -972,7 +972,7 @@ function buildStatusDashboard() {
         const charWrap = document.createElement('div');
         charWrap.style.marginBottom = '10px';
         charWrap.style.padding = '5px';
-        charWrap.style.border = '1px solid var(--sillynpc-border-color)';
+        charWrap.style.border = '1px solid var(--sillynpc-border)';
         charWrap.innerHTML = `<div><strong>${escapeHtml(char.name)}</strong></div>`;
         
         settings.npcStats.forEach(stat => {

@@ -308,7 +308,7 @@ export const defaultSettings = {
      */
     categoryRenames: {},
     statusTracker: {
-        enabled: false,
+        enabled: true,
         showOnlyAtBottom: false,
         globalStats: [
             { name: 'Location', defaultValue: 'Unknown', format: '<b>{{name}}:</b> {{value}}', visible: true },

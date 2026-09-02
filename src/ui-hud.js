@@ -2,7 +2,7 @@ import { eventSource } from '../../../../events.js';
 import { getSettings, saveSettings } from './settings.js';
 import { loadStateFromMetadata, findMatchingStatKey, getPersonaData, getPlayerImageUrl, resolveMaxValue, hasOpenChat } from './status-logic.js';
 import { openPlayerModal } from './ui-player-modal.js';
-import { allThemeClasses, themeClassFor } from './constants.js';
+import { allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR } from './constants.js';
 import { computeStatBar, splitValue, applyStatFormat } from './utils.js';
 
 let hudContainer = null;
@@ -180,12 +180,7 @@ export function updateHUD(updatedState = null) {
     const settings = allSettings.statusTracker;
     // A player sheet with no chat behind it is showing whatever the last chat left in
     // memory, which reads as the current state and is not.
-    //
-    // And nothing to track means nothing to show. The HUD is a view of tracker state, so
-    // with the tracker off it displayed the starting values of stats nothing was reading -
-    // HP 20/20, Energy 10/10, Level 1 - which never moved. That was the first thing a new
-    // install put on screen, since the HUD is on by default and the tracker is not.
-    if (!settings.enabled || !settings.hudEnabled || !hasOpenChat()) {
+    if (!settings.hudEnabled || !hasOpenChat()) {
         hudContainer.style.display = 'none';
         return;
     }
@@ -195,7 +190,10 @@ export function updateHUD(updatedState = null) {
     const themeClass = themeClassFor(theme);
     hudContainer.classList.remove(...allThemeClasses());
 
-    const hasManualPos = settings.hud?.position?.x !== null && settings.hud?.position?.y !== null;
+    // A settings block with no hud in it leaves both undefined, and `undefined !== null`
+    // is true - which read as "the user dragged it here" and placed the HUD at NaN.
+    const hasManualPos = Number.isFinite(settings.hud?.position?.x)
+        && Number.isFinite(settings.hud?.position?.y);
     applyHudAppearance(hudContainer, settings);
 
     // Not while it is being dragged. A status update landing mid-drag would otherwise
@@ -245,7 +243,8 @@ export function updateHUD(updatedState = null) {
     // and looked soft. It is one image on screen, not a gallery.
     // The player's own portrait first, so the HUD and the sheet show one face. The
     // persona picture is what is left when they have not made one.
-    const face = getPlayerImageUrl() || persona.avatarUrl || persona.avatarThumbUrl;
+    const face = getPlayerImageUrl() || persona.avatarUrl || persona.avatarThumbUrl
+        || BUILT_IN_DEFAULT_AVATAR;
     portrait.style.backgroundImage = `url('${face}')`;
 
     // Update Stats

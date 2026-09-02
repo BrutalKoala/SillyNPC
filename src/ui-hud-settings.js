@@ -74,7 +74,7 @@ export function renderHudView(container) {
             onChange: () => {
                 const st = getSettings().statusTracker;
                 // Choosing a corner is also how you undo having dragged it somewhere.
-                if (st.hud) { st.hud.position.x = null; st.hud.position.y = null; }
+                if (st.hud?.position) { st.hud.position.x = null; st.hud.position.y = null; }
                 onApply();
             }
         }));

@@ -17,14 +17,14 @@ let systemBuilderActiveTab = 'global';
 export function buildSystemBuilder(onRefresh) {
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-system-builder';
-    wrap.style.border = '1px solid var(--sillynpc-border-color)';
+    wrap.style.border = '1px solid var(--sillynpc-border)';
     wrap.style.borderRadius = '8px';
     wrap.style.overflow = 'hidden';
 
     const tabs = document.createElement('div');
     tabs.style.display = 'flex';
     tabs.style.background = 'var(--sillynpc-bg-secondary)';
-    tabs.style.borderBottom = '1px solid var(--sillynpc-border-color)';
+    tabs.style.borderBottom = '1px solid var(--sillynpc-border)';
 
     const content = document.createElement('div');
     content.style.padding = '15px';
@@ -110,7 +110,7 @@ function buildCollectionsEditor(onRefresh) {
         colWrap.style.padding = '15px';
         colWrap.style.background = 'var(--sillynpc-bg-secondary)';
         colWrap.style.borderRadius = '8px';
-        colWrap.style.border = '1px solid var(--sillynpc-border-color)';
+        colWrap.style.border = '1px solid var(--sillynpc-border)';
 
         colWrap.innerHTML = `
             <div style="display:flex; gap:8px; width:100%; margin-bottom:12px;">
@@ -532,6 +532,9 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
             row.querySelector(selector)?.addEventListener('click', () => {
                 if (!moveInList(stats, index, delta)) return;
                 saveSettings();
+                // The HUD draws its meters in this order too, and it is a separate element from
+                // this panel - without this it kept the old order until something else redrew it.
+                updateHUD();
                 // The whole editor, not the row: the buttons at both ends have to become
                 // enabled or disabled as entries pass them.
                 onRefresh();

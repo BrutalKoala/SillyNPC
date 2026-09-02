@@ -592,12 +592,12 @@ function showAddCharacterDropdown(btn, mesEl) {
 
     const dropdown = document.createElement('div');
     dropdown.className = 'sillynpc-add-char-dropdown list-group';
-    dropdown.style.cssText = 'position: absolute; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border-color); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px; min-width: 150px;';
+    dropdown.style.cssText = 'position: absolute; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px; min-width: 150px;';
 
     available.forEach(char => {
         const item = document.createElement('div');
         item.className = 'list-group-item';
-        item.style.cssText = 'cursor: pointer; padding: 5px 10px; border-bottom: 1px solid var(--sillynpc-border-color);';
+        item.style.cssText = 'cursor: pointer; padding: 5px 10px; border-bottom: 1px solid var(--sillynpc-border);';
         item.textContent = char.name;
         item.addEventListener('click', (e) => {
             e.stopPropagation();

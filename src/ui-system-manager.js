@@ -166,7 +166,7 @@ export function buildSystemManager(onRefresh) {
     listWrap.style.marginBottom = '20px';
     listWrap.style.maxHeight = '300px';
     listWrap.style.overflowY = 'auto';
-    listWrap.style.border = '1px solid var(--sillynpc-border-color)';
+    listWrap.style.border = '1px solid var(--sillynpc-border)';
     listWrap.style.borderRadius = '5px';
 
     if (presetNames.length === 0) {
@@ -179,7 +179,7 @@ export function buildSystemManager(onRefresh) {
         presetNames.forEach(name => {
             const profile = presets[name];
             const row = document.createElement('tr');
-            row.style.borderBottom = '1px solid var(--sillynpc-border-color)';
+            row.style.borderBottom = '1px solid var(--sillynpc-border)';
             
             const nameCell = document.createElement('td');
             nameCell.style.padding = '8px';
