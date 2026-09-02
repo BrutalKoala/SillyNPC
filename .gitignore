@@ -3,9 +3,6 @@
 # stay on disk: `node tests/run.mjs` still works locally.
 tests/
 
-# Claude Code's working directory: agents, plans, worktrees.
-.claude/
-
 # Scratch / editor debris
 temp_*.txt
 *.bak
