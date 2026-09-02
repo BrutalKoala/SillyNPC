@@ -506,9 +506,11 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
    dropdown lists that take the same colour end up pale enough to lose their text on.
 
    Relative colour syntax takes that exact tint and drops its alpha, so the panel keeps the
-   user's own SillyTavern colour and becomes a surface instead of a filter. Browsers
-   without it keep the translucent value above. */
-@supports (color: rgb(from white r g b)) {
+   user's own SillyTavern colour and becomes a surface instead of a filter. The "/ 1" is
+   the whole point: without it relative colour syntax carries the origin's alpha straight
+   through, and the declaration computes to the very colour it was meant to replace.
+   A browser without relative colour keeps the translucent value above. */
+@supports (color: rgb(from white r g b / 1)) {
     :root,
     .sillynpc-manage.sillynpc-theme-default,
     .sillynpc-review-panel.sillynpc-theme-default,
@@ -516,7 +518,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     .sillynpc-theme-default.sillynpc-hud-container,
     .sillynpc-theme-default.sillynpc-player-sheet,
     .sillynpc-theme-default.sillynpc-manage {
-        --sillynpc-bg-primary: rgb(from var(--SmartThemeBlurTintColor, #1a1a1a) r g b);
+        --sillynpc-bg-primary: rgb(from var(--SmartThemeBlurTintColor, #1a1a1a) r g b / 1);
     }
 }
 
@@ -545,6 +547,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 5. Terminal (Dark - Monospace) ───────────────────────────────────── */
 
 .sillynpc-theme-terminal {
+    color-scheme: dark;
     --sillynpc-bg-primary: #050505;
     --sillynpc-bg-secondary: #0d0d0d;
     --sillynpc-fg-primary: #00ff41;
@@ -602,6 +605,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 6. Cyberpunk (Dark - Monospace) ──────────────────────────────────── */
 
 .sillynpc-theme-cyberpunk {
+    color-scheme: dark;
     --sillynpc-bg-primary: #0a0a0f;
     --sillynpc-bg-secondary: #16161d;
     --sillynpc-fg-primary: #ffffff;
@@ -662,6 +666,11 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 7. Monochrome (Light - Serif) ────────────────────────────────────── */
 
 .sillynpc-theme-monochrome {
+    /* Native controls - the dropdown list, its scrollbar, and the closed select while
+       its list is open - are painted by the browser, which picks light or dark from
+       color-scheme rather than from the colours set here. The SillyTavern page is dark,
+       so on a light theme the browser was drawing white text on our white panel. */
+    color-scheme: light;
     --sillynpc-bg-primary: #ffffff;
     --sillynpc-bg-secondary: #f8f8f8;
     --sillynpc-fg-primary: #222222;
@@ -725,6 +734,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 8. Modern Dark (Sans-serif) ──────────────────────────────────────── */
 
 .sillynpc-theme-modern-dark {
+    color-scheme: dark;
     --sillynpc-bg-primary: #0a0a0c;
     --sillynpc-bg-secondary: rgba(255, 255, 255, 0.03);
     --sillynpc-fg-primary: #ffffff;
@@ -792,6 +802,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 9. Fantasy HUD (Dark - Serif) ────────────────────────────────────── */
 
 .sillynpc-theme-fantasy-hud {
+    color-scheme: dark;
     --sillynpc-font-size-base: 16px;
     --sillynpc-line-height: 1.6;
     --sillynpc-bg-primary: #1a1c2c;
@@ -853,6 +864,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 10. Tabletop Parchment (Light - Serif) ───────────────────────────── */
 
 .sillynpc-theme-tabletop-parchment {
+    color-scheme: light;
     --sillynpc-bg-primary: #e8d5ac;
     --sillynpc-bg-secondary: rgba(93, 64, 55, 0.07);
     --sillynpc-fg-primary: #2b1f14;
@@ -927,6 +939,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 11. Analog Horror (Dark - Monospace) ─────────────────────────────── */
 
 .sillynpc-theme-analog-horror {
+    color-scheme: dark;
     --sillynpc-bg-primary: #050505;
     --sillynpc-bg-secondary: #0a0a0a;
     --sillynpc-fg-primary: #cccccc;
@@ -1043,6 +1056,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 /* ── 12. Rosewater (Light - Serif) ────────────────────────────────────── */
 
 .sillynpc-theme-rosewater {
+    color-scheme: light;
     --sillynpc-bg-primary: #fdeef0;
     --sillynpc-bg-secondary: #f8dfe3;
     --sillynpc-fg-primary: #4a2c33;
