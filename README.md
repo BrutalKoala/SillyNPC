@@ -49,6 +49,7 @@ SillyNPC operates across two core modules:
 ### Theming & Analytics
 * **Built-in Themes:** Seamless Native, Terminal, Cyberpunk, Monochrome, Modern Dark, Fantasy HUD, Tabletop Parchment, Analog Horror, and Rosewater.
 * **Token Tracking:** Monitors token consumption, instruction costs, and average usage across tracker extractions, lore generation, and history scans.
+* **Recommended for Better Visuals:** the [Moonlit Echoes](https://github.com/RivelleDays/SillyTavern-MoonlitEchoesTheme) theme.
 
 ---
 
