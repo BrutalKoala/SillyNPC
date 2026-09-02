@@ -2202,6 +2202,10 @@ span.sillynpc-review-to {
        and height settings did nothing here at all. */
     width: 100%;
     height: 100%;
+    /* A flex item will not shrink below its own content unless it is told it may, and
+       until it can shrink there is nothing for the scrolling pane inside it to overflow.
+       This is one of the three declarations that make the sheet scroll at all. */
+    min-height: 0;
     background: var(--sillynpc-bg-primary);
     color: var(--sillynpc-fg-primary);
     padding: var(--sillynpc-space-xl);
@@ -2218,6 +2222,9 @@ span.sillynpc-review-to {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* Keeps its height while the body takes what is left. Without this the header is
+       squeezed along with everything else once the sheet is taller than the dialog. */
+    flex-shrink: 0;
 }
 
 .sillynpc-sheet-close {
@@ -2262,6 +2269,9 @@ span.sillynpc-review-to {
     gap: var(--sillynpc-space-xl);
     flex: 1;
     overflow: hidden;
+    /* Same reason as the sheet above: without this it refuses to be shorter than its
+       own contents, and the pane inside it never has anything to scroll. */
+    min-height: 0;
 }
 
 /* The portrait and its controls. The lorebook entry used to sit here too, and a linked
@@ -2294,6 +2304,7 @@ span.sillynpc-review-to {
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    min-height: 0;
 }
 
 .sillynpc-sheet-tabs {

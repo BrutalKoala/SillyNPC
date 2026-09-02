@@ -111,6 +111,13 @@ export function openPlayerModal() {
 
     const container = document.createElement('div');
     container.innerHTML = modalHtml;
+    // The same three the manage popup sets, and for the same reason: the dialog is given
+    // a fixed height, and everything inside it measures against this wrapper. Without a
+    // height here the sheet is as tall as its contents, so the part that is meant to
+    // scroll never overflows anything - it is simply clipped by the dialog.
+    container.style.height = '100%';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
 
     const popup = new Popup(container, POPUP_TYPE.DISPLAY, '', {
         large: true,
