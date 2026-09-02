@@ -523,6 +523,10 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 }
 
 .sillynpc-theme-default .sillynpc-setting {
+    /* Flat by design: rows told apart by a rule beneath them, not by a filled box. The
+       base .sillynpc-setting paints one, and only the :hover below took it away again -
+       so every row the cursor was not on wore a grey panel. */
+    background: transparent;
     border: none;
     border-bottom: 1px solid var(--sillynpc-border);
     border-radius: 0;
@@ -708,7 +712,10 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     color: var(--sillynpc-bg-primary);
 }
 
-.sillynpc-theme-monochrome .sillynpc-setting:hover * {
+/* Inverting the row on hover is about its text. A select or a text field keeps its own
+   surface, so recolouring it here wrote white on a near-white input - invisible while the
+   cursor was on the row, which is also the whole time its dropdown is open. */
+.sillynpc-theme-monochrome .sillynpc-setting:hover *:not(select):not(input):not(textarea):not(option) {
     color: var(--sillynpc-bg-primary);
 }
 
