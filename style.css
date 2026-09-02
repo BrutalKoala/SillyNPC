@@ -330,15 +330,16 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
    `select option:not(:checked)` to `color: var(--white70a)`, at exactly the same
    specificity as the plain selectors above, so which one won came down to stylesheet
    order - and when the colours split between the two rules the list went white on white.
-   Repeating the list with :not(:checked) outranks it outright. */
+   Repeating the list with :not(:checked) outranks it outright, and !important settles it
+   whatever order the two sheets happen to load in. */
 .sillynpc-manage select option,
 .sillynpc-player-sheet select option,
 .sillynpc-status-box select option,
 .sillynpc-manage select option:not(:checked),
 .sillynpc-player-sheet select option:not(:checked),
 .sillynpc-status-box select option:not(:checked) {
-    background-color: var(--sillynpc-bg-primary);
-    color: var(--sillynpc-fg-primary);
+    background-color: var(--sillynpc-bg-primary) !important;
+    color: var(--sillynpc-fg-primary) !important;
 }
 
 .sillynpc-manage ::placeholder,
@@ -494,13 +495,29 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-accent: var(--SmartThemeQuoteColor, #c9a96e);
     --sillynpc-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
     background: var(--sillynpc-bg-primary);
-    /* --SmartThemeBlurTintColor is a translucent tint - as little as 61% opaque on stock
-       Azure - and SillyTavern never paints with it unless this blur is behind it. Used
-       flat, the panel showed the chat straight through itself. */
-    backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
-    -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
     color: var(--sillynpc-fg-primary);
     border: 0;
+}
+
+/* Seamless Native's whole palette hangs off --SmartThemeBlurTintColor, which is a
+   *translucent* tint: SillyTavern only ever paints it with a blur behind it, and the user
+   controls that blur - plenty of people set it to zero. At zero the panel is simply a
+   sheet of tinted glass over the chat, which is unreadable and looks wrong, and the
+   dropdown lists that take the same colour end up pale enough to lose their text on.
+
+   Relative colour syntax takes that exact tint and drops its alpha, so the panel keeps the
+   user's own SillyTavern colour and becomes a surface instead of a filter. Browsers
+   without it keep the translucent value above. */
+@supports (color: rgb(from white r g b)) {
+    :root,
+    .sillynpc-manage.sillynpc-theme-default,
+    .sillynpc-review-panel.sillynpc-theme-default,
+    .sillynpc-status-box.sillynpc-theme-default,
+    .sillynpc-theme-default.sillynpc-hud-container,
+    .sillynpc-theme-default.sillynpc-player-sheet,
+    .sillynpc-theme-default.sillynpc-manage {
+        --sillynpc-bg-primary: rgb(from var(--SmartThemeBlurTintColor, #1a1a1a) r g b);
+    }
 }
 
 .sillynpc-theme-default .sillynpc-setting {
