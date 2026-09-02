@@ -27,7 +27,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
        --st-text-color was never a SillyTavern variable at all, so the foreground silently
        resolved to #fff every time and the fallback was doing all the work. */
     --sillynpc-bg-primary: var(--SmartThemeBlurTintColor, #222);
-    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 6%, transparent);
+    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 14%, transparent);
     --sillynpc-fg-primary: var(--SmartThemeBodyColor, #fff);
     --sillynpc-fg-secondary: var(--SmartThemeEmColor, #9a9a9a);
     --sillynpc-accent: var(--SmartThemeQuoteColor, #c9a96e);
@@ -324,10 +324,19 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 
 /* A dropdown's list is painted by the browser, not the page, so an option left unstyled
    falls back to the system menu colours - white-on-white on a light theme in some
-   browsers. Naming both is the only way to be sure the list is readable. */
+   browsers. Naming both is the only way to be sure the list is readable.
+
+   The :not(:checked) copies are not redundant. SillyTavern sets
+   `select option:not(:checked)` to `color: var(--white70a)`, at exactly the same
+   specificity as the plain selectors above, so which one won came down to stylesheet
+   order - and when the colours split between the two rules the list went white on white.
+   Repeating the list with :not(:checked) outranks it outright. */
 .sillynpc-manage select option,
 .sillynpc-player-sheet select option,
-.sillynpc-status-box select option {
+.sillynpc-status-box select option,
+.sillynpc-manage select option:not(:checked),
+.sillynpc-player-sheet select option:not(:checked),
+.sillynpc-status-box select option:not(:checked) {
     background-color: var(--sillynpc-bg-primary);
     color: var(--sillynpc-fg-primary);
 }
@@ -479,12 +488,17 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 .sillynpc-theme-default.sillynpc-player-sheet,
 .sillynpc-theme-default.sillynpc-manage {
     --sillynpc-bg-primary: var(--SmartThemeBlurTintColor, #1a1a1a);
-    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 6%, transparent);
+    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 14%, transparent);
     --sillynpc-fg-primary: var(--SmartThemeBodyColor, #e5e5e5);
     --sillynpc-fg-secondary: var(--SmartThemeEmColor, #9a9a9a);
     --sillynpc-accent: var(--SmartThemeQuoteColor, #c9a96e);
     --sillynpc-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
     background: var(--sillynpc-bg-primary);
+    /* --SmartThemeBlurTintColor is a translucent tint - as little as 61% opaque on stock
+       Azure - and SillyTavern never paints with it unless this blur is behind it. Used
+       flat, the panel showed the chat straight through itself. */
+    backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
+    -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
     color: var(--sillynpc-fg-primary);
     border: 0;
 }

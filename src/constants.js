@@ -84,7 +84,7 @@ export const NATIVE_THEME_CLASSES = Object.freeze([
  * @returns {string[]}
  */
 export function allThemeClasses() {
-    return SILLYNPC_THEMES.map(t => `sillynpc-theme-${t}`).concat(NATIVE_THEME_CLASSES);
+    return SILLYNPC_THEMES.map(t => `sillynpc-theme-${t}`).concat(NATIVE_THEME_CLASSES, 'sillynpc-theme-default');
 }
 
 /**
@@ -93,6 +93,11 @@ export function allThemeClasses() {
  * @returns {string}
  */
 export function themeClassFor(theme) {
+    // Seamless Native is deliberately kept out of SILLYNPC_THEMES so the theme picker,
+    // which prepends it, does not list it twice. But style.css does define ten
+    // .sillynpc-theme-default rules, and defines nothing at all for .theme-default - so
+    // returning that left the panel transparent and its text on the chat behind it.
+    if (theme === 'default') return 'sillynpc-theme-default';
     return SILLYNPC_THEMES.includes(theme) ? `sillynpc-theme-${theme}` : `theme-${theme}`;
 }
 
