@@ -180,7 +180,12 @@ export function updateHUD(updatedState = null) {
     const settings = allSettings.statusTracker;
     // A player sheet with no chat behind it is showing whatever the last chat left in
     // memory, which reads as the current state and is not.
-    if (!settings.hudEnabled || !hasOpenChat()) {
+    //
+    // And nothing to track means nothing to show. The HUD is a view of tracker state, so
+    // with the tracker off it displayed the starting values of stats nothing was reading -
+    // HP 20/20, Energy 10/10, Level 1 - which never moved. That was the first thing a new
+    // install put on screen, since the HUD is on by default and the tracker is not.
+    if (!settings.enabled || !settings.hudEnabled || !hasOpenChat()) {
         hudContainer.style.display = 'none';
         return;
     }
