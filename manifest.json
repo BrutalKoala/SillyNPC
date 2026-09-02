@@ -1,0 +1,13 @@
+{
+    "display_name": "SillyNPC - Character Stylist & Status Tracker",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "BrutalKoala",
+    "version": "0.1.0",
+    "homePage": "https://github.com/BrutalKoala/SillyNPC",
+    "auto_update": false,
+    "description": "Styles chat messages by speaker with per-character avatars and colours, and tracks an RPG-style status system (stats, inventory, HUD, player sheet) driven by the AI."
+}

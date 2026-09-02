@@ -1,0 +1,3884 @@
+/* SillyNPC - Character Stylist
+   Namespaced under .sillynpc / #sillynpc-* / .sillynpc-chat-* so styles
+   don't bleed into the rest of SillyTavern. */
+
+/* ─── Global Font Fix ─────────────────────────────────────────────────── */
+* {
+    font-family: inherit;
+}
+
+/* Force FontAwesome for icons, ignoring generic global family */
+i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
+.fa, .fas, .fa-solid, .fa-regular, .fa-brands {
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif !important;
+}
+
+/* ─── Design Tokens ────────────────────────────────────────────────────── */
+/* FIX: Removed duplicate --sillynpc-border-color alias.
+   All rules now use --sillynpc-border consistently. */
+
+:root {
+    /* Core Design Tokens (Native/Default fallback) */
+    /* --SmartThemeBodyColor is SillyTavern's *text* colour, not a background: on the
+       stock theme it is rgb(220,220,210), and on Celestial Macaron a salmon pink. Using
+       it here painted every unthemed panel in the user's text colour and then wrote text
+       on top of it. --SmartThemeBlurTintColor is the panel background.
+
+       --st-text-color was never a SillyTavern variable at all, so the foreground silently
+       resolved to #fff every time and the fallback was doing all the work. */
+    --sillynpc-bg-primary: var(--SmartThemeBlurTintColor, #222);
+    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 6%, transparent);
+    --sillynpc-fg-primary: var(--SmartThemeBodyColor, #fff);
+    --sillynpc-fg-secondary: var(--SmartThemeEmColor, #9a9a9a);
+    --sillynpc-accent: var(--SmartThemeQuoteColor, #c9a96e);
+    --sillynpc-border: var(--SmartThemeBorderColor, #444);
+    --sillynpc-success: #00c851;
+    --sillynpc-danger: #ff4444;
+
+    /* Typography */
+    --sillynpc-font-family: inherit;
+    --sillynpc-font-serif: Georgia, serif;
+    --sillynpc-font-mono: monospace;
+    --sillynpc-font-size-base: 14px;
+    --sillynpc-line-height: 1.5;
+
+    /* Spacing Scale */
+    --sillynpc-space-xs: 4px;
+    --sillynpc-space-sm: 8px;
+    --sillynpc-space-md: 12px;
+    --sillynpc-space-lg: 16px;
+    --sillynpc-space-xl: 20px;
+
+    /* Radii */
+    --sillynpc-radius-sm: 4px;
+    --sillynpc-radius-md: 8px;
+    --sillynpc-radius-lg: 12px;
+
+    /* Specialized Effects */
+    --sillynpc-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    --sillynpc-backdrop: blur(10px);
+    --sillynpc-glow: none;
+    --sillynpc-overlay: none;
+
+    /* Z-index Scale — adjust these if SillyTavern conflicts arise */
+    --sillynpc-z-tabs: 100;
+    --sillynpc-z-overlay: 101;
+    /* Strictly between the chat and SillyTavern's chrome, so a menu the user opens can
+       cover the HUD. Measured at runtime rather than read from SillyTavern's stylesheet,
+       which disagrees: #sheld and #form_sheld resolve to 30, and the lowest chrome layer
+       is 1000 - every drawer panel, #left-nav-panel, #WorldInfo, #AdvancedFormatting -
+       rising through 3005 for the top bar to 29999 for the menus. An inline 10000 here
+       used to land above all but the last of them. */
+    --sillynpc-z-hud: 500;
+    --sillynpc-z-modal: 300;
+}
+
+/* ─── Layout ───────────────────────────────────────────────────────────── */
+
+.sillynpc-manage {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-family);
+    font-size: var(--sillynpc-font-size-base);
+    line-height: var(--sillynpc-line-height);
+    box-sizing: border-box;
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.sillynpc-manage-layout {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+    overflow: hidden;
+    width: 100%;
+}
+
+/* Targets the main popup window only when your extension is open inside it */
+/* FIX: Removed !important; these apply only inside the scoped :has() selector
+   so they don't need force to win specificity over generic popup rules. */
+#dialogue_popup:has(.sillynpc-manage) {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    /* FIX: Was visibility:hidden (hides but keeps layout space + is still
+       interactable). Using display:none to fully remove from layout. */
+    display: none;
+}
+
+/* ─── Tabs Sidebar ─────────────────────────────────────────────────────── */
+
+.sillynpc-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-xs);
+    border-right: 1px solid var(--sillynpc-border);
+    border-bottom: none;
+    padding: var(--sillynpc-space-lg) var(--sillynpc-space-sm);
+    margin-bottom: 0;
+    flex-wrap: nowrap;
+    /* FIX: Was z-index:2000 !important — use token, no !important needed */
+    z-index: var(--sillynpc-z-tabs);
+    flex-shrink: 0;
+    width: 200px;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    height: 100%;
+}
+
+.sillynpc-tab {
+    appearance: none;
+    background: transparent;
+    color: var(--sillynpc-fg-primary);
+    border: none;
+    border-left: 3px solid transparent;
+    border-bottom: none;
+    padding: 10px var(--sillynpc-space-md);
+    cursor: pointer;
+    font-size: 0.95em;
+    opacity: 0.7;
+    transition: background 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    border-radius: 0 var(--sillynpc-radius-md) var(--sillynpc-radius-md) 0;
+}
+
+.sillynpc-tab:hover {
+    opacity: 1;
+    background: var(--sillynpc-bg-secondary);
+}
+
+.sillynpc-tab.active {
+    opacity: 1;
+    border-left-color: var(--sillynpc-accent);
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    font-weight: bold;
+    background: var(--sillynpc-bg-secondary);
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────── */
+
+.sillynpc-export-btn,
+.sillynpc-import-btn {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    font-size: 0.9em;
+    margin-top: var(--sillynpc-space-xs);
+    width: 100%;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+.sillynpc-import-btn {
+    opacity: 0.8;
+}
+
+.sillynpc-import-btn:hover {
+    opacity: 1;
+}
+
+/* ─── Tab Panel ────────────────────────────────────────────────────────── */
+
+.sillynpc-tab-panel {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: var(--sillynpc-space-lg);
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
+
+/* The view a tab renders into fills the panel. Without this the panel's own
+   `display: flex` lays every setting out in a row instead of a column. */
+.sillynpc-tab-panel > div {
+    width: 100%;
+}
+
+/* ─── Shared UI Components ─────────────────────────────────────────────── */
+
+.sillynpc-section-title {
+    padding-bottom: var(--sillynpc-space-sm);
+    border-bottom: 1px solid var(--sillynpc-accent);
+    margin-bottom: var(--sillynpc-space-lg);
+    margin-top: var(--sillynpc-space-lg);
+    font-size: 1.1em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+}
+
+.sillynpc-setting {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-xs);
+    padding: 14px var(--sillynpc-space-lg);
+    margin-bottom: var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-md);
+    transition: background 0.2s ease, border-color 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sillynpc-setting:hover {
+    background: color-mix(in srgb, var(--sillynpc-bg-secondary), white 5%);
+    border-color: var(--sillynpc-accent);
+}
+
+/* FIX: Removed !important from every property; the specificity of this
+   compound selector is already sufficient to win over generic .notes rules. */
+.sillynpc-setting .notes {
+    margin-top: 2px;
+    /* Was opacity: 0.6 with no colour, so every description was the body text faded
+       towards whatever it sat on - grey-on-cream on the light themes, a whisper on the
+       dark ones. Four themes were reported unreadable before it was clear this was one
+       fault and not four. A muted colour the theme names is legible by construction. */
+    color: var(--sillynpc-fg-secondary);
+    text-align: left;
+    display: block;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.sillynpc-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sillynpc-space-lg);
+    min-height: 28px;
+    width: 100%;
+}
+
+.sillynpc-setting-row > label,
+.sillynpc-setting-label {
+    font-weight: 500;
+    font-size: 1em;
+    flex: 1;
+    text-align: left;
+    margin: 0;
+}
+
+.sillynpc-setting .text_pole,
+.sillynpc-setting select {
+    flex: 0 0 200px;
+    max-width: 60%;
+}
+
+/* ── Form controls follow the theme ────────────────────────────────────────
+
+   Dropdowns and text boxes were the one part of a panel that ignored the theme. They are
+   SillyTavern's .text_pole, which sets `background: var(--black30a)` and
+   `color: var(--SmartThemeBodyColor)` - a dark translucent box holding the user's ST text
+   colour. Inside a dark panel that passes unnoticed. Inside Monochrome, Rosewater or
+   Parchment it is a dark well of salmon-pink text sitting in a cream panel, and the words
+   in a dropdown do not match the words underneath it.
+
+   The same fault as the descriptions: a colour inherited from somewhere else rather than
+   chosen by the theme. So the controls take the theme's own tokens.
+
+   Two selectors deep, which beats SillyTavern's single .text_pole without !important.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.sillynpc-manage select,
+.sillynpc-manage input[type="text"],
+.sillynpc-manage input[type="number"],
+.sillynpc-manage textarea,
+.sillynpc-manage .text_pole,
+.sillynpc-player-sheet select,
+.sillynpc-player-sheet input[type="text"],
+.sillynpc-player-sheet input[type="number"],
+.sillynpc-player-sheet textarea,
+.sillynpc-player-sheet .text_pole,
+.sillynpc-status-box select,
+.sillynpc-status-box input[type="text"],
+.sillynpc-status-box input[type="number"],
+.sillynpc-status-box .text_pole {
+    background-color: var(--sillynpc-bg-secondary);
+    color: var(--sillynpc-fg-primary);
+    border: 1px solid var(--sillynpc-border);
+}
+
+/* A dropdown's list is painted by the browser, not the page, so an option left unstyled
+   falls back to the system menu colours - white-on-white on a light theme in some
+   browsers. Naming both is the only way to be sure the list is readable. */
+.sillynpc-manage select option,
+.sillynpc-player-sheet select option,
+.sillynpc-status-box select option {
+    background-color: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-manage ::placeholder,
+.sillynpc-player-sheet ::placeholder,
+.sillynpc-status-box ::placeholder {
+    color: var(--sillynpc-fg-secondary);
+    opacity: 1;
+}
+
+/* Checkboxes and radios are drawn by the browser from a single colour. Without this they
+   stay the browser default blue, which is the one thing on a parchment sheet that never
+   belongs there. */
+.sillynpc-manage input[type="checkbox"],
+.sillynpc-manage input[type="radio"],
+.sillynpc-player-sheet input[type="checkbox"],
+.sillynpc-player-sheet input[type="radio"] {
+    accent-color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+
+.sillynpc-setting .slider-container {
+    flex: 0 0 200px;
+    max-width: 60%;
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+}
+
+.sillynpc-setting .slider-container input[type="range"] {
+    flex: 1;
+}
+
+/* Free-entry numbers, for limits that should have no ceiling. Sized to match the
+   sliders beside them so a settings column does not go ragged where the control changes. */
+.sillynpc-setting .sillynpc-number-container {
+    flex: 0 0 200px;
+    max-width: 60%;
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+}
+
+.sillynpc-setting input.sillynpc-number-input {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-family: var(--sillynpc-font-mono);
+}
+
+.sillynpc-setting .sillynpc-number-suffix {
+    font-size: 0.9em;
+    white-space: nowrap;
+    opacity: 0.75;
+}
+
+.sillynpc-setting .slider-value {
+    font-family: var(--sillynpc-font-mono);
+    font-size: 1em;
+    width: 50px;
+    text-align: right;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* ─── Animations ───────────────────────────────────────────────────────── */
+
+/* FIX: Removed duplicate definition — this keyframe was declared twice. */
+@keyframes sillynpc-fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sillynpc-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+
+@keyframes sillynpc-glitch {
+    0%   { transform: translate(0);        text-shadow: -2px 0 #ff00ea,  2px 0 #00ffcc; }
+    20%  { transform: translate(-2px, 2px);  text-shadow:  2px 0 #ff00ea, -2px 0 #00ffcc; }
+    40%  { transform: translate(-2px, -2px); text-shadow: -2px 0 #ff00ea,  2px 0 #00ffcc; }
+    60%  { transform: translate( 2px,  2px); text-shadow:  2px 0 #ff00ea, -2px 0 #00ffcc; }
+    80%  { transform: translate( 2px, -2px); text-shadow: -2px 0 #ff00ea,  2px 0 #00ffcc; }
+    100% { transform: translate(0);        text-shadow: -2px 0 #ff00ea,  2px 0 #00ffcc; }
+}
+
+@keyframes sillynpc-glitch-border {
+    0%   { clip-path: inset(0 0 95% 0); }
+    10%  { clip-path: inset(50% 0 30% 0); }
+    20%  { clip-path: inset(20% 0 70% 0); }
+    30%  { clip-path: inset(80% 0 10% 0); }
+    40%  { clip-path: inset(40% 0 40% 0); }
+    50%  { clip-path: inset(0 0 90% 0); }
+    60%  { clip-path: inset(70% 0 20% 0); }
+    70%  { clip-path: inset(30% 0 60% 0); }
+    80%  { clip-path: inset(90% 0 0 0); }
+    90%  { clip-path: inset(10% 0 80% 0); }
+    100% { clip-path: inset(0 0 95% 0); }
+}
+
+/* ─── Popup Button Overrides ───────────────────────────────────────────── */
+
+/* Target SillyTavern Popup buttons inside SillyNPC modals */
+.popup:has(.sillynpc-manage),
+#dialogue_popup:has(.sillynpc-manage) {
+    --button-border: var(--sillynpc-border);
+}
+
+/* Force hide standard close buttons when our modals are active */
+#dialogue_popup:has(.sillynpc-player-sheet) .popup_close,
+#dialogue_popup:has(.sillynpc-player-sheet) #dialogue_popup_close,
+#dialogue_popup:has(.sillynpc-player-sheet) .close_button,
+#dialogue_popup:has(.sillynpc-player-sheet) .popup-close,
+#dialogue_popup:has(.sillynpc-player-sheet) .popup-button-close,
+.popup:has(.sillynpc-player-sheet) .popup_close,
+.popup:has(.sillynpc-player-sheet) #dialogue_popup_close,
+.popup:has(.sillynpc-player-sheet) .close_button,
+.popup:has(.sillynpc-player-sheet) .popup-close,
+.popup:has(.sillynpc-player-sheet) .popup-close-button,
+.popup:has(.sillynpc-player-sheet) .popup-button-close {
+    display: none !important;
+}
+
+.popup:has(.sillynpc-manage) .popup-close,
+#dialogue_popup:has(.sillynpc-manage) .popup-close,
+.popup:has(.sillynpc-manage) .menu_button,
+#dialogue_popup:has(.sillynpc-manage) .menu_button {
+    border-color: var(--button-border, var(--SmartThemeBorderColor, #444));
+}
+
+/* ─── Themes ───────────────────────────────────────────────────────────── */
+/* FIX: All themes now use a single consistent naming convention:
+   a modifier class on the root element (.sillynpc-theme-*).
+   The old mixed approach (some using .theme-*, others .sillynpc-theme-*)
+   has been unified. All theme child rules use .sillynpc-theme-* as the
+   parent selector throughout. */
+
+/* ── 1. Default (Seamless Native) ─────────────────────────────────────── */
+
+/* The pink panel and the invisible descriptions were one bug. --SmartThemeBodyColor is
+   SillyTavern's *text* colour - a salmon pink on Celestial Macaron - and this painted the
+   panel with it, then wrote text on top. --SmartThemeBlurTintColor is the background.
+   With the roles the right way round, "seamless" finally follows the user's ST theme. */
+.sillynpc-manage.sillynpc-theme-default,
+.sillynpc-review-panel.sillynpc-theme-default,
+.sillynpc-status-box.sillynpc-theme-default,
+.sillynpc-theme-default.sillynpc-hud-container,
+.sillynpc-theme-default.sillynpc-player-sheet,
+.sillynpc-theme-default.sillynpc-manage {
+    --sillynpc-bg-primary: var(--SmartThemeBlurTintColor, #1a1a1a);
+    --sillynpc-bg-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 6%, transparent);
+    --sillynpc-fg-primary: var(--SmartThemeBodyColor, #e5e5e5);
+    --sillynpc-fg-secondary: var(--SmartThemeEmColor, #9a9a9a);
+    --sillynpc-accent: var(--SmartThemeQuoteColor, #c9a96e);
+    --sillynpc-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    border: 0;
+}
+
+.sillynpc-theme-default .sillynpc-setting {
+    border: none;
+    border-bottom: 1px solid var(--sillynpc-border);
+    border-radius: 0;
+    padding: 10px 0;
+    box-shadow: none;
+}
+
+.sillynpc-theme-default .sillynpc-setting:hover {
+    background: transparent;
+    border-bottom-color: var(--sillynpc-accent);
+}
+
+.sillynpc-theme-default .sillynpc-status-divider {
+    border-top: 1px solid var(--sillynpc-border);
+    margin: 6px 0;
+}
+
+.sillynpc-theme-default .sillynpc-status-editable:hover {
+    background: var(--sillynpc-bg-secondary);
+}
+
+/* ── 5. Terminal (Dark - Monospace) ───────────────────────────────────── */
+
+.sillynpc-theme-terminal {
+    --sillynpc-bg-primary: #050505;
+    --sillynpc-bg-secondary: #0d0d0d;
+    --sillynpc-fg-primary: #00ff41;
+    --sillynpc-fg-secondary: #008f11;
+    --sillynpc-accent: #00ff41;
+    --sillynpc-border: #00ff41;
+    --sillynpc-font-family: var(--sillynpc-font-mono);
+    --sillynpc-font-size-base: 13px;
+    --sillynpc-radius-md: 0px;
+    --sillynpc-radius-lg: 0px;
+    --sillynpc-shadow: none;
+    --sillynpc-backdrop: none;
+    --sillynpc-glow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
+.sillynpc-theme-terminal .sillynpc-manage,
+.sillynpc-theme-terminal .sillynpc-status-box,
+.sillynpc-theme-terminal.sillynpc-hud-container,
+.sillynpc-theme-terminal.sillynpc-player-sheet,
+.sillynpc-theme-terminal.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-mono);
+}
+
+.sillynpc-theme-terminal .sillynpc-manage *,
+.sillynpc-theme-terminal.sillynpc-hud-container *,
+.sillynpc-theme-terminal .sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands) {
+    font-family: var(--sillynpc-font-mono);
+}
+
+.sillynpc-theme-terminal .sillynpc-section-title::after {
+    content: "_";
+    animation: sillynpc-blink 1s step-end infinite;
+    margin-left: 5px;
+}
+
+.sillynpc-theme-terminal .sillynpc-setting {
+    border: 1px solid var(--sillynpc-border);
+    background: transparent;
+    border-radius: 0;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.sillynpc-theme-terminal .sillynpc-setting:hover {
+    background: rgba(0, 255, 65, 0.1);
+    border-color: var(--sillynpc-accent);
+}
+
+.sillynpc-theme-terminal .sillynpc-tab.active {
+    background: var(--sillynpc-accent);
+    color: #000000;
+}
+
+/* ── 6. Cyberpunk (Dark - Monospace) ──────────────────────────────────── */
+
+.sillynpc-theme-cyberpunk {
+    --sillynpc-bg-primary: #0a0a0f;
+    --sillynpc-bg-secondary: #16161d;
+    --sillynpc-fg-primary: #ffffff;
+    --sillynpc-fg-secondary: #a0a0a0;
+    --sillynpc-accent: #00ffcc;
+    --sillynpc-border: #ff00ea;
+    --sillynpc-font-family: var(--sillynpc-font-mono);
+    --sillynpc-radius-md: 0px;
+    --sillynpc-radius-lg: 0px;
+    --sillynpc-shadow: 0 0 15px rgba(255, 0, 234, 0.3);
+    --sillynpc-backdrop: blur(5px);
+    --sillynpc-glow: 0 0 10px #00ffcc;
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-manage,
+.sillynpc-theme-cyberpunk .sillynpc-status-box,
+.sillynpc-theme-cyberpunk.sillynpc-hud-container,
+.sillynpc-theme-cyberpunk.sillynpc-player-sheet,
+.sillynpc-theme-cyberpunk.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-mono);
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-manage *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-cyberpunk.sillynpc-hud-container *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-cyberpunk .sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands) {
+    font-family: var(--sillynpc-font-mono);
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-section-title {
+    color: #fffb00;
+    text-shadow: 2px 2px var(--sillynpc-border);
+    border-bottom: 2px solid var(--sillynpc-accent);
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-section-title:hover {
+    animation: sillynpc-glitch 0.3s infinite;
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-setting {
+    border: 1px solid var(--sillynpc-border);
+    background: rgba(22, 22, 29, 0.9);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-setting:hover {
+    border-color: var(--sillynpc-accent);
+    box-shadow: 0 0 10px var(--sillynpc-accent);
+}
+
+.sillynpc-theme-cyberpunk .sillynpc-tab.active {
+    background: var(--sillynpc-border);
+    color: var(--sillynpc-fg-primary);
+    clip-path: polygon(0 0, 90% 0, 100% 10%, 100% 100%, 0 100%);
+}
+
+/* ── 7. Monochrome (Light - Serif) ────────────────────────────────────── */
+
+.sillynpc-theme-monochrome {
+    --sillynpc-bg-primary: #ffffff;
+    --sillynpc-bg-secondary: #f8f8f8;
+    --sillynpc-fg-primary: #222222;
+    --sillynpc-fg-secondary: #3f3f3f;
+    --sillynpc-accent: #000000;
+    --sillynpc-border: #000000;
+    --sillynpc-success: #1a7a3c;
+    --sillynpc-danger: #b91c1c;
+    --sillynpc-font-family: var(--sillynpc-font-serif);
+    --sillynpc-font-size-base: 15px;
+    --sillynpc-radius-md: 0px;
+    --sillynpc-radius-lg: 0px;
+    --sillynpc-shadow: none;
+    --sillynpc-backdrop: none;
+    --sillynpc-glow: none;
+}
+
+.sillynpc-theme-monochrome .sillynpc-manage,
+.sillynpc-theme-monochrome .sillynpc-status-box,
+.sillynpc-theme-monochrome.sillynpc-hud-container,
+.sillynpc-theme-monochrome.sillynpc-player-sheet,
+.sillynpc-theme-monochrome.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-theme-monochrome .sillynpc-setting {
+    border: 1px solid var(--sillynpc-border);
+    margin-bottom: var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-primary);
+}
+
+.sillynpc-theme-monochrome .sillynpc-setting:hover {
+    background: var(--sillynpc-accent);
+    color: var(--sillynpc-bg-primary);
+}
+
+.sillynpc-theme-monochrome .sillynpc-setting:hover * {
+    color: var(--sillynpc-bg-primary);
+}
+
+.sillynpc-theme-monochrome .sillynpc-tab.active {
+    background: var(--sillynpc-accent);
+    color: var(--sillynpc-bg-primary);
+    border-left: none;
+    font-weight: 900;
+}
+
+.sillynpc-theme-monochrome .sillynpc-section-title {
+    border-bottom: 4px solid var(--sillynpc-accent);
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.sillynpc-theme-monochrome .sillynpc-status-box {
+    border: 2px solid var(--sillynpc-border);
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+}
+
+/* ── 8. Modern Dark (Sans-serif) ──────────────────────────────────────── */
+
+.sillynpc-theme-modern-dark {
+    --sillynpc-bg-primary: #0a0a0c;
+    --sillynpc-bg-secondary: rgba(255, 255, 255, 0.03);
+    --sillynpc-fg-primary: #ffffff;
+    --sillynpc-fg-secondary: #94a3b8;
+    --sillynpc-accent: #3b82f6;
+    --sillynpc-border: rgba(255, 255, 255, 0.08);
+    --sillynpc-radius-md: 12px;
+    --sillynpc-radius-lg: 20px;
+    --sillynpc-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    --sillynpc-backdrop: blur(16px);
+    --sillynpc-glow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.sillynpc-theme-modern-dark .sillynpc-manage,
+.sillynpc-theme-modern-dark .sillynpc-status-box,
+.sillynpc-theme-modern-dark.sillynpc-hud-container,
+.sillynpc-theme-modern-dark.sillynpc-player-sheet,
+.sillynpc-theme-modern-dark.sillynpc-manage {
+    background: radial-gradient(circle at top left, #141418, #050506);
+}
+
+.sillynpc-theme-modern-dark .sillynpc-setting {
+    background: var(--sillynpc-bg-secondary);
+    backdrop-filter: var(--sillynpc-backdrop);
+    border: 1px solid var(--sillynpc-border);
+    /* FIX: Was transition:all — narrowed to specific properties */
+    transition: background 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                box-shadow 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                border-color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.sillynpc-theme-modern-dark .sillynpc-setting:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: var(--sillynpc-glow);
+    border-color: var(--sillynpc-accent);
+}
+
+.sillynpc-theme-modern-dark .sillynpc-tab.active {
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), transparent);
+    border-left: 4px solid var(--sillynpc-accent);
+    color: #60a5fa;
+}
+
+@keyframes modern-glow-pulse {
+    0%   { box-shadow: 0 0  5px rgba(59, 130, 246, 0.1); }
+    50%  { box-shadow: 0 0 25px rgba(59, 130, 246, 0.3); }
+    100% { box-shadow: 0 0  5px rgba(59, 130, 246, 0.1); }
+}
+
+.sillynpc-theme-modern-dark .sillynpc-status-box {
+    animation: modern-glow-pulse 5s infinite ease-in-out;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: radial-gradient(circle at top left, #141418, #050506);
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-theme-modern-dark .sillynpc-attribute-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ── 9. Fantasy HUD (Dark - Serif) ────────────────────────────────────── */
+
+.sillynpc-theme-fantasy-hud {
+    --sillynpc-font-size-base: 16px;
+    --sillynpc-line-height: 1.6;
+    --sillynpc-bg-primary: #1a1c2c;
+    --sillynpc-bg-secondary: rgba(212, 175, 55, 0.1);
+    --sillynpc-fg-primary: #f0ebd8;
+    --sillynpc-fg-secondary: #c4bda6;
+    --sillynpc-accent: #d4af37;
+    --sillynpc-border: #d4af37;
+    --sillynpc-font-family: var(--sillynpc-font-serif);
+    --sillynpc-radius-md: 4px;
+    --sillynpc-radius-lg: 8px;
+    --sillynpc-shadow: 0 0 20px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(212, 175, 55, 0.2);
+    --sillynpc-glow: 0 0 8px rgba(212, 175, 55, 0.5);
+}
+
+.sillynpc-theme-fantasy-hud .sillynpc-manage,
+.sillynpc-theme-fantasy-hud .sillynpc-status-box,
+.sillynpc-theme-fantasy-hud.sillynpc-hud-container,
+.sillynpc-theme-fantasy-hud.sillynpc-player-sheet,
+.sillynpc-theme-fantasy-hud.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    border: 1px solid var(--sillynpc-border);
+    font-family: var(--sillynpc-font-serif);
+}
+
+.sillynpc-theme-fantasy-hud .sillynpc-manage *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-fantasy-hud.sillynpc-hud-container *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-fantasy-hud .sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands) {
+    font-family: var(--sillynpc-font-serif);
+}
+
+.sillynpc-theme-fantasy-hud .sillynpc-section-title {
+    border-bottom: 2px solid var(--sillynpc-accent);
+    padding-bottom: 4px;
+    text-shadow: 0 0 5px rgba(212, 175, 55, 0.5);
+}
+
+.sillynpc-theme-fantasy-hud .menu_button,
+.sillynpc-theme-fantasy-hud .sillynpc-tab.active {
+    background: rgba(212, 175, 55, 0.15);
+    border: 1px solid var(--sillynpc-accent);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* Glow only. The colour comes from the stat, so a theme adding its own here would
+   silently override whatever the user chose. */
+.sillynpc-theme-fantasy-hud .sillynpc-hud-bar { box-shadow: 0 0 8px rgba(0, 0, 0, 0.45); }
+
+.sillynpc-theme-terminal .sillynpc-hud-bar { box-shadow: 0 0 5px currentColor; }
+.sillynpc-theme-terminal .sillynpc-hud-bar-wrap { border-color: var(--sillynpc-accent); background: #000; }
+.sillynpc-theme-terminal.sillynpc-hud-container { box-shadow: 0 0 15px rgba(0, 255, 65, 0.2); }
+
+.sillynpc-theme-cyberpunk .sillynpc-hud-bar { filter: saturate(1.4) brightness(1.1); }
+.sillynpc-theme-cyberpunk.sillynpc-hud-container { 
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+
+/* ── 10. Tabletop Parchment (Light - Serif) ───────────────────────────── */
+
+.sillynpc-theme-tabletop-parchment {
+    --sillynpc-bg-primary: #e8d5ac;
+    --sillynpc-bg-secondary: rgba(93, 64, 55, 0.07);
+    --sillynpc-fg-primary: #2b1f14;
+    --sillynpc-fg-secondary: #5a4632;
+    --sillynpc-accent: #7a3b1f;
+    --sillynpc-border: #8a6a45;
+    /* A bookish old-style face, so it is not the same Georgia Rosewater uses. */
+    --sillynpc-font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sillynpc-radius-md: 2px;
+    --sillynpc-radius-lg: 3px;
+    --sillynpc-shadow: 2px 3px 12px rgba(60, 40, 20, 0.35);
+}
+
+.sillynpc-theme-tabletop-parchment .sillynpc-manage,
+.sillynpc-theme-tabletop-parchment .sillynpc-status-box,
+.sillynpc-theme-tabletop-parchment.sillynpc-hud-container,
+.sillynpc-theme-tabletop-parchment.sillynpc-player-sheet,
+.sillynpc-theme-tabletop-parchment.sillynpc-manage {
+    /* Blotching, then a faint fibre weave, over the base tone. All gradients, so the
+       theme stays self-contained - no image to ship, cache, or fail to load. */
+    background-color: #e8d5ac;
+    background-image:
+        radial-gradient(ellipse at 18% 22%, rgba(150, 110, 60, 0.16) 0%, transparent 42%),
+        radial-gradient(ellipse at 82% 14%, rgba(120, 85, 45, 0.12) 0%, transparent 38%),
+        radial-gradient(ellipse at 68% 84%, rgba(150, 110, 60, 0.14) 0%, transparent 45%),
+        radial-gradient(ellipse at 8% 78%, rgba(120, 85, 45, 0.10) 0%, transparent 40%),
+        repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.05) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.04) 0 1px, transparent 1px 4px),
+        linear-gradient(160deg, #efdfbc 0%, #e3cda1 55%, #d8bf90 100%);
+    /* Aged at the edges, where a real sheet is handled most. */
+    box-shadow:
+        inset 0 0 44px rgba(110, 78, 40, 0.34),
+        inset 0 0 8px rgba(90, 60, 30, 0.20),
+        var(--sillynpc-shadow);
+    border: 1px solid var(--sillynpc-border);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-serif);
+    box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.1);
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+}
+
+.sillynpc-theme-tabletop-parchment .sillynpc-manage *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-tabletop-parchment.sillynpc-hud-container *:not(.fa-solid):not(.fa-regular):not(.fa-brands),
+.sillynpc-theme-tabletop-parchment .sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands) {
+    font-family: var(--sillynpc-font-serif);
+}
+
+.sillynpc-theme-tabletop-parchment .sillynpc-setting {
+    border: 1px solid rgba(93, 64, 55, 0.3);
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px 10px 5px 12px / 10px 5px 12px 4px;
+}
+
+.sillynpc-theme-tabletop-parchment .sillynpc-section-title {
+    position: relative;
+    border-bottom: 2px solid var(--sillynpc-accent);
+}
+
+.sillynpc-theme-tabletop-parchment .sillynpc-section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    right: 20px;
+    width: 30px;
+    height: 15px;
+    background: var(--sillynpc-accent);
+    opacity: 0.2;
+    mask: radial-gradient(circle, black 30%, transparent 70%);
+    -webkit-mask: radial-gradient(circle, black 30%, transparent 70%);
+}
+
+/* ── 11. Analog Horror (Dark - Monospace) ─────────────────────────────── */
+
+.sillynpc-theme-analog-horror {
+    --sillynpc-bg-primary: #050505;
+    --sillynpc-bg-secondary: #0a0a0a;
+    --sillynpc-fg-primary: #cccccc;
+    --sillynpc-fg-secondary: #888888;
+    --sillynpc-accent: #ff0000;
+    --sillynpc-border: #333333;
+    --sillynpc-font-family: var(--sillynpc-font-mono);
+    --sillynpc-radius-md: 0px;
+    --sillynpc-radius-lg: 0px;
+    --sillynpc-shadow: 0 0 20px rgba(255, 0, 0, 0.2);
+    --sillynpc-backdrop: none;
+    --sillynpc-glow: 0 0 5px rgba(255, 0, 0, 0.5);
+}
+
+@keyframes analog-flicker {
+    /* Still for most of the cycle, and it no longer moves anything: translateY and skewX
+       on a 0.3s loop is what shook the menu and the HUD. A CRT that never settles is a
+       strobe, not a CRT. */
+    0%, 92%, 100% { opacity: 1; }
+    93%           { opacity: 0.86; }
+    94%           { opacity: 1; }
+    97%           { opacity: 0.92; }
+    98%           { opacity: 1; }
+}
+
+@keyframes analog-vignette-pulse {
+    0%, 100% { box-shadow: inset 0 0 60px rgba(255, 0, 0, 0.08), var(--sillynpc-shadow); }
+    50%      { box-shadow: inset 0 0 90px rgba(255, 0, 0, 0.16), var(--sillynpc-shadow); }
+}
+
+@keyframes analog-chromatic {
+    0%, 100% { text-shadow:  1px 0 rgba(255, 0, 0, 0.3), -1px 0 rgba(0, 255, 255, 0.2); }
+    33%       { text-shadow:  1.5px 0 rgba(255, 0, 0, 0.4), -0.5px 0 rgba(0, 255, 255, 0.2); }
+    66%       { text-shadow:  0.5px 0 rgba(255, 0, 0, 0.2), -1.5px 0 rgba(0, 255, 255, 0.4); }
+}
+
+.sillynpc-theme-analog-horror .sillynpc-manage,
+.sillynpc-theme-analog-horror .sillynpc-status-box,
+.sillynpc-theme-analog-horror.sillynpc-player-sheet,
+.sillynpc-theme-analog-horror.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-mono);
+    position: relative;
+    overflow: hidden;
+    animation: analog-flicker 9s infinite steps(1), analog-vignette-pulse 10s infinite ease-in-out;
+}
+
+.sillynpc-theme-analog-horror .sillynpc-manage::before,
+.sillynpc-theme-analog-horror .sillynpc-status-box::before,
+.sillynpc-theme-analog-horror.sillynpc-player-sheet::before {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0; left: 0; bottom: 0; right: 0;
+    /* The repeating-radial-gradient at 2500px was the shattered-glass field, and it sat
+       over the text you were trying to read. Scanlines and a colour split instead, at a
+       fraction of the weight. */
+    background:
+        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.14) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.012), rgba(0, 255, 0, 0.006), rgba(0, 0, 255, 0.012));
+    background-blend-mode: normal;
+    opacity: 0.55;
+    pointer-events: none;
+    /* FIX: Was z-index:2001 magic number — use token */
+    z-index: var(--sillynpc-z-overlay);
+    background-size: 100% 3px, 4px 100%;
+    pointer-events: none;
+    opacity: 0.15;
+}
+
+/* The HUD is 60 pixels across and permanently on screen. Giving it the same treatment as
+   a full menu panel is what made the theme unusable rather than atmospheric: it shook, and
+   the overlay covered the few numbers it exists to show. */
+.sillynpc-theme-analog-horror.sillynpc-hud-container {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-mono);
+    position: relative;
+    overflow: hidden;
+    animation: none;
+}
+
+.sillynpc-theme-analog-horror.sillynpc-hud-container::before {
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.10) 50%);
+    background-size: 100% 3px;
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.sillynpc-theme-analog-horror .sillynpc-section-title {
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    /* Was chromatic aberration on a 2s loop, which made every heading swim. */
+    text-shadow: 1px 0 rgba(255, 0, 0, 0.25), -1px 0 rgba(0, 255, 255, 0.18);
+    border-bottom: 1px solid var(--sillynpc-accent);
+}
+
+.sillynpc-theme-analog-horror .sillynpc-setting {
+    border: 1px solid var(--sillynpc-border);
+    background: rgba(10, 10, 10, 0.8);
+    transition: border-color 0.1s;
+}
+
+.sillynpc-theme-analog-horror .sillynpc-setting:hover {
+    border-color: var(--sillynpc-accent);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+}
+
+.sillynpc-theme-analog-horror .sillynpc-tab.active {
+    background: var(--sillynpc-accent);
+    color: #000;
+}
+
+/* ── 12. Rosewater (Light - Serif) ────────────────────────────────────── */
+
+.sillynpc-theme-rosewater {
+    --sillynpc-bg-primary: #fdeef0;
+    --sillynpc-bg-secondary: #f8dfe3;
+    --sillynpc-fg-primary: #4a2c33;
+    --sillynpc-fg-secondary: #7b5560;
+    --sillynpc-accent: #f4d1d1;
+    /* --sillynpc-accent is a pale pink chosen as a FILL (the active-tab pill).
+       As text on the cream background it scores 1.30 contrast, which left field
+       labels, category labels, item names and stat values effectively invisible.
+       Only themes with this problem declare --sillynpc-accent-text; everywhere
+       else the var() fallback resolves to the theme's own accent. */
+    --sillynpc-accent-text: #9d4e5e;
+    --sillynpc-border: #e0c3a8;
+    --sillynpc-font-family: var(--sillynpc-font-serif);
+    --sillynpc-radius-md: 15px;
+    --sillynpc-radius-lg: 25px;
+    --sillynpc-shadow: 0 10px 30px rgba(244, 209, 209, 0.3);
+    --sillynpc-backdrop: blur(5px);
+    --sillynpc-glow: 0 0 15px rgba(244, 209, 209, 0.5);
+}
+
+.sillynpc-theme-rosewater .sillynpc-manage,
+.sillynpc-theme-rosewater .sillynpc-status-box,
+.sillynpc-theme-rosewater.sillynpc-hud-container,
+.sillynpc-theme-rosewater.sillynpc-player-sheet,
+.sillynpc-theme-rosewater.sillynpc-manage {
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    font-family: var(--sillynpc-font-serif);
+    /* FIX: Was transition:all — narrowed to specific properties */
+    transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sillynpc-theme-rosewater .sillynpc-manage::after,
+.sillynpc-theme-rosewater.sillynpc-player-sheet::after {
+    content: "✿";
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-size: 40px;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.sillynpc-theme-rosewater .sillynpc-setting {
+    /* FIX: Was transition:all */
+    transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--sillynpc-accent);
+}
+
+.sillynpc-theme-rosewater .sillynpc-setting:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(244, 209, 209, 0.4);
+    background: white;
+    border-color: #d4a373;
+}
+
+.sillynpc-theme-rosewater .sillynpc-section-title {
+    color: #d4a373;
+    font-style: italic;
+    border-bottom: 2px solid var(--sillynpc-accent);
+}
+
+.sillynpc-theme-rosewater .sillynpc-tab.active {
+    background: var(--sillynpc-accent);
+    color: var(--sillynpc-fg-primary);
+    box-shadow: 0 4px 10px rgba(244, 209, 209, 0.5);
+}
+
+.sillynpc-theme-rosewater .sillynpc-status-box {
+    border: 1px solid var(--sillynpc-border);
+    border-radius: 20px;
+}
+
+/* ─── Chat Injection ───────────────────────────────────────────────────── */
+/* FIX: This block injects into SillyTavern's .mes_text which has its own
+   aggressive styles. !important is justified here — it's the one place we
+   genuinely need to override a 3rd-party host stylesheet we can't modify. */
+
+.sillynpc-speech-block {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: var(--sillynpc-space-lg) !important;
+    /* Vertical padding is its own token because two rules set it - this one and the
+       coloured-background variant below - and they have to move together. 15px above and
+       below a block whose height is already set by the avatar read as a thick band of
+       empty colour; the 12px margin between blocks is what separates them. */
+    padding: var(--sillynpc-speech-pad-y, 6px) 0 !important;
+    margin: var(--sillynpc-space-md) 0 !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+    box-sizing: border-box !important;
+}
+
+.sillynpc-speech-text {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: block !important;
+    line-height: var(--sillynpc-line-height) !important;
+}
+
+.sillynpc-chat-avatar {
+    flex: 0 0 auto !important;
+    align-self: center !important;
+    margin: 0 !important;
+    display: block !important;
+    max-width: none !important;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    z-index: 1;
+}
+
+.sillynpc-chat-avatar:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.sillynpc-chat-avatar.shape-square   { border-radius: 0 !important; }
+.sillynpc-chat-avatar.shape-rounded  { border-radius: 10px !important; }
+.sillynpc-chat-avatar.shape-circle   { border-radius: 50% !important; }
+
+.sillynpc-chat-avatar.size-small  { width:  44px !important; min-width:  44px !important; height:  60px !important; }
+.sillynpc-chat-avatar.size-medium { width:  64px !important; min-width:  64px !important; height:  88px !important; }
+.sillynpc-chat-avatar.size-large  { width:  96px !important; min-width:  96px !important; height: 132px !important; }
+.sillynpc-chat-avatar.size-extra  { width: 132px !important; min-width: 132px !important; height: 180px !important; }
+
+/* Speech Block Coloring */
+.mes_text .sillynpc-speech-block[class*="color-"],
+.mes_text .sillynpc-speech-block[class*="color-"] * {
+    color: var(--sillynpc-color) !important;
+}
+
+.mes_text .sillynpc-speech-block.color-background,
+.mes_text .sillynpc-speech-block.color-all {
+    background-color: color-mix(in srgb, var(--sillynpc-color), transparent 85%) !important;
+    /* Horizontal padding stays: text needs clearance from a coloured edge. Only the
+       vertical band shrinks. */
+    padding: var(--sillynpc-speech-pad-y, 6px) 15px !important;
+    border-radius: 10px !important;
+}
+
+.mes_text .sillynpc-speech-block.color-border,
+.mes_text .sillynpc-speech-block.color-all {
+    border-left: 4px solid var(--sillynpc-color) !important;
+    padding-left: 15px !important;
+}
+
+.mes_text .sillynpc-speech-block.color-gradient {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--sillynpc-color), transparent 85%) 0%, transparent 100%) !important;
+    border-left: 4px solid var(--sillynpc-color) !important;
+    padding-left: 15px !important;
+}
+
+.mes_text .sillynpc-speech-block.color-all {
+    border-radius: 0 10px 10px 0 !important;
+}
+
+/* Dividers
+ *
+ * Mixed from the text colour rather than named outright, so each one keeps the same
+ * weight whatever the chat sits on. Subtle was a flat 5%-opacity white and Dashed used
+ * the theme's border colour: on a dark background both came out as good as invisible,
+ * which read as the setting doing nothing at all. */
+.sillynpc-speech-block.divider-subtle {
+    border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent) !important;
+}
+.sillynpc-speech-block.divider-bold   { border-top: 2px solid var(--SmartThemeQuoteColor, #c9a96e) !important; }
+.sillynpc-speech-block.divider-dashed {
+    border-top: 1px dashed color-mix(in srgb, currentColor 55%, transparent) !important;
+}
+.sillynpc-speech-block.divider-none   { border-top: none !important; }
+
+/* ─── Cards ────────────────────────────────────────────────────────────── */
+
+.sillynpc-category-heading.drag-over {
+    background: rgba(201, 169, 110, 0.2);
+    border-bottom: 2px solid var(--SmartThemeQuoteColor, #c9a96e);
+}
+
+.sillynpc-card-subgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
+    gap: var(--sillynpc-space-lg);
+    padding: var(--sillynpc-space-xs);
+    min-height: 50px;
+}
+
+.sillynpc-card {
+    position: relative;
+    background: var(--sillynpc-bg-primary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    aspect-ratio: 3 / 4;
+}
+
+.sillynpc-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--sillynpc-accent);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.sillynpc-card.dragging {
+    opacity: 0.4;
+    transform: scale(0.9);
+}
+
+.sillynpc-card.drag-over {
+    border: 2px solid var(--sillynpc-accent);
+    box-shadow: 0 0 10px var(--sillynpc-accent);
+}
+
+.sillynpc-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.sillynpc-card-fallback {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sillynpc-card-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--sillynpc-space-sm);
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    color: white;
+    font-size: 0.9em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sillynpc-card-color-stripe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    z-index: 2;
+}
+
+.sillynpc-card-delete {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 0, 0, 0.7);
+    color: white;
+    border: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 3;
+    transition: background 0.2s;
+}
+
+.sillynpc-card:hover .sillynpc-card-delete {
+    display: flex;
+}
+
+/* A character who is not in this chat.
+ *
+ * Dimmed rather than hidden: somebody you cannot see is somebody you cannot let back in,
+ * and a grid that silently drops half its cards teaches the wrong lesson. */
+.sillynpc-card-out-of-chat {
+    opacity: 0.35;
+    filter: grayscale(1);
+}
+
+.sillynpc-card-out-of-chat:hover {
+    opacity: 0.7;
+    filter: grayscale(0.4);
+}
+
+.sillynpc-card-scope {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 3;
+}
+
+.sillynpc-card:hover .sillynpc-card-scope {
+    display: flex;
+}
+
+.sillynpc-card-delete:hover {
+    background: rgba(255, 0, 0, 1);
+}
+
+.sillynpc-card-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    border: 2px dashed var(--sillynpc-border);
+    background: transparent;
+    color: var(--sillynpc-border);
+}
+
+.sillynpc-card-add:hover {
+    border-color: var(--sillynpc-accent);
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* ─── Editor ───────────────────────────────────────────────────────────── */
+
+.sillynpc-editor-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-lg);
+    margin-bottom: var(--sillynpc-space-xl);
+    padding-bottom: var(--sillynpc-space-md);
+    /* SillyTavern's own popup close sits at top:-6px right:-6px and is 24px square, so it
+       lands on top of whatever this row puts in its right-hand corner - which is the
+       delete button. Enough padding to clear it. */
+    padding-right: 28px;
+    border-bottom: 1px solid var(--sillynpc-border);
+    flex-wrap: wrap;
+}
+
+.sillynpc-editor-title {
+    flex: 1;
+    margin: 0;
+    font-size: 1.4em;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-editor-main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+}
+
+.sillynpc-editor-left {
+    flex: 0 0 260px;
+    max-width: 100%;
+}
+
+.sillynpc-editor-right {
+    flex: 1 1 260px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.sillynpc-editor-bigpreview {
+    /* width:100% plus a border is wider than its column without this. It never showed in
+       the character editor, whose left column has room to spare; the player sheet's is
+       240px and the two extra pixels put a scrollbar under the whole sidebar. */
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--sillynpc-radius-md);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-editor-bigpreview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.sillynpc-editor-bigpreview-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--sillynpc-fg-secondary);
+    font-size: 1.2em;
+}
+
+.sillynpc-editor-bigpreview-empty i {
+    font-size: 3em;
+}
+
+.sillynpc-img-gen-icon {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--sillynpc-accent);
+    color: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s, background 0.2s;
+}
+
+.sillynpc-img-gen-icon:hover {
+    transform: scale(1.1);
+    background: white;
+}
+
+.sillynpc-editor-image-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sillynpc-space-sm);
+    margin-top: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-xl);
+}
+
+.sillynpc-editor-field {
+    margin-bottom: var(--sillynpc-space-xl);
+}
+
+.sillynpc-editor-field label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: var(--sillynpc-space-sm);
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* ─── Color Controls ───────────────────────────────────────────────────── */
+
+.sillynpc-color-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+}
+
+.sillynpc-color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--sillynpc-radius-sm);
+    border: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-color-input {
+    flex: 1;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* ─── Alias & Path Fields ──────────────────────────────────────────────── */
+
+.sillynpc-alias-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+.sillynpc-alias-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    background: rgba(255, 255, 255, 0.05);
+    padding: var(--sillynpc-space-sm);
+    border-radius: 6px;
+    flex-wrap: wrap;
+}
+
+/* ─── Category Headings ────────────────────────────────────────────────── */
+
+.sillynpc-category-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    margin-top: 24px;
+    margin-bottom: var(--sillynpc-space-md);
+    padding-bottom: var(--sillynpc-space-xs);
+    border-bottom: 1px solid var(--sillynpc-accent);
+}
+
+.sillynpc-category-label {
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-category-delete,
+.sillynpc-category-rename {
+    background: transparent;
+    border: none;
+    color: var(--sillynpc-fg-secondary);
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: var(--sillynpc-space-xs);
+    transition: color 0.2s;
+}
+
+.sillynpc-category-delete:hover {
+    color: var(--sillynpc-danger);
+}
+
+/* Renaming is not destructive, so it does not borrow the delete colour. */
+.sillynpc-category-rename:hover {
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* A heading is both a place to drop a card and a thing to drag, so the two say different
+   things: filing a character underlines the heading (.drag-over, above), reordering shows
+   the line it would move to. Without the distinction a drop is a guess. */
+.sillynpc-category-heading[draggable="true"] {
+    cursor: grab;
+}
+
+.sillynpc-category-heading.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.sillynpc-category-heading.drag-over-category {
+    border-top: 2px solid var(--SmartThemeQuoteColor, #c9a96e);
+    background: rgba(201, 169, 110, 0.12);
+}
+
+/* --- Bulk delete -------------------------------------------------------------------
+   The same bar in six lists - the item library, two collection panels, the character
+   grid and both System Builder lists - so it has to read the same in all of them. */
+.sillynpc-bulk-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sillynpc-space-sm);
+}
+
+/* Destructive, and it is the button the count lives on, so it is the one that looks it. */
+.sillynpc-bulk-bar .sillynpc-bulk-delete {
+    color: var(--sillynpc-danger);
+}
+
+/* Disabled rather than hidden while nothing is ticked: a button that appears once you
+   have selected something gives no clue that selecting is what it is waiting for. */
+.sillynpc-bulk-bar .sillynpc-bulk-delete:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* --- Who is in this scene ----------------------------------------------------------
+   One row per name, with the three answers on the right. The name is given the room so
+   a long one does not push the choices off the panel. */
+.sillynpc-cast-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    flex-wrap: wrap;
+    padding: var(--sillynpc-space-sm) 0;
+    border-bottom: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-cast-name {
+    flex: 1;
+    min-width: 120px;
+    font-weight: bold;
+}
+
+.sillynpc-cast-choices {
+    display: flex;
+    gap: var(--sillynpc-space-md);
+    flex-wrap: wrap;
+}
+
+/* The whole label is the target, not the dot: a radio button on its own is a small thing
+   to hit, and the words beside it are what say which answer this is. */
+.sillynpc-cast-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sillynpc-space-xs);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Big enough to hit without care, since the row beside it is a click target too. */
+.sillynpc-bulk-check {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    cursor: pointer;
+    accent-color: var(--sillynpc-accent);
+}
+
+/* ─── Tab Panel Animation ──────────────────────────────────────────────── */
+
+.sillynpc-tab-panel[style*="display: flex"] {
+    animation: sillynpc-fade-in 0.3s ease-out;
+}
+
+/* ─── Status Tracker ───────────────────────────────────────────────────── */
+
+.sillynpc-status-tracker-container {
+    margin-top: 10px;
+    margin-bottom: var(--sillynpc-space-xs);
+    clear: both;
+    position: relative;
+}
+
+/* The swipe counter is drawn in the last message's footer, and the tracker box ended
+   directly underneath it - so the "2/3" sat on the box. Reserve the counter's own height
+   and margin, using SillyTavern's variables so this follows if it ever restyles them.
+   Only the last message: no other message has swipes to count. */
+.last_mes .sillynpc-status-tracker-container {
+    margin-bottom: calc(var(--swipeCounterHeight, 15px) + var(--swipeCounterMargin, 5px) + var(--sillynpc-space-xs));
+}
+
+/* The three-state eye that hides the tracker box.
+   Positioned against .mes rather than dropped into SillyTavern's swipe markup, which is
+   a pointer-events:none column on the right and an out-of-flow chevron on the left -
+   a child of either would ignore clicks or stack above the arrow instead of beside it.
+   Sharing the left chevron's line means sharing its offsets: .swipe_left sits at
+   left:20px and is 25px wide, so 47px clears it, and the vertical offset is the counter's
+   height through SillyTavern's own variables - as the rule above already does - so this
+   follows if it ever restyles them. */
+.sillynpc-tracker-eye {
+    position: absolute;
+    left: 47px;
+    bottom: calc(var(--swipeCounterHeight, 15px) + var(--swipeCounterMargin, 5px));
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    opacity: 0.3; /* at rest, like the swipe arrows it sits with */
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 9999;
+    transition: opacity var(--animation-duration, 125ms) ease-in-out;
+}
+
+.sillynpc-tracker-eye:hover {
+    opacity: 0.7;
+}
+
+/* One control, on the message that is always on screen. Every message is given an eye so
+   nothing depends on catching the moment the last message changes; this is what keeps
+   only one of them visible. */
+.mes:not(.last_mes) .sillynpc-tracker-eye {
+    display: none;
+}
+
+.sillynpc-status-box {
+    all: unset !important;
+    display: block !important;
+    position: relative !important; /* Allow absolute positioning of buttons */
+    background: var(--sillynpc-bg-primary) !important;
+    border: 1px solid var(--sillynpc-border) !important;
+    border-radius: var(--sillynpc-radius-md) !important;
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md) !important;
+    font-family: var(--sillynpc-font-family) !important;
+    font-size: var(--sillynpc-font-size-base) !important;
+    line-height: var(--sillynpc-line-height) !important;
+    color: var(--sillynpc-fg-primary) !important;
+    box-shadow: var(--sillynpc-shadow) !important;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+    word-break: break-word;
+    backdrop-filter: var(--sillynpc-backdrop) !important;
+    box-sizing: border-box !important;
+}
+
+.sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands):not(.sillynpc-status-buttons-container):not(.sillynpc-status-add-btn):not(.sillynpc-status-settings-btn):not(.sillynpc-status-undo-btn):not(.sillynpc-status-meter):not(.sillynpc-status-meter-fill):not(.sillynpc-status-meter-text):not(.sillynpc-status-portrait) {
+    all: revert !important;
+    box-sizing: border-box !important;
+    font-family: inherit !important;
+    color: inherit !important;
+}
+
+/* The header buttons, at the top right of the tracker box.
+   Floated rather than absolutely positioned, so the text beside them wraps around them
+   instead of running underneath. The room for them used to be a fixed padding-right on
+   the header - 50px, which is about two buttons - and the row can carry four: undo
+   appears once there is history, and the cast control was added later. Any count that
+   outgrew the guess put the world stats under the icons. A float needs no guess, and
+   cannot go stale the next time a button is added. */
+.sillynpc-status-buttons-container {
+    float: right !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    align-items: center !important;
+    /* Clear of the text it now sits beside rather than over. */
+    margin: 0 0 4px 10px !important;
+    position: relative !important;
+    z-index: 10 !important;
+}
+
+.sillynpc-status-add-btn,
+.sillynpc-status-undo-btn,
+.sillynpc-status-settings-btn {
+    cursor: pointer !important;
+    opacity: 0.5 !important;
+    padding: 4px !important;
+    font-size: 14px !important;
+    color: inherit !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: opacity 0.2s, color 0.2s !important;
+}
+
+.sillynpc-status-add-btn:hover,
+.sillynpc-status-undo-btn:hover,
+.sillynpc-status-settings-btn:hover {
+    opacity: 1 !important;
+    /* Use the theme's readable accent rather than a raw SillyTavern variable, so the
+       hover colour follows the selected SillyNPC theme like everything else. */
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent)) !important;
+}
+
+/* Restore-recommended sits under its textarea, quiet: it replaces work someone may
+   have spent time on, so it must not read as the obvious thing to click. */
+.sillynpc-restore-recommended {
+    margin-top: 6px;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.sillynpc-restore-recommended:hover {
+    opacity: 1;
+}
+
+/* ─── Advanced settings block ─────────────────────────────────────────── */
+
+/* ─── Time rules ───────────────────────────────────────────────────────── */
+/* One rule reads as a sentence across the row: stat, by N, every M minutes, while X
+   is Y. Wraps rather than scrolls, since the tail of a rule is the part worth seeing. */
+
+.sillynpc-time-rule {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--sillynpc-border), transparent 60%);
+}
+
+.sillynpc-time-rule:last-child { border-bottom: none; }
+
+.sillynpc-time-rule select,
+.sillynpc-time-rule input[type="text"],
+.sillynpc-time-rule input[type="number"] {
+    height: 26px;
+    font-size: 0.9em;
+    padding: 2px 6px;
+}
+
+.sillynpc-time-rule-label {
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.sillynpc-time-rule .delete-btn {
+    margin-left: auto;
+}
+
+/* ─── History scan button ──────────────────────────────────────────────── */
+/* Lives in #leftSendForm beside SillyTavern's own options button, so it has to match
+   that button's size and weight rather than the extension's own controls. */
+
+.sillynpc-scan-button {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.sillynpc-scan-button:hover {
+    opacity: 1;
+}
+
+.sillynpc-scan-button.sillynpc-scanning {
+    opacity: 1;
+    color: var(--sillynpc-accent);
+    animation: sillynpc-scan-pulse 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes sillynpc-scan-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+/* ─── Historical status box ────────────────────────────────────────────── */
+/* Under an older message the box shows that moment, not now. It has to be obviously
+   not-live, or a past number reads as a current one. */
+
+.sillynpc-status-historical {
+    opacity: 0.82;
+}
+
+.sillynpc-status-historical .sillynpc-status-box {
+    border-left: 3px solid color-mix(in srgb, var(--sillynpc-accent), transparent 45%);
+}
+
+/* Nothing recorded for the messages after this one, so the rewind could not complete. */
+.sillynpc-status-approximate .sillynpc-status-box {
+    border-left-style: dotted;
+}
+
+/* ─── Change Review Panel ──────────────────────────────────────────────── */
+/* Sits under the message that proposed the changes, as a sibling of the status box
+   rather than inside it - the box applies `all: revert !important` to its descendants,
+   which would flatten this entirely. */
+
+.sillynpc-review-panel {
+    margin-top: var(--sillynpc-space-md);
+    padding: var(--sillynpc-space-md);
+    border: 1px solid var(--sillynpc-accent-text, var(--sillynpc-accent));
+    border-radius: var(--sillynpc-radius-md);
+    background: color-mix(in srgb, var(--sillynpc-bg-secondary), transparent 25%);
+    font-size: 0.9em;
+}
+
+.sillynpc-review-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: var(--sillynpc-space-sm);
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-review-owner {
+    margin-top: var(--sillynpc-space-sm);
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.6;
+}
+
+.sillynpc-review-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    flex-wrap: wrap;
+}
+
+.sillynpc-review-toggle {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.sillynpc-review-icon {
+    opacity: 0.55;
+    width: 1em;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sillynpc-review-label {
+    flex: 1;
+    min-width: 100px;
+    font-weight: 600;
+}
+
+.sillynpc-review-from {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.sillynpc-review-arrow {
+    opacity: 0.5;
+}
+
+/* Editable because "it says 5 but it should be 4" has a right answer, and rejecting the
+   row outright would leave the state wrong a different way. */
+input.sillynpc-review-to {
+    width: 90px;
+    padding: 2px 6px;
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-sm);
+    background: var(--sillynpc-bg-primary);
+    color: inherit;
+    font: inherit;
+}
+
+span.sillynpc-review-to {
+    font-weight: 600;
+}
+
+.sillynpc-review-why {
+    width: 100%;
+    padding-left: 32px;
+    opacity: 0.55;
+    font-size: 0.85em;
+}
+
+/* The line carries the reader's own account of the change as well as the extension's
+   risk note, and that account is the thing being read - so it is not dimmed as far as a
+   bare "large swing" is, and it wraps rather than being cut off. */
+.sillynpc-review-why.has-note {
+    opacity: 0.8;
+    white-space: normal;
+}
+
+/* Reasons that matched no row. Set apart from the rows so it is clear they explain
+   nothing on the list, which is itself the point of showing them. */
+.sillynpc-review-loose-notes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-xs);
+    margin: var(--sillynpc-space-sm) 0;
+    padding: var(--sillynpc-space-sm);
+    border-left: 2px solid var(--sillynpc-border);
+    opacity: 0.75;
+    font-size: 0.85em;
+}
+
+.sillynpc-review-loose-note {
+    padding-left: var(--sillynpc-space-sm);
+}
+
+/* A deletion is the one thing that cannot be undone by simply waiting, so it reads as a
+   warning and starts unticked. */
+.sillynpc-review-row.kind-item-remove .sillynpc-review-icon,
+.sillynpc-review-row.kind-item-remove .sillynpc-review-why {
+    color: var(--sillynpc-danger);
+    opacity: 0.85;
+}
+
+.sillynpc-review-row.kind-item-add .sillynpc-review-icon {
+    color: var(--sillynpc-success);
+}
+
+/* Opt-in, and quiet: blacklisting an item forever is a rarer decision than declining
+   one, so it must not read as the obvious thing to click. */
+/* Where a row is going. Reads as part of the sentence rather than a form: an addition
+   and a move used to look identical, because neither named a collection. */
+.sillynpc-review-dest {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.sillynpc-review-dest > small {
+    opacity: 0.5;
+}
+
+.sillynpc-review-dest-fixed {
+    opacity: 0.7;
+}
+
+.sillynpc-review-dest-select {
+    height: 24px;
+    padding: 1px 4px;
+    font-size: 0.85em;
+    max-width: 130px;
+    background: var(--sillynpc-bg-primary);
+    color: inherit;
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+.sillynpc-review-never {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 32px;
+    font-size: 0.8em;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.sillynpc-review-never:hover {
+    opacity: 0.9;
+}
+
+.sillynpc-review-never input {
+    cursor: pointer;
+}
+
+.sillynpc-review-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: var(--sillynpc-space-md);
+    flex-wrap: wrap;
+}
+
+/* ─── NPC Portraits in the tracker ─────────────────────────────────────── */
+
+.sillynpc-status-portrait {
+    display: inline-block !important;
+    width: 1.6em !important;
+    height: 1.6em !important;
+    object-fit: cover !important;
+    /* Round, so it crops the same way the HUD portrait does and needs the same framing. */
+    object-position: center var(--sillynpc-portrait-focus, top) !important;
+    border-radius: 50% !important;
+    vertical-align: -0.4em !important;
+    margin-right: 6px !important;
+    border: 1px solid color-mix(in srgb, var(--sillynpc-border), transparent 40%) !important;
+    /* The row is text-sized; a portrait that fails to load must not collapse the line. */
+    background: color-mix(in srgb, var(--sillynpc-fg-primary), transparent 85%) !important;
+    flex-shrink: 0 !important;
+}
+
+/* ─── Stat Meters ──────────────────────────────────────────────────────── */
+/* A stat configured as a Meter renders its value on top of a proportional bar.
+   The value stays contenteditable, so the gauge is decoration around the same
+   control rather than a replacement for it. */
+
+.sillynpc-status-meter {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 64px !important;
+    padding: 0 6px !important;
+    border-radius: var(--sillynpc-radius-sm) !important;
+    background: color-mix(in srgb, var(--sillynpc-fg-primary), transparent 88%) !important;
+    overflow: hidden !important;
+    vertical-align: middle !important;
+    line-height: 1.4 !important;
+}
+
+.sillynpc-status-meter-fill {
+    position: absolute !important;
+    inset: 0 auto 0 0 !important;
+    background: color-mix(in srgb, var(--sillynpc-accent-text, var(--sillynpc-accent)), transparent 55%) !important;
+    transition: width 0.3s ease !important;
+    pointer-events: none !important;
+}
+
+.sillynpc-status-meter-text {
+    position: relative !important;
+    z-index: 1 !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+/* The header reserves no room for the buttons on purpose. They float, so its text wraps
+   around however many there are; a fixed reservation here - 50px, about two buttons - is
+   what let a row of four overlap it. Giving this a block formatting context (overflow,
+   display:flow-root) would stop the wrap and bring the overlap back in another form. */
+.sillynpc-status-char {
+    margin-bottom: 3px;
+    display: block;
+    line-height: 1.6;
+}
+
+.sillynpc-status-editable {
+    padding: 0px 2px;
+    border-radius: 2px;
+    cursor: text;
+    display: inline-block;
+    min-width: 5px;
+    border-bottom: 1px dashed transparent;
+}
+
+.sillynpc-status-editable:hover {
+    border-bottom-color: currentColor;
+}
+
+.sillynpc-status-editable:focus {
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+    border-bottom: 1px solid currentColor;
+}
+
+.sillynpc-status-dashboard {
+    color: var(--st-text-color);
+}
+
+/* ─── HUD Widget ───────────────────────────────────────────────────────── */
+
+.sillynpc-hud-container {
+    position: fixed;
+    z-index: var(--sillynpc-z-hud);
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-primary);
+    backdrop-filter: var(--sillynpc-backdrop);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-lg);
+    box-shadow: var(--sillynpc-shadow);
+    pointer-events: all;
+    transition: transform 0.2s ease, opacity 0.2s ease, background 0.3s, border-color 0.3s, box-shadow 0.3s;
+    transform-origin: center center;
+}
+
+/* Clear of SillyTavern's top bar rather than 20px from the window edge, which put the
+   HUD under it. The variable is SillyTavern's own and follows the user's font scale. */
+.sillynpc-hud-container.top-right    { top: calc(var(--topBarBlockSize, 34px) + 20px); right: 20px; }
+.sillynpc-hud-container.top-left     { top: calc(var(--topBarBlockSize, 34px) + 20px); left: 20px; flex-direction: row-reverse; }
+.sillynpc-hud-container.bottom-right { bottom: 20px; right: 20px; }
+.sillynpc-hud-container.bottom-left  { bottom: 20px; left: 20px; flex-direction: row-reverse; }
+
+/* Persona images are 2:3 - SillyTavern renders the thumbnail at 96x144 - and this frame is
+ * a circle, so `cover` keeps a square from the middle and discards the top and bottom. On a
+ * full-body picture the discarded top is exactly the head.
+ *
+ * `top` is the fallback rather than the JavaScript default, so the right framing holds
+ * before any of it runs. Portrait Framing overrides it by setting the variable. */
+.sillynpc-hud-portrait {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center var(--sillynpc-portrait-focus, top);
+    border: 2px solid var(--sillynpc-accent);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+}
+
+.sillynpc-hud-portrait:hover {
+    transform: scale(1.05);
+    z-index: 5;
+}
+
+.sillynpc-hud-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 120px;
+}
+
+.sillynpc-hud-stat-row {
+    width: 100%;
+}
+
+.sillynpc-hud-bar-wrap {
+    width: var(--sillynpc-hud-meter-width, 92px);
+    height: var(--sillynpc-hud-meter-height, 14px);
+    background: var(--sillynpc-bg-secondary);
+    border-radius: var(--sillynpc-radius-md);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-hud-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+
+.sillynpc-hud-bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 0 2px black;
+}
+
+/* ─── Player Sheet Modal ───────────────────────────────────────────────── */
+
+.sillynpc-modal.sillynpc-player-sheet {
+    display: flex;
+    flex-direction: column;
+    /* Fills the dialog, the way .sillynpc-manage does. It used to be a fixed
+       1200x700 inside a dialog sized to the popup-width setting, so on a wide
+       screen the sheet sat in the left of it looking off-centre - and the width
+       and height settings did nothing here at all. */
+    width: 100%;
+    height: 100%;
+    background: var(--sillynpc-bg-primary);
+    color: var(--sillynpc-fg-primary);
+    padding: var(--sillynpc-space-xl);
+    box-sizing: border-box;
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-lg);
+    box-shadow: var(--sillynpc-shadow);
+}
+
+.sillynpc-sheet-header {
+    margin-bottom: var(--sillynpc-space-xl);
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--sillynpc-accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sillynpc-sheet-close {
+    cursor: pointer;
+    font-size: 20px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.sillynpc-sheet-close:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.sillynpc-sheet-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.sillynpc-sheet-title .persona-name {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.sillynpc-sheet-title .level-badge {
+    background: var(--sillynpc-accent);
+    color: black;
+    padding: 2px 10px;
+    border-radius: var(--sillynpc-radius-sm);
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.sillynpc-sheet-body {
+    display: flex;
+    gap: var(--sillynpc-space-xl);
+    flex: 1;
+    overflow: hidden;
+}
+
+/* The portrait and its controls. The lorebook entry used to sit here too, and a linked
+   entry is several paragraphs: in a fixed column with nothing to scroll it flattened the
+   portrait on the way past. It has a tab of its own now. */
+.sillynpc-sheet-sidebar {
+    flex: 0 0 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+    /* So the scrollbar sits beside the content rather than on top of it. */
+    padding-right: var(--sillynpc-space-sm);
+}
+
+/* A flex item shrinks before it scrolls, which is how the portrait came to be squeezed to
+   nothing rather than the column simply being too long. Nothing in here may shrink. */
+.sillynpc-sheet-sidebar > * {
+    flex-shrink: 0;
+}
+
+/* The portrait block's own buttons already carry the gap below them. */
+.sillynpc-sheet-sidebar .sillynpc-editor-image-buttons {
+    margin-bottom: 0;
+}
+
+.sillynpc-sheet-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.sillynpc-sheet-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-sheet-tabs .sillynpc-tab {
+    padding: var(--sillynpc-space-sm) 15px;
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.7;
+    margin-bottom: -1px;
+}
+
+.sillynpc-sheet-tabs .sillynpc-tab.active {
+    opacity: 1;
+    background: var(--sillynpc-bg-primary);
+    border-top: 2px solid var(--sillynpc-accent);
+    font-weight: bold;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-sheet-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.sillynpc-attributes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+}
+
+.sillynpc-attribute-item {
+    background: var(--sillynpc-bg-secondary);
+    padding: var(--sillynpc-space-md);
+    border-radius: var(--sillynpc-radius-md);
+    border: 1px solid var(--sillynpc-border);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.sillynpc-attribute-item .attr-name {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+}
+
+.sillynpc-attribute-item .attr-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-inline-edit {
+    cursor: pointer;
+}
+
+.sillynpc-inline-edit:focus {
+    outline: 1px solid var(--sillynpc-accent);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* ─── Collection / Item Cards ──────────────────────────────────────────── */
+
+.sillynpc-collection-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.sillynpc-collection-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sillynpc-item-card {
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-md);
+    padding: var(--sillynpc-space-md);
+    position: relative;
+    transition: background 0.2s;
+}
+
+.sillynpc-item-card:hover {
+    background: color-mix(in srgb, var(--sillynpc-bg-secondary), white 5%);
+}
+
+.sillynpc-item-card .item-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.sillynpc-item-card .item-name {
+    font-weight: bold;
+    font-size: 16px;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-item-card .item-quantity {
+    font-weight: bold;
+    opacity: 0.8;
+}
+
+.sillynpc-item-card .item-description {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.sillynpc-item-card .item-actions {
+    position: absolute;
+    top: var(--sillynpc-space-md);
+    right: var(--sillynpc-space-md);
+    display: flex;
+    gap: 10px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.sillynpc-item-card:hover .item-actions {
+    opacity: 1;
+}
+
+.sillynpc-item-card .item-actions i {
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.sillynpc-item-card .item-actions i:hover {
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* The flex container is .sillynpc-manage-layout, NOT .sillynpc-manage.
+       This used to target the wrapper, so the layout stayed flex-direction: row
+       while the tab bar became a full-width row beside it. The tabs then ate the
+       whole width and the content panel was squeezed to ~30px off the right edge,
+       making the extension unusable in a narrow window. */
+    .sillynpc-manage-layout {
+        flex-direction: column;
+    }
+
+    .sillynpc-tabs {
+        width: 100%;
+        /* The base rule sets height:100%; in a row bar that stretched every tab
+           button to full popup height, leaving the labels floating mid-screen. */
+        height: auto;
+        flex-direction: row;
+        flex-shrink: 0;
+        /* position:sticky/top:0 only makes sense for the vertical sidebar. */
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--sillynpc-border);
+        padding: var(--sillynpc-space-sm);
+        /* Wrap onto a second row rather than scrolling horizontally: a scrollable
+           tab strip hides tabs with no visible affordance, and at 620px the eight
+           tabs need ~900px. */
+        flex-wrap: wrap;
+        overflow: visible;
+        row-gap: var(--sillynpc-space-xs);
+    }
+
+    .sillynpc-tabs .sillynpc-tab {
+        flex: 0 0 auto;
+        /* The base rule sets width:100% for the vertical sidebar. Left alone in a
+           horizontal bar every tab became ~555px wide, giving the bar 4500px of
+           scroll width and pushing all but the first two tabs out of reach. */
+        width: auto;
+        white-space: nowrap;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        border-radius: 6px 6px 0 0;
+    }
+
+    .sillynpc-tabs .sillynpc-tab.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--sillynpc-accent);
+    }
+
+    /* The spacer that right-aligns Import/Export in the vertical sidebar adds
+       hundreds of pixels of dead scroll width once the bar is horizontal. */
+    .sillynpc-tabs > div[style*="flex-grow"] {
+        display: none;
+    }
+
+    /* Same width:100% problem as the tabs - left alone these two sat on their own
+       full-width rows and made the bar ~200px tall. */
+    .sillynpc-tabs .sillynpc-import-btn,
+    .sillynpc-tabs .sillynpc-export-btn {
+        width: auto;
+        flex: 0 0 auto;
+        margin-top: 0;
+    }
+
+    /* Without this the panel refuses to shrink inside the column flex and the
+       tab bar gets pushed off the top. */
+    .sillynpc-tab-panel {
+        min-height: 0;
+    }
+
+    .sillynpc-editor-main {
+        gap: var(--sillynpc-space-lg);
+    }
+}
+
+/* ─── Collection Readonly Mode ─────────────────────────────────────────── */
+.sillynpc-item-card.readonly-mode {
+    background: color-mix(in srgb, var(--sillynpc-bg-secondary), transparent 50%);
+    border: 1px solid var(--sillynpc-border);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+    padding: 10px;
+    border-radius: var(--sillynpc-radius-md);
+    margin-bottom: 10px;
+}
+
+.readonly-field {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--sillynpc-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--sillynpc-border), transparent 80%);
+}
+
+.readonly-field.multiline {
+    display: flex;
+    flex-direction: column;
+}
+
+.readonly-field .field-label {
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 4px;
+    border-bottom: 1px solid color-mix(in srgb, var(--sillynpc-border), transparent 80%);
+    padding-bottom: 2px;
+}
+
+.readonly-field .field-value {
+    font-size: 0.95em;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+@media (max-width: 500px) {
+    .sillynpc-setting-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--sillynpc-space-sm);
+        min-height: auto;
+    }
+
+    .sillynpc-setting .text_pole,
+    .sillynpc-setting select,
+    .sillynpc-setting .slider-container {
+        flex: 1 1 auto;
+        max-width: 100%;
+        width: 100%;
+    }
+}
+/* A lore reply that ignored the requested format.
+ *
+ * Above the preview rather than instead of it: the usual cause is that the instruction
+ * never reached the model, so what came back is the story model answering in character -
+ * occasionally salvageable, never a lore entry. */
+.sillynpc-lore-warning {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border-left: 3px solid var(--SmartThemeQuoteColor, #c9a96e);
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+/* Stepping through a character's saved portraits. The arrows sit over the preview rather
+   than beside it so the image keeps the full width of the column, and they are hidden
+   entirely below two images by the code that builds them. */
+.sillynpc-img-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6em;
+    cursor: pointer;
+    opacity: 0.55;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    /* Legible over a light or dark portrait without a solid backing plate. */
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    transition: opacity 0.15s ease;
+    z-index: 2;
+}
+
+.sillynpc-img-nav:hover {
+    opacity: 1;
+}
+
+.sillynpc-img-nav-prev {
+    left: 4px;
+}
+
+.sillynpc-img-nav-next {
+    right: 4px;
+}
+
+.sillynpc-img-nav-count {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--sillynpc-font-mono);
+    font-size: 0.8em;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    z-index: 2;
+}
+
+/* Choosing what a generation should be drawn from. */
+.sillynpc-genmode-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-md);
+    margin: var(--sillynpc-space-md) 0;
+}
+
+.sillynpc-genmode-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sillynpc-space-md);
+    cursor: pointer;
+    text-align: left;
+}
+
+.sillynpc-genmode-row input[type="radio"] {
+    margin-top: 4px;
+    flex: 0 0 auto;
+}
+
+.sillynpc-genref-area {
+    margin-top: var(--sillynpc-space-md);
+}
+
+.sillynpc-genref-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sillynpc-space-md);
+    margin: var(--sillynpc-space-md) 0;
+}
+
+.sillynpc-genref-cell {
+    width: 72px;
+    height: 96px;
+    border: 2px solid transparent;
+    border-radius: var(--sillynpc-radius-sm, 4px);
+    overflow: hidden;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.sillynpc-genref-cell img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+}
+
+.sillynpc-genref-cell.selected {
+    border-color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    opacity: 1;
+}
+
+.sillynpc-genresult-image {
+    max-width: 100%;
+    max-height: 55vh;
+    display: block;
+    margin: 0 auto var(--sillynpc-space-md);
+    border-radius: var(--sillynpc-radius-sm, 4px);
+}
+
+/* Removing a portrait. Bottom-left, clear of the generate wand and the nav arrows, and
+   deliberately understated: it deletes a file, so it should not invite a stray click. */
+.sillynpc-img-delete {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    opacity: 0.4;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    font-size: 0.85em;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    z-index: 2;
+}
+
+.sillynpc-img-delete:hover {
+    opacity: 1;
+    background: rgba(160, 40, 40, 0.85);
+}
+
+/* Which characters this chat is for. Previously it borrowed the sync row's class and was
+   nudged into shape with inline styles at four separate places, which is why it sat
+   ragged against the grid below it. Its own panel, centred, with the controls in tidy
+   rows instead of wrapping flex children with flex-basis:100%. */
+/* --- Finding a setting without knowing which page it is on --------------------------
+   Above the tabs, because it is a way of getting to a tab rather than something on one. */
+.sillynpc-settings-search {
+    position: relative;
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+.sillynpc-settings-search-input {
+    width: 100%;
+    text-align: left;
+}
+
+/* Over the tabs rather than pushing them down: the list is transient, and a rail that
+   jumps every time you type is harder to use than one that does not move. */
+.sillynpc-settings-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 2px;
+    border: 1px solid var(--sillynpc-border, rgba(128, 128, 128, 0.25));
+    border-radius: var(--sillynpc-radius-sm, 4px);
+    background: var(--sillynpc-bg-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.sillynpc-settings-search-hit {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sillynpc-settings-search-hit:hover,
+.sillynpc-settings-search-hit:focus-visible {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.sillynpc-settings-search-label {
+    font-weight: 500;
+}
+
+/* Which page, because half of what makes this useful is learning where things are rather
+   than being taken there blind every time. */
+.sillynpc-settings-search-where {
+    font-size: 0.8em;
+    color: var(--sillynpc-fg-secondary);
+}
+
+.sillynpc-settings-search-none {
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    text-align: left;
+}
+
+/* Where the search took you. A long page arriving with nothing marked is barely better
+   than not being brought at all. */
+.sillynpc-setting-found {
+    outline: 2px solid var(--sillynpc-accent);
+    outline-offset: 3px;
+    border-radius: var(--sillynpc-radius-sm, 4px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .sillynpc-setting-found {
+        transition: outline-color 0.3s ease;
+    }
+}
+
+/* Finding a character among many. Sits directly above what it filters, because a box
+   further away than the thing it acts on reads as belonging to something else. */
+.sillynpc-grid-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+.sillynpc-grid-filter-input {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+
+/* Says how many of how many, so a short list is told from a narrow filter. */
+.sillynpc-grid-filter-count {
+    white-space: nowrap;
+    color: var(--sillynpc-fg-secondary);
+}
+
+/* The row above the grid: a count, the select bar, and two buttons.
+
+   It had no rule at all, so it was a plain block and the three controls sat
+   against each other with nothing between them - createElement and append put no
+   whitespace between siblings, so there was not even the accidental space an
+   inline layout normally borrows from the source. */
+.sillynpc-sync-all-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+.sillynpc-chat-scope {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    padding: var(--sillynpc-space-lg, 12px);
+    margin-bottom: var(--sillynpc-space-md);
+    text-align: center;
+    border: 1px solid var(--sillynpc-border, rgba(128, 128, 128, 0.25));
+    border-radius: var(--sillynpc-radius-sm, 4px);
+    background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.sillynpc-chat-scope-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.sillynpc-chat-scope-categories {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sillynpc-space-md) var(--sillynpc-space-lg, 14px);
+}
+
+.sillynpc-chat-scope-categories label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.sillynpc-chat-scope .notes {
+    max-width: 62ch;
+}
+
+
+
+/* One rank below a section title. The Writing Rules tab has two halves with three
+   features in the first, so the features need to read as parts of the half above them
+   rather than as five equal headings. Quieter on every count: no rule, no uppercase,
+   the body colour rather than the accent. */
+.sillynpc-subsection-title {
+    margin: var(--sillynpc-space-lg) 0 var(--sillynpc-space-sm);
+    font-size: 1em;
+    letter-spacing: 0.04em;
+    color: var(--sillynpc-fg-primary, inherit);
+    text-align: left;
+}
+
+/* Prose introducing a tab or one of its halves: left, and the width it is given, for the
+   same reason the Threads blurb is - a centred paragraph inherited from SillyTavern's own
+   .popup reads as a block pinned at one width. */
+.sillynpc-tab-intro {
+    width: 100%;
+    max-width: 100ch;
+    text-align: left;
+    line-height: 1.55;
+    margin: 0 0 var(--sillynpc-space-md);
+}
+
+/* Two buttons that do opposite things, kept apart. */
+.sillynpc-backup-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+/* --- The pool of faces for strangers ------------------------------------------------
+   A grid rather than a list: these are chosen by looking at them, and the tags under
+   each one are what decides who wears it. */
+.sillynpc-pool-note {
+    max-width: 100ch;
+    text-align: left;
+    line-height: 1.55;
+    margin: 0 0 var(--sillynpc-space-md);
+}
+
+.sillynpc-pool-grid {
+    display: grid;
+    /* As many as fit, never fewer than one, and each stays wide enough for its tags. */
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-lg, 12px);
+}
+
+.sillynpc-pool-empty {
+    grid-column: 1 / -1;
+    text-align: left;
+    margin: 0;
+}
+
+.sillynpc-pool-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm);
+    border: 1px solid var(--sillynpc-border, rgba(128, 128, 128, 0.25));
+    border-radius: var(--sillynpc-radius-sm, 4px);
+    background: var(--sillynpc-bg-secondary);
+}
+
+/* A fixed frame so a portrait and a landscape photograph line up in the same grid. */
+.sillynpc-pool-frame {
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--sillynpc-radius-sm, 4px);
+}
+
+.sillynpc-pool-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sillynpc-pool-tags {
+    width: 100%;
+    font-size: 0.85em;
+    text-align: left;
+}
+
+/* Over the picture's corner: the cell is small, and a full-width button under the tags
+   would take as much room as the face it removes. */
+.sillynpc-pool-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 2px 6px;
+    line-height: 1;
+    color: var(--sillynpc-danger);
+    background: var(--sillynpc-bg-primary);
+    opacity: 0.85;
+}
+
+.sillynpc-pool-remove:hover {
+    opacity: 1;
+}
+
+/* Seeing a portrait whole. The preview crops to a fixed frame, so this is the only way to
+   see the picture as generated without opening the file on disk. */
+.sillynpc-lightbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sillynpc-lightbox img {
+    max-width: 100%;
+    max-height: 78vh;
+    border-radius: var(--sillynpc-radius-sm, 4px);
+}
+
+/* ── HUD meters ────────────────────────────────────────────────────────────
+
+   The colours used to be keyed to the stat's *name* - .hud-bar.hp was red, .energy blue
+   - so marking any other stat as Primary produced a meter with no background at all. It
+   appeared, drew nothing, and read as "Primary does nothing". The colour is set inline
+   from the stat now; what remains here is shape.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Ten notches filled from the left, for systems that count in pips rather than percent. */
+.sillynpc-hud-bar-wrap.segmented {
+    display: flex;
+    gap: 2px;
+    background: transparent;
+    border: 0;
+    overflow: visible;
+}
+
+.sillynpc-hud-segment {
+    flex: 1;
+    height: 100%;
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: 1px;
+}
+
+/* A stat with no number in it cannot fill anything, so it is shown as its value alone
+   rather than as a bar stuck at 0% for the life of the chat. */
+.sillynpc-hud-stat-text {
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1.4;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Arcs around the portrait, nested inward, one per stat.
+
+   Drawn as SVG strokes. The first attempt was a conic-gradient div clipped by a
+   radial-gradient mask, and when the mask did not apply every ring rendered as a filled
+   square stacked behind the portrait - the HUD became a pile of coloured blocks. A stroked
+   circle has no clip to lose. */
+.sillynpc-hud-rings {
+    position: absolute;
+    /* Exactly the space the rings occupy, written by the painter that drew them. It was a
+       fraction of the portrait size, which meant the gap between the image and the first
+       ring grew with the portrait and had nothing to do with how thick the rings were. */
+    inset: calc(var(--sillynpc-hud-ring-overhang, 8px) * -1);
+    width: auto;
+    height: auto;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.sillynpc-hud-ring-track {
+    fill: none;
+    stroke: var(--sillynpc-border);
+    /* No stroke-width here: it is set per ring from the thickness setting, and a rule at
+       this level would beat the presentation attribute and pin every ring to one size. */
+    opacity: 0.35;
+}
+
+.sillynpc-hud-ring-arc {
+    fill: none;
+    stroke-linecap: round;
+    /* From the top rather than from three o'clock, which is where a meter is expected to
+       start filling. */
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dasharray 0.3s ease;
+}
+
+/* Nothing hides the rings: a square portrait falls back to bars in the renderer, so the
+   meters are still shown rather than silently disappearing. */
+
+/* ── HUD proportions ───────────────────────────────────────────────────────
+
+   The portrait was a fixed 60px while the meter column grew with the number of stats, so
+   the two lined up only by coincidence: at two meters the column was about 36px against a
+   60px circle, which is the lopsidedness that made the whole HUD look wrong. The size is
+   computed from the row count in applyHudProportions and arrives as a variable.
+
+   The frame was also heavier than it needed to be - 8px/12px of padding, a further 12px
+   gap and a 12px radius around a panel only 60px tall.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.sillynpc-hud-container {
+    gap: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm);
+    border-radius: var(--sillynpc-radius-md);
+}
+
+.sillynpc-hud-portrait {
+    width: var(--sillynpc-hud-portrait-size, 60px);
+    height: var(--sillynpc-hud-portrait-size, 60px);
+    /* Rings are absolutely positioned against this. */
+    position: relative;
+    border-color: var(--sillynpc-hud-portrait-border, var(--sillynpc-accent));
+}
+
+.sillynpc-hud-container.portrait-square .sillynpc-hud-portrait {
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+/* Explicit sides win over whatever the docked corner implies, so a HUD in the top-left
+   can still keep its portrait on the right. */
+.sillynpc-hud-container.portrait-left  { flex-direction: row; }
+.sillynpc-hud-container.portrait-right { flex-direction: row-reverse; }
+
+.sillynpc-hud-stats {
+    /* Follows the meter, so widening one does not leave the column clipping it. */
+    min-width: var(--sillynpc-hud-meter-width, 92px);
+}
+
+/* With rings there is often nothing in the column at all, and the reserved width became a
+   slab of empty panel beside the portrait - wider the wider the meter was set. An empty
+   column takes no room; a column holding text rows still sizes itself to its content
+   rather than to the bar width, which rings do not use. */
+.sillynpc-hud-stats:empty {
+    display: none;
+}
+
+.sillynpc-hud-container.meter-ring .sillynpc-hud-stats {
+    min-width: 0;
+}
+
+/* Rings sit outside the portrait, so the panel needs room or they cross its edge. The
+   overhang is set on the portrait by the painter, so it is read from there. */
+.sillynpc-hud-container.meter-ring {
+    padding: calc(var(--sillynpc-space-xs) + var(--sillynpc-hud-ring-overhang, 8px));
+}
+
+/* With rings and nothing else, the panel is a rounded rectangle wrapped around a circle -
+   which is the dark slab showing in the corners. Matching the portrait's shape makes the
+   background read as a backing plate rather than as a stray box. */
+.sillynpc-hud-container.meter-ring:not(.portrait-square) {
+    border-radius: 50%;
+}
+
+/* Icon-and-label buttons. SillyTavern styles .menu_button as a flex container, which turns
+   the space in `<i></i> Back` into an anonymous flex item and then discards it - so the
+   icon sat against its text. An explicit gap works whether the button is flex or not, and
+   the stray whitespace node is dropped either way, so nothing double-spaces.
+
+   Matched on any element of ours, and any popup holding one, rather than on a list of
+   container names: the list was correct when written and then every popup added after it
+   - the lore generator, the change review - started life without the gap again. */
+[class*="sillynpc-"] .menu_button,
+.popup:has([class*="sillynpc-"]) .menu_button,
+.sillynpc-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+/* Saved states of a system. Each row is a point you can go back to, so it reads as a list
+   of moments rather than a settings block. */
+.sillynpc-checkpoint-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    margin-top: var(--sillynpc-space-sm);
+}
+
+.sillynpc-checkpoint-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    padding: var(--sillynpc-space-sm);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-sm, 4px);
+    background: var(--sillynpc-bg-secondary);
+}
+
+.sillynpc-checkpoint-when {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9em;
+    /* A long label must not push the buttons off the row. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ─── Prompt cost and usage ─────────────────────────────────────────────── */
+
+/* The token count under a prompt box. Aligned right, so a column of them can be compared
+   down the page without reading each label, and set in the accent colour because it is a
+   measurement of the box above rather than more advice about it. */
+.sillynpc-token-count {
+    align-self: flex-end;
+    color: var(--sillynpc-accent);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+}
+
+/* An estimate is a different claim from a count. Italic rather than a warning colour:
+   it is still the right order of magnitude, just not from the tokenizer. */
+.sillynpc-token-count.is-estimate {
+    font-style: italic;
+    color: var(--sillynpc-fg-secondary);
+}
+
+/* Where else a prompt lives. Quieter than the help text above it - it answers a question
+   about the panel, not about the prompt. */
+.sillynpc-prompt-home {
+    display: block;
+    margin-top: var(--sillynpc-space-xs);
+    color: var(--sillynpc-fg-secondary);
+    opacity: 0.8;
+}
+
+/* A prompt and its reply budget belong together: what you may say and what you allow back
+   are one decision, and the pair reads as one block rather than two settings that happen
+   to be adjacent. */
+.sillynpc-prompt-section {
+    border-left: 2px solid var(--sillynpc-border);
+    padding-left: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-lg);
+}
+
+.sillynpc-prompt-section:hover {
+    border-left-color: var(--sillynpc-accent);
+}
+
+.sillynpc-prompt-hidden {
+    display: block;
+    margin-top: var(--sillynpc-space-md);
+    color: var(--sillynpc-fg-secondary);
+}
+
+.sillynpc-stat-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-md);
+    margin: var(--sillynpc-space-md) 0;
+}
+
+.sillynpc-stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-xs);
+    padding: 14px var(--sillynpc-space-lg);
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-md);
+}
+
+.sillynpc-stat-title {
+    margin: 0;
+    color: var(--sillynpc-fg-primary);
+    font-size: var(--sillynpc-font-size-base);
+}
+
+/* Label left, number right. The numbers line up in a column whatever the label is, which
+   is what makes two generators comparable at a glance. */
+.sillynpc-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sillynpc-space-md);
+    padding-top: var(--sillynpc-space-xs);
+    border-top: 1px solid color-mix(in srgb, var(--sillynpc-border) 50%, transparent);
+}
+
+.sillynpc-stat-name {
+    color: var(--sillynpc-fg-secondary);
+}
+
+.sillynpc-stat-value {
+    color: var(--sillynpc-fg-primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+/* A colour the model wrote into the reply. It sits inside the speech block and so beats
+   the colour the block sets, which meant Character Coloring Logic quietly stopped applying
+   to any line a persona prompt had told the model to colour. Neutralised only while the
+   extension is doing the colouring; the class is removed on the next decorate pass, so
+   turning colouring off gives the model's colours straight back. */
+.sillynpc-ignore-model-color {
+    color: inherit !important;
+}
+
+/* ─── Filling in a character card ───────────────────────────────────────── */
+
+.sillynpc-fill-plan {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    text-align: left;
+}
+
+
+/* Asking what to do about names already in use. Left-aligned and stacked for the same
+   reason the fill plan is: SillyTavern centres everything inside a popup, and a centred
+   question with a dropdown under it reads as a poster rather than a choice. */
+.sillynpc-import-collision {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    text-align: left;
+}
+
+.sillynpc-import-choice {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    font-weight: bold;
+}
+
+/* The three answers differ by a few words each, so the box has to show all of them. */
+.sillynpc-import-choice select {
+    width: 100%;
+    font-weight: normal;
+}
+
+/* Checkbox and description side by side, aligned to the top of the text so a two-line
+   summary does not push the box to the middle of the row. */
+.sillynpc-fill-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-md);
+    cursor: pointer;
+}
+
+.sillynpc-fill-row .sillynpc-fill-check {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+/* A stage with nothing to do is shown rather than hidden - "there was nothing to do" and
+   "it did nothing" are different answers - but it should not read as a choice. */
+.sillynpc-fill-row.is-done {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.sillynpc-fill-text {
+    line-height: var(--sillynpc-line-height);
+}
+
+/* ─── Character profile fields ──────────────────────────────────────────────
+   The four built-in fields on the character editor. A label above its box
+   rather than beside it: three of the four are paragraphs, and a label column
+   wide enough for "Speech & dialogue style" would leave the age box tiny. */
+.sillynpc-profile-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-md);
+    margin-top: var(--sillynpc-space-sm);
+}
+
+.sillynpc-profile-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sillynpc-profile-label {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+.sillynpc-profile-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+textarea.sillynpc-profile-input {
+    resize: vertical;
+    min-height: 58px;
+    font-family: inherit;
+    line-height: 1.45;
+}
+
+/* ─── Character page: the readable view ─────────────────────────────────────
+   The editor is a form, which is the right shape for changing things and the
+   wrong one for looking at them. This is what sits in front of it. Every colour
+   comes from the theme tokens, so it follows whichever theme is chosen. */
+
+/* The header and the tabs travel together, and stay put while the page scrolls.
+   A long profile put Back, Fill, Delete and the tab switch off the top of the
+   screen, so getting out meant scrolling back up first. */
+.sillynpc-editor-sticky {
+    position: sticky;
+    z-index: 5;
+    background: var(--sillynpc-bg-primary);
+    /* Both numbers are the panel's own padding, and they have to stay that way.
+       .sillynpc-tab-panel pads its content; the margin pulls this bar back out over
+       that padding and the matching padding puts its contents back where they were,
+       so the bar covers the full width and the full strip above it.
+
+       The offset is negative because a sticky top is measured from the scrollport's
+       CONTENT edge, not its padding edge: at top:0 the bar parked one padding-width
+       low and scrolling content showed through the gap above it. */
+    top: calc(-1 * var(--sillynpc-space-lg));
+    margin: calc(-1 * var(--sillynpc-space-lg)) calc(-1 * var(--sillynpc-space-lg)) 0;
+    padding: var(--sillynpc-space-lg) var(--sillynpc-space-lg) 0;
+}
+
+.sillynpc-charview-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: var(--sillynpc-space-md);
+    border-bottom: 1px solid var(--sillynpc-border);
+}
+
+/* Its own class, not .sillynpc-tab: that one belongs to the popup's tab bar,
+   whose handler would switch the whole panel from here. */
+.sillynpc-charview-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 2px solid transparent;
+    color: var(--sillynpc-fg-secondary);
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    font-size: 0.95em;
+    cursor: pointer;
+    border-radius: var(--sillynpc-radius-sm) var(--sillynpc-radius-sm) 0 0;
+}
+
+.sillynpc-charview-tab:hover {
+    color: var(--sillynpc-fg-primary);
+    background: var(--sillynpc-bg-secondary);
+}
+
+.sillynpc-charview-tab.active {
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    border-bottom-color: var(--sillynpc-accent);
+    font-weight: bold;
+}
+
+/* Said out loud rather than inherited. SillyTavern's own `.popup` sets
+   text-align: center on everything inside every popup, which is where this came
+   from originally - and a page whose alignment depends on somebody else's
+   stylesheet flips the day they change it. */
+.sillynpc-charview {
+    /* The widest a line of prose gets before it is capped. */
+    --sillynpc-cv-measure: 100ch;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-xl);
+    padding-top: var(--sillynpc-space-md);
+    text-align: center;
+}
+
+.sillynpc-cv-body {
+    display: flex;
+    gap: var(--sillynpc-space-xl);
+    align-items: flex-start;
+}
+
+/* Matched to .sillynpc-editor-left rather than chosen: flipping between Profile
+   and Edit should not resize the portrait under the cursor. */
+.sillynpc-cv-left {
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+}
+
+.sillynpc-cv-right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-lg);
+}
+
+.sillynpc-cv-portrait {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    box-sizing: border-box;
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-md);
+    background: var(--sillynpc-bg-secondary);
+    overflow: hidden;
+}
+
+.sillynpc-cv-portrait img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.sillynpc-cv-portrait-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sillynpc-space-sm);
+    color: var(--sillynpc-fg-secondary);
+}
+
+.sillynpc-cv-portrait-empty i { font-size: 2.6em; }
+
+/* The speech colour, on the portrait rather than in a row of its own: it is one
+   fact and it is about how they appear. */
+.sillynpc-cv-colour {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--sillynpc-bg-primary);
+}
+
+.sillynpc-cv-category {
+    text-align: center;
+    font-size: 0.85em;
+    color: var(--sillynpc-fg-secondary);
+    padding: 4px 8px;
+    background: var(--sillynpc-bg-secondary);
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+/* A caption and its text share one box, so they centre on one axis. With a width
+   on the text alone the caption kept the full width of the column and centred
+   against that instead, which is how every label came to sit in the middle of the
+   page while its own paragraph stayed where it was.
+
+   The box takes the width it is given rather than capping itself: the popup's
+   width is a setting, and a page that ignored it would leave the space somebody
+   chose to have sitting empty. */
+.sillynpc-cv-block,
+.sillynpc-cv-lore {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    /* Generous on purpose: it should only bite where a line gets genuinely hard to
+       follow, not claw back the width somebody widened the popup to get. Centred
+       text makes a long line worse than a left-aligned one - there is no straight
+       edge to come back to - which is why there is a limit at all. One name, so
+       there is one place to change it. */
+    max-width: var(--sillynpc-cv-measure);
+    margin: 0 auto;
+}
+
+.sillynpc-cv-label {
+    font-size: 0.75em;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sillynpc-fg-secondary);
+}
+
+.sillynpc-cv-value {
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-cv-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sillynpc-space-sm);
+}
+
+.sillynpc-cv-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: 999px;
+    font-size: 0.9em;
+}
+
+.sillynpc-cv-chip-key { color: var(--sillynpc-fg-secondary); }
+
+.sillynpc-cv-chip-value {
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A chip with no value is a thing, not a measurement - an item, not a stat -
+   so it reads as plain text rather than as a label waiting for a number. */
+.sillynpc-cv-chip:not(:has(.sillynpc-cv-chip-value)) .sillynpc-cv-chip-key {
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-cv-empty {
+    max-width: 60ch;
+    margin: 0 auto;
+}
+
+.sillynpc-cv-lore-text {
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: var(--sillynpc-fg-primary);
+    padding: var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-secondary);
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+@media (max-width: 700px) {
+    .sillynpc-cv-body { flex-direction: column; align-items: center; }
+    .sillynpc-cv-left { flex: 0 0 auto; width: 200px; }
+}
+
+/* ─── Player sheet: one page instead of a tab per collection ────────────────
+   The sheet used to be Attributes, a tab for each collection and Lore, which
+   made the same player look like two unrelated pages depending on whether you
+   opened them from the HUD or from the character grid. It carries the character
+   page's two tabs now, and everything that was behind the old ones is stacked
+   under Profile. */
+.sillynpc-sheet-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: var(--sillynpc-space-lg);
+}
+
+/* The profile fields, between the attributes above and the collections below. */
+.sillynpc-sheet-profile,
+.sillynpc-sheet-profile-form,
+.sillynpc-sheet-lore {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-lg);
+}
+
+.sillynpc-sheet-profile:not(:empty),
+.sillynpc-sheet-lore:not(:empty) {
+    margin-top: var(--sillynpc-space-xl);
+}
+
+/* The sheet reads left-aligned: it is a working sheet with values you correct,
+   not the character page's centred read. Said out loud because SillyTavern's own
+   .popup centres everything inside it. */
+.sillynpc-sheet-content {
+    text-align: left;
+}
+
+.sillynpc-sheet-content .sillynpc-cv-block,
+.sillynpc-sheet-content .sillynpc-cv-lore {
+    margin: 0;
+}
+
+/* The chips centre on the character page and have to follow the text here. Left
+   in the middle they were the one row on the sheet that did not line up with
+   everything above and below it. */
+.sillynpc-sheet-content .sillynpc-cv-chips {
+    justify-content: flex-start;
+}
+
+/* ─── Ban list ──────────────────────────────────────────────────────────────
+   Whether these are banned or merely requested changes what the list means, so
+   the mode is said above it rather than tucked under it. */
+.sillynpc-ban-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-lg);
+}
+
+.sillynpc-ban-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
+    border-radius: var(--sillynpc-radius-sm);
+    border: 1px solid var(--sillynpc-border);
+    background: var(--sillynpc-bg-secondary);
+    font-size: 0.9em;
+    color: var(--sillynpc-fg-secondary);
+}
+
+/* A real ban and a polite request are different promises, and the difference is
+   worth seeing before you read the list. */
+.sillynpc-ban-mode.is-sampler {
+    border-color: var(--sillynpc-success);
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-ban-mode i { margin-top: 0.2em; }
+
+.sillynpc-ban-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sillynpc-ban-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-sm);
+    padding: 4px 4px 4px var(--sillynpc-space-md);
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+.sillynpc-ban-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--sillynpc-fg-primary);
+}
+
+.sillynpc-ban-remove { padding: 2px 8px; }
+
+.sillynpc-ban-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sillynpc-space-sm);
+}
+
+.sillynpc-ban-offer-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sillynpc-space-sm);
+    padding: 5px 0;
+    cursor: pointer;
+    text-align: left;
+}
+
+/* ─── Open threads ──────────────────────────────────────────────────────────
+   What is being sent with every message, shown so the cost of the feature is
+   never a mystery. The quote is on screen because it is what makes a thread
+   checkable - one whose line never appears in the story is one the reader
+   invented, and there is no way to notice that without seeing it. */
+.sillynpc-threads-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    margin: var(--sillynpc-space-md) 0 var(--sillynpc-space-lg);
+}
+
+.sillynpc-thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sillynpc-thread-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm);
+    background: var(--sillynpc-bg-secondary);
+    border: 1px solid var(--sillynpc-border);
+    border-radius: var(--sillynpc-radius-sm);
+}
+
+/* Settled ones stay in the list so a wrong close can be undone, but they are
+   not what the panel is about. */
+.sillynpc-thread-row.is-closed { opacity: 0.55; }
+
+.sillynpc-thread-kind {
+    flex: 0 0 auto;
+    font-size: 0.7em;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+    padding: 3px 7px;
+    border: 1px solid var(--sillynpc-border);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.sillynpc-thread-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sillynpc-thread-text {
+    color: var(--sillynpc-fg-primary);
+    overflow-wrap: anywhere;
+}
+
+.sillynpc-thread-quote {
+    font-size: 0.85em;
+    font-style: italic;
+    color: var(--sillynpc-fg-secondary);
+    overflow-wrap: anywhere;
+}
+
+.sillynpc-thread-actions {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.sillynpc-thread-actions .menu_button { padding: 2px 8px; }
+
+/* The Threads tab explains itself, because it is off by default and anybody
+   reading it has never seen it work. */
+/* Said out loud, for the same reason the character page says it: SillyTavern's own
+   .popup centres everything inside it, so this read as a centred, ragged block
+   pinned at one width - it ignored the menu width entirely and looked like a
+   picture of text rather than text. Left, and the width it is given, capped at the
+   same measure the character page uses so a very wide menu does not produce a line
+   too long to track back to the start of. */
+.sillynpc-threads-blurb {
+    width: 100%;
+    max-width: 100ch;
+    text-align: left;
+    line-height: 1.55;
+    margin: 0 0 var(--sillynpc-space-md);
+}
+
+
+/* Two ways of getting a thread in that the reader did not find as the story went past. */
+.sillynpc-thread-gather {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sillynpc-space-md);
+    margin-bottom: var(--sillynpc-space-md);
+}
+
+/* Writing one out by hand. Left-aligned and stacked, because SillyTavern's own .popup
+   centres everything inside it and a centred form reads as a poster. */
+.sillynpc-thread-add {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-md);
+    text-align: left;
+}
+
+.sillynpc-thread-add-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    font-weight: bold;
+}
+
+/* The field itself is not the label, so it does not inherit the weight. */
+.sillynpc-thread-add-field select,
+.sillynpc-thread-add-field input,
+.sillynpc-thread-add-field textarea {
+    width: 100%;
+    font-weight: normal;
+}
+
+.sillynpc-thread-add-field textarea {
+    resize: vertical;
+    min-height: 3.4em;
+}
+
+/* The six kinds, so what the reader is being asked for is on the page rather
+   than only in the prompt. */
+.sillynpc-thread-kinds {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: var(--sillynpc-space-md) 0;
+}
+
+.sillynpc-thread-kind-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sillynpc-space-sm);
+}

@@ -1,0 +1,15 @@
+# The test suite is not part of what SillyTavern loads - manifest.json names only
+# index.js and style.css - so it is kept out of the published extension. The files
+# stay on disk: `node tests/run.mjs` still works locally.
+tests/
+
+# Claude Code's working directory: agents, plans, worktrees.
+.claude/
+
+# Scratch / editor debris
+temp_*.txt
+*.bak
+*.orig
+*.rej
+.DS_Store
+Thumbs.db

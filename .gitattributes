@@ -1,0 +1,5 @@
+# Keep line endings consistent regardless of who checks the repo out.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
