@@ -1659,39 +1659,23 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 }
 
 /* The three-state eye that hides the tracker box.
-   Positioned against .mes rather than dropped into SillyTavern's swipe markup, which is
-   a pointer-events:none column on the right and an out-of-flow chevron on the left -
-   a child of either would ignore clicks or stack above the arrow instead of beside it.
-   Sharing the left chevron's line means sharing its offsets: .swipe_left sits at
-   left:20px and is 25px wide, so 47px clears it, and the vertical offset is the counter's
-   height through SillyTavern's own variables - as the rule above already does - so this
-   follows if it ever restyles them. */
+
+   A button in SillyTavern's own per-message toolbar, so it needs no placement of its own -
+   only the resting opacity its neighbours there use. It was absolutely positioned in the
+   message's left margin, borrowing the swipe chevron's offsets to sit beside it: exact
+   arithmetic against somebody else's layout, and a stray icon in the margin on any theme
+   that moved the arrows.
+
+   Every message carries one. They all show the same state and every one of them is
+   repainted on a click, so which message you happen to be hovering does not matter. */
 .sillynpc-tracker-eye {
-    position: absolute;
-    left: 47px;
-    bottom: calc(var(--swipeCounterHeight, 15px) + var(--swipeCounterMargin, 5px));
-    width: 25px;
-    height: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    opacity: 0.3; /* at rest, like the swipe arrows it sits with */
+    opacity: 0.5;
     cursor: pointer;
-    pointer-events: auto;
-    z-index: 9999;
     transition: opacity var(--animation-duration, 125ms) ease-in-out;
 }
 
 .sillynpc-tracker-eye:hover {
-    opacity: 0.7;
-}
-
-/* One control, on the message that is always on screen. Every message is given an eye so
-   nothing depends on catching the moment the last message changes; this is what keeps
-   only one of them visible. */
-.mes:not(.last_mes) .sillynpc-tracker-eye {
-    display: none;
+    opacity: 1;
 }
 
 .sillynpc-status-box {
@@ -3164,6 +3148,22 @@ span.sillynpc-review-to {
     align-items: center;
     justify-content: center;
     gap: 6px;
+}
+
+/* SillyTavern's own .menu_button carries `width: min-content`, which sizes a button to its
+   longest single word rather than to its label. "Export everything" breaks onto two lines,
+   "Import a backup" onto three, and "Apply selected" in a narrow column onto one letter per
+   line. Themes that restyle buttons - Moonlit among them - override it, so this is only
+   visible on SillyTavern's stock theme, which is what somebody installing this for the
+   first time has.
+
+   min-width rather than width: these are usually flex items, and width alone still allows
+   flex-shrink to squeeze them back under their label. A row that cannot fit them all wraps
+   instead, which every row of ours is already set up to do. */
+[class*="sillynpc-"] .menu_button,
+.popup:has([class*="sillynpc-"]) .menu_button {
+    width: auto;
+    min-width: max-content;
 }
 
 /* Saved states of a system. Each row is a point you can go back to, so it reads as a list

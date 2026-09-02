@@ -820,28 +820,36 @@ export const TRACKER_EYE = {
 /** Puts the eye in the state given, without rebuilding it. */
 export function paintTrackerEye(btn, view) {
     const { icon, title } = TRACKER_EYE[view] || TRACKER_EYE.full;
-    btn.className = `sillynpc-tracker-eye fa-solid ${icon}`;
+    // mes_button so it looks and sizes like SillyTavern's own toolbar buttons, which
+    // is where it now lives.
+    btn.className = `mes_button sillynpc-tracker-eye fa-solid ${icon}`;
     btn.title = title;
     btn.dataset.view = view;
 }
 
 /**
- * The control that hides the tracker box, beside the swipe arrows.
+ * The control that hides the tracker box.
  *
  * Deliberately not inside the box: the third state removes the box, and a switch that
  * disappears along with the thing it switches cannot be switched back.
  *
- * It goes on the message element rather than into SillyTavern's .swipeRightBlock, which
- * is a `pointer-events: none` column - a child there would stack above the chevron rather
- * than sit beside it, and would inherit a parent that ignores clicks. Every message gets
- * one and CSS shows only the last message's, so nothing here has to notice when the last
- * message moves.
+ * It lives in SillyTavern's own per-message toolbar, beside the refresh button this
+ * extension already puts there. It spent its first version absolutely positioned in the
+ * message's left margin, lined up with the swipe chevron by borrowing that chevron's
+ * offsets - which is exact arithmetic against somebody else's layout, and read as a stray
+ * icon floating in the margin on the stock theme.
+ *
+ * The toolbar sits behind SillyTavern's "Message Actions" ellipsis, so this is a step
+ * further in than it was. That is the trade for a position that no theme can move.
  */
 function addTrackerEyeToMessage(mesEl) {
     if (!getSettings().statusTracker?.enabled) {
         mesEl.querySelector('.sillynpc-tracker-eye')?.remove();
         return;
     }
+
+    const toolbar = mesEl.querySelector('.extraMesButtons');
+    if (!toolbar) return;
 
     const existing = mesEl.querySelector('.sillynpc-tracker-eye');
     if (existing) {
@@ -864,7 +872,7 @@ function addTrackerEyeToMessage(mesEl) {
         redrawStatusBoxes();
     });
 
-    mesEl.appendChild(btn);
+    toolbar.insertBefore(btn, toolbar.firstChild);
 }
 
 function addRefreshButtonToMessage(mesEl) {
