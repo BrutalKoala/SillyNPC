@@ -21,24 +21,35 @@ import { getSettings } from './settings.js';
  * closed when it resolves. Nothing is retrieved, because nothing was ever filed away.
  */
 
-/** The kinds of thing worth catching. Named so the reader is asked about acts, not importance. */
+/**
+ * The kinds of thing worth catching. Named so the reader is asked about acts, not
+ * importance.
+ *
+ * `weight` is how well the kind survives being left alone, and the differences are about
+ * how each one ends. A debt and a promise stay true until they are discharged, and nothing
+ * in the story quietly cancels them. A secret stays true until it is told. A deadline is
+ * answerable and then expires. A threat is often rhetoric that the scene moves past. A plan
+ * is the one most often silently superseded - people say what they intend to do and then do
+ * something else, and nobody narrates the change of mind.
+ */
 export const THREAD_KINDS = [
-    { id: 'promise', label: 'Promise', hint: 'somebody undertook to do something' },
-    { id: 'threat', label: 'Threat', hint: 'somebody said what would happen if' },
-    { id: 'debt', label: 'Debt', hint: 'somebody owes or is owed' },
-    { id: 'secret', label: 'Secret', hint: 'something was told in confidence, or discovered' },
-    { id: 'deadline', label: 'Deadline', hint: 'something must happen by a time or an event' },
-    { id: 'plan', label: 'Plan', hint: 'somebody set out to do something later' },
+    { id: 'promise', label: 'Promise', hint: 'somebody undertook to do something', weight: 1.0 },
+    { id: 'threat', label: 'Threat', hint: 'somebody said what would happen if', weight: 0.6 },
+    { id: 'debt', label: 'Debt', hint: 'somebody owes or is owed', weight: 1.0 },
+    { id: 'secret', label: 'Secret', hint: 'something was told in confidence, or discovered', weight: 0.9 },
+    { id: 'deadline', label: 'Deadline', hint: 'something must happen by a time or an event', weight: 0.8 },
+    { id: 'plan', label: 'Plan', hint: 'somebody set out to do something later', weight: 0.5 },
 ];
 
 const KIND_IDS = new Set(THREAD_KINDS.map(k => k.id));
+const KIND_WEIGHTS = new Map(THREAD_KINDS.map(k => [k.id, k.weight]));
 
 /** The list, always an array. */
 export function getThreads(state) {
     return Array.isArray(state?.threads) ? state.threads : [];
 }
 
-/** Still open, oldest first - the order they are injected in when the cap bites. */
+/** Still open, in the order they were caught. Ranking for injection is rankedThreads. */
 export function openThreads(state) {
     return getThreads(state).filter(t => t && t.status !== 'closed');
 }
@@ -52,7 +63,7 @@ export function openThreads(state) {
  *
  * @returns {object|null} Null when it is not usable.
  */
-export function coerceThread(raw, { messageId = null } = {}) {
+export function coerceThread(raw, { messageId = null, pinned = false } = {}) {
     if (!raw || typeof raw !== 'object') return null;
 
     const text = String(raw.text ?? '').trim();
@@ -68,6 +79,15 @@ export function coerceThread(raw, { messageId = null } = {}) {
         quote,
         who: String(raw.who ?? '').trim(),
         opened: messageId,
+        // When the story last had anything to do with this. Set again by touchThreads
+        // whoever it is about walks back into a scene, which is what keeps a long-running
+        // obligation from being scored as cold merely for being old.
+        touched: messageId,
+        // Exempt from ageing and from pruning. Nothing sets this automatically except a
+        // thread the reader wrote themselves.
+        // Never read from `raw`: that object is the model's own JSON, and a reply that
+        // set pinned would exempt itself from every cap here.
+        pinned: pinned === true,
         status: 'open',
     };
 }
@@ -92,7 +112,11 @@ export function manualThread(raw) {
     // No check for empty text here: with the quote standing in for it, a thread saying
     // nothing arrives at coerceThread with both blank and is refused there. One place
     // decides what a thread must have.
-    return coerceThread({ ...raw, text, quote: quote || text });
+    //
+    // Pinned, because you wrote it on purpose. Scoring exists to guess which threads still
+    // matter, and there is nothing to guess about one somebody typed out by hand - so it is
+    // never aged out and never pruned.
+    return coerceThread({ ...raw, text, quote: quote || text }, { pinned: true });
 }
 
 /**
@@ -138,27 +162,180 @@ export function reopenThread(state, id) {
     return true;
 }
 
+/** A setting that must be a positive number, or the shipped default. */
+function positive(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** The caps, in one place, so the UI and the pruning cannot disagree about them. */
+export function threadLimits() {
+    const settings = getSettings().statusTracker || {};
+    return {
+        active: positive(settings.threadsInjectedMax, 8),
+        openMax: positive(settings.threadsOpenMax, 20),
+        closedKeep: positive(settings.threadsClosedKeep, 10),
+        halfLife: positive(settings.threadsHalfLife, 60),
+    };
+}
+
 /**
- * The open threads as a block for the story prompt.
+ * How much a thread is still worth, from 0 up.
+ *
+ * Ordering these by age alone was the thing that did not work. Age is a poor proxy on its
+ * own in both directions: it treated a debt from three hundred messages ago as no different
+ * from a plan somebody mentioned once and forgot, and with eighty open it pinned the same
+ * eight ancient entries forever so nothing from the current scene was ever carried.
+ *
+ *     score = kind weight / (1 + messages since touched / half-life)
+ *
+ * The weight says how well the kind survives neglect. The divisor says the story has moved
+ * on without it. A thread is touched when it opens and again whenever whoever it is about
+ * walks back into a scene, so a long-running obligation that keeps coming up stays near its
+ * full weight however old it is - which is the case ageing alone got wrong.
+ *
+ * A pin is not a large number, it is Infinity: the reader has answered the question this
+ * function exists to guess at, so there is nothing left to weigh.
+ *
+ * @param {object} thread
+ * @param {number} now Index of the latest message.
+ * @param {number} [halfLife] Messages until a thread is worth half its kind weight.
+ */
+export function threadScore(thread, now, halfLife = threadLimits().halfLife) {
+    if (!thread) return 0;
+    if (thread.pinned) return Infinity;
+
+    const weight = KIND_WEIGHTS.get(thread.kind) ?? 0.5;
+
+    // Threads from before this existed have no `touched`, and a manual one has no message
+    // to have opened at. Both fall back in the reader's favour - treated as current rather
+    // than as infinitely old, so nothing is pruned merely for predating the field.
+    const last = Number(thread.touched ?? thread.opened);
+    const age = Number.isFinite(last) && Number.isFinite(now) ? Math.max(0, now - last) : 0;
+
+    return weight / (1 + age / halfLife);
+}
+
+/** Open threads, best first. Ties keep their existing order, so the list does not jitter. */
+export function rankedThreads(state, now) {
+    const { halfLife } = threadLimits();
+    return openThreads(state)
+        .map((thread, index) => ({ thread, index, score: threadScore(thread, now, halfLife) }))
+        .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+        .map(entry => entry.thread);
+}
+
+/** The ones that ride along with the story: the highest scoring, up to the active cap. */
+export function activeThreads(state, now) {
+    return rankedThreads(state, now).slice(0, threadLimits().active);
+}
+
+/**
+ * Records that the story has just dealt with whoever these threads are about.
+ *
+ * Called with the characters the extractor found in a message. Matching on `who` is coarse
+ * - a thread about a place or an object has nobody to match - but it costs nothing, since
+ * the extractor already knows who was in the scene, and it is the difference between
+ * scoring a live obligation as live and scoring it as cold.
+ *
+ * @param {string[]} names Who appeared.
+ * @param {number} messageId The message they appeared in.
+ * @returns {number} How many threads were touched.
+ */
+export function touchThreads(state, names, messageId) {
+    const present = new Set((names || [])
+        .map(n => String(n || '').trim().toLowerCase())
+        .filter(Boolean));
+    if (!present.size) return 0;
+
+    let touched = 0;
+    for (const thread of openThreads(state)) {
+        const who = String(thread.who || '').trim().toLowerCase();
+        if (!who || !present.has(who)) continue;
+        thread.touched = messageId;
+        touched += 1;
+    }
+    return touched;
+}
+
+/** Pins or unpins one, by id. @returns {boolean} Whether anything changed. */
+export function setThreadPinned(state, id, pinned) {
+    const thread = getThreads(state).find(t => t?.id === id);
+    if (!thread || thread.pinned === !!pinned) return false;
+    thread.pinned = !!pinned;
+    return true;
+}
+
+/**
+ * Enforces the caps, deleting what falls outside them.
+ *
+ * Deletion, not another status. A third resting place would only move the pile: the reason
+ * eighty accumulated is that nothing ever left, and closing merely flipped a flag.
+ *
+ * Open threads go by score, so what survives is what is still worth carrying rather than
+ * whatever happens to be recent. Settled ones go by age, because a closed thread is only a
+ * record of what was carried and the newest records are the useful ones. Pinned threads are
+ * not counted against the open cap and are never removed - the reader has said they matter,
+ * and a cap that could overrule that would make pinning worthless.
+ *
+ * @returns {{ open: number, closed: number }} How many of each were deleted.
+ */
+export function pruneThreads(state, now) {
+    const all = getThreads(state);
+    if (!all.length) return { open: 0, closed: 0 };
+
+    const { openMax, closedKeep } = threadLimits();
+
+    // Pinned ones are kept and are not counted, so pinning three does not quietly cost
+    // three of the slots the rest are competing for. Counting them would make the cap
+    // punish the very threads the reader singled out as the ones to keep.
+    let counted = 0;
+    const keptOpen = new Set(
+        rankedThreads(state, now)
+            .filter(thread => thread.pinned || counted++ < openMax)
+            .map(t => t.id));
+
+    // Newest first by the message they were opened at, so the tail dropped is the oldest.
+    const keptClosed = new Set(
+        all.filter(t => t?.status === 'closed')
+            .sort((a, b) => (Number(b?.opened) || 0) - (Number(a?.opened) || 0))
+            .slice(0, closedKeep)
+            .map(t => t.id));
+
+    let open = 0;
+    let closed = 0;
+    state.threads = all.filter(thread => {
+        if (!thread) return false;
+        if (thread.status === 'closed') {
+            if (keptClosed.has(thread.id)) return true;
+            closed += 1;
+            return false;
+        }
+        if (keptOpen.has(thread.id)) return true;
+        open += 1;
+        return false;
+    });
+
+    return { open, closed };
+}
+
+/**
+ * The active threads as a block for the story prompt.
  *
  * Capped, because the failure mode is fifty of them injected every turn until the feature
- * costs more than it is worth. Oldest first when it bites: an obligation that has been
- * open for two hundred messages is the one at risk of being forgotten, and a fresh one is
- * still in the chat the model can see.
+ * costs more than it is worth. Which ones is decided by threadScore rather than by
+ * position: see the note there for why age on its own picked badly at both ends.
  *
  * @returns {string} Empty when there is nothing open, so the caller can leave it out.
  */
-export function describeThreads(state) {
+export function describeThreads(state, now) {
     const settings = getSettings().statusTracker;
     if (settings.threadsEnabled === false) return '';
 
-    const cap = Number(settings.threadsInjectedMax);
-    const limit = Number.isFinite(cap) && cap > 0 ? cap : 8;
+    const active = activeThreads(state, now);
+    if (!active.length) return '';
 
-    const open = openThreads(state).slice(0, limit);
-    if (!open.length) return '';
-
-    const lines = open.map(t => {
+    const lines = active.map(t => {
         const who = t.who ? `${t.who}: ` : '';
         return `- ${who}${t.text} ("${t.quote}")`;
     });

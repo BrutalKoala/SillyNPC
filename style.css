@@ -3836,6 +3836,30 @@ textarea.sillynpc-profile-input {
    not what the panel is about. */
 .sillynpc-thread-row.is-closed { opacity: 0.55; }
 
+/* Which ones are actually being sent. The list is ordered by that, but order alone does
+   not say where the line falls - and the line is the whole point of the panel, because
+   below it a thread is costing nothing and is first to be dropped when the cap bites. */
+.sillynpc-thread-row.is-active {
+    border-left: 3px solid var(--sillynpc-accent);
+}
+
+/* A pin is the reader overruling the scoring, so it should look deliberate rather than
+   like another state the extension chose. */
+.sillynpc-thread-row.is-pinned {
+    border-color: var(--sillynpc-accent);
+}
+
+.sillynpc-thread-status {
+    margin-top: 2px;
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
+.sillynpc-thread-actions .menu_button.sillynpc-thread-pinned {
+    color: var(--sillynpc-accent);
+    border-color: var(--sillynpc-accent);
+}
+
 .sillynpc-thread-kind {
     flex: 0 0 auto;
     font-size: 0.7em;

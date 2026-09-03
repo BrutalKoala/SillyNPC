@@ -542,3 +542,17 @@ export function personaFileFromAvatar(src) {
         return text.slice(at + prefix.length);
     }
 }
+
+/**
+ * The index of the latest message, which is what "how long ago" is measured against.
+ *
+ * Threads age in messages rather than in time: a story left for a week and picked up where
+ * it stopped has not moved on, and one played hard for an hour has. Zero for an empty chat,
+ * so nothing is scored as old before there is anything to be old relative to.
+ *
+ * @returns {number}
+ */
+export function currentMessageIndex() {
+    const chat = getContext()?.chat;
+    return Array.isArray(chat) && chat.length ? chat.length - 1 : 0;
+}

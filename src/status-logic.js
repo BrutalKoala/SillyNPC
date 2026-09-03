@@ -15,7 +15,7 @@ import { power_user } from '../../../../power-user.js';
 import { setUserAvatar, getUserAvatar } from '../../../../personas.js';
 import { getSettings, saveSettings, defaultSettings } from './settings.js';
 import { LOG_PREFIX, debugLog, PROFILE_FIELDS } from './constants.js';
-import { extractJSON, safeJsonParse, splitValue, escapeRegExp } from './utils.js';
+import { extractJSON, safeJsonParse, splitValue, escapeRegExp, currentMessageIndex } from './utils.js';
 import { getIgnoredSpeakerLabels, normaliseSpeakerLabel } from './speaker-labels.js';
 import { describeThreads } from './threads.js';
 
@@ -1275,7 +1275,7 @@ export function formatCompactStatus(state, forPrompt = false) {
     // What is still outstanding, riding the block that is already being sent. Nothing
     // is retrieved to put it here - a thread was caught when it opened, which is the
     // whole difference between this and searching a summary for it later.
-    const threads = describeThreads(state);
+    const threads = describeThreads(state, currentMessageIndex());
     if (threads) output += `${threads}\n`;
 
     return output.trim();

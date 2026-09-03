@@ -2,9 +2,11 @@ import { getSettings } from './settings.js';
 import { loadStateFromMetadata, saveStateToMetadata } from './status-logic.js';
 import {
     THREAD_KINDS, getThreads, openThreads, closeThread, reopenThread, addThread, manualThread,
+    activeThreads, rankedThreads, setThreadPinned, threadLimits,
 } from './threads.js';
 import { scanHistoryForThreads } from './history-scan.js';
 import { LOG_PREFIX } from './constants.js';
+import { currentMessageIndex } from './utils.js';
 import { buildSettingToggle, buildSettingNumber } from './ui-shared.js';
 import { POPUP_TYPE, Popup } from '../../../../popup.js';
 
@@ -18,10 +20,34 @@ import { POPUP_TYPE, Popup } from '../../../../popup.js';
 
 const KIND_LABELS = Object.fromEntries(THREAD_KINDS.map(k => [k.id, k.label]));
 
+/**
+ * Says why a thread is where it is in the list.
+ *
+ * Without this the scoring is a black box: threads would silently stop being sent and
+ * eventually be deleted, and the reader would have no way to see it coming or to know
+ * which one to pin. Naming the reason is what makes the pin a decision rather than a
+ * guess.
+ *
+ * @param {object} thread
+ * @param {boolean} isActive Whether it is in the set being sent with the story.
+ * @param {number} now
+ */
+function threadState(thread, isActive, now) {
+    if (thread.status === 'closed') return 'settled';
+    if (thread.pinned) return 'pinned - always sent';
+    if (isActive) return 'active - sent with the story';
+
+    const last = Number(thread.touched ?? thread.opened);
+    const age = Number.isFinite(last) && Number.isFinite(now) ? Math.max(0, now - last) : 0;
+    const since = thread.who ? `since ${thread.who} was in a scene` : 'since it was opened';
+    return age > 0 ? `waiting - ${age} message${age === 1 ? '' : 's'} ${since}` : 'waiting';
+}
+
 /** One thread: what it is, where it came from, and the way to settle it. */
-function threadRow(thread, state, redraw) {
+function threadRow(thread, state, redraw, { isActive = false, now = 0 } = {}) {
     const row = document.createElement('div');
-    row.className = `sillynpc-thread-row is-${thread.status === 'closed' ? 'closed' : 'open'}`;
+    row.className = `sillynpc-thread-row is-${thread.status === 'closed' ? 'closed' : 'open'}`
+        + (isActive ? ' is-active' : '') + (thread.pinned ? ' is-pinned' : '');
 
     const kind = document.createElement('span');
     kind.className = 'sillynpc-thread-kind';
@@ -49,8 +75,32 @@ function threadRow(thread, state, redraw) {
         body.append(quote);
     }
 
+    const status = document.createElement('div');
+    status.className = 'sillynpc-thread-status notes';
+    status.textContent = threadState(thread, isActive, now);
+    body.append(status);
+
     const actions = document.createElement('div');
     actions.className = 'sillynpc-thread-actions';
+
+    // Only for open ones. Pinning something already settled would claim to protect it
+    // while the settled list is trimmed by age regardless, which is a promise the cap
+    // does not keep.
+    if (thread.status !== 'closed') {
+        const pin = document.createElement('button');
+        pin.type = 'button';
+        pin.className = `menu_button${thread.pinned ? ' sillynpc-thread-pinned' : ''}`;
+        pin.innerHTML = '<i class="fa-solid fa-thumbtack"></i>';
+        pin.title = thread.pinned
+            ? 'Pinned - always sent, never tidied away. Click to unpin.'
+            : 'Always send this one, and never tidy it away';
+        pin.addEventListener('click', () => {
+            setThreadPinned(state, thread.id, !thread.pinned);
+            saveStateToMetadata(state, { label: thread.pinned ? 'Thread unpinned' : 'Thread pinned' });
+            redraw();
+        });
+        actions.append(pin);
+    }
 
     const settle = document.createElement('button');
     settle.type = 'button';
@@ -201,14 +251,20 @@ export function renderThreads(container) {
     const all = getThreads(state);
     const open = openThreads(state);
 
+    const now = currentMessageIndex();
+    const active = activeThreads(state, now);
+    const activeIds = new Set(active.map(t => t.id));
+
     const summary = document.createElement('div');
     summary.className = 'notes';
-    const cap = Number(getSettings().statusTracker.threadsInjectedMax) || 8;
+    const limits = threadLimits();
     summary.textContent = all.length === 0
         ? 'Nothing outstanding yet. Threads are caught as they open, so this fills up as '
             + 'the story goes rather than all at once.'
         : `${open.length} open, ${all.length - open.length} settled. `
-            + `The oldest ${Math.min(open.length, cap)} ride along with every message.`;
+            + `${active.length} ride along with every message - whichever are worth most, `
+            + `by what kind they are and how long the story has left them alone. `
+            + `Past ${limits.openMax} open the least of them is dropped; pin one to keep it.`;
     container.append(summary);
 
     // Threads accumulate as a story is played, so a chat that predates the feature has
@@ -258,10 +314,12 @@ export function renderThreads(container) {
 
     const list = document.createElement('div');
     list.className = 'sillynpc-thread-list';
-    // Open first, and oldest first within that - the order they are sent in, so what is on
-    // screen is what the model is being told.
-    for (const thread of [...open, ...all.filter(t => t.status === 'closed')]) {
-        list.append(threadRow(thread, state, redraw));
+    // Open first, best-scoring first within that - the order they are sent in, so what is
+    // at the top of the list is what the model is being told, and what is at the bottom is
+    // what will go first when the cap bites.
+    const ranked = rankedThreads(state, now);
+    for (const thread of [...ranked, ...all.filter(t => t.status === 'closed')]) {
+        list.append(threadRow(thread, state, redraw, { isActive: activeIds.has(thread.id), now }));
     }
     container.append(list);
 }
@@ -321,9 +379,44 @@ export function renderThreadsView(container) {
         advanced: true,
         label: 'How Many Ride Along',
         suffix: 'threads',
-        help: 'The oldest open ones are sent, up to this many. Oldest because something '
-            + 'open for two hundred messages is what is at risk of being forgotten - a '
-            + 'fresh one is still in the chat the model can see.',
+        help: 'How many are sent with every message. The ones worth most go first: a debt '
+            + 'or a promise outranks a plan somebody mentioned once, and anything the '
+            + 'story has left alone for a long time falls behind whatever it is. Pin one '
+            + 'to put it at the front for good.',
+        onChange: () => renderThreadsView(container),
+    }));
+
+    container.append(buildSettingNumber({
+        key: 'statusTracker.threadsOpenMax',
+        advanced: true,
+        label: 'How Many Are Kept',
+        suffix: 'open threads',
+        help: 'Past this the least of them is deleted. Without a cap nothing ever left, '
+            + 'and a long story reached eighty - every one of which was named in the '
+            + "tracker's request on every message, whether or not it was being sent to "
+            + 'the story. Pinned ones do not count towards this and are never deleted.',
+        onChange: () => renderThreadsView(container),
+    }));
+
+    container.append(buildSettingNumber({
+        key: 'statusTracker.threadsClosedKeep',
+        advanced: true,
+        label: 'Settled Ones Kept',
+        suffix: 'threads',
+        help: 'A settled thread is only a record of what was carried, so the newest are '
+            + 'the useful ones. Past this the oldest are deleted.',
+        onChange: () => renderThreadsView(container),
+    }));
+
+    container.append(buildSettingNumber({
+        key: 'statusTracker.threadsHalfLife',
+        advanced: true,
+        label: 'Goes Cold After',
+        suffix: 'messages',
+        help: 'How long the story has to leave a thread alone before it is worth half as '
+            + 'much. Counted in messages rather than time, and the count restarts whenever '
+            + 'whoever it is about is in a scene again - so something that keeps coming up '
+            + 'never goes cold however old it is.',
         onChange: () => renderThreadsView(container),
     }));
 

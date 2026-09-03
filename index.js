@@ -20,7 +20,7 @@ import {
 import { tryAutoSyncLorebook, syncLorebookScope } from './src/lorebook.js';
 import { initStatusLogic, hasOpenChat } from './src/status-logic.js';
 import { rebaseToSwipe } from './src/status-snapshots.js';
-import { extractStateFromMessage, resetExtractionState } from './src/status-extractor.js';
+import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad } from './src/status-extractor.js';
 import { initHUD, updateHUD } from './src/ui-hud.js';
 import { openPlayerModal } from './src/ui-player-modal.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
@@ -341,6 +341,15 @@ jQuery(async () => {
         eventSource.on(event_types.MORE_MESSAGES_LOADED, reprocessAllMessages);
         eventSource.on(event_types.CHAT_CHANGED, reprocessAllMessages);
         eventSource.on(event_types.CHAT_CHANGED, resetExtractionState);
+        // Chats that filled up before the caps existed are brought within them here, once,
+        // rather than waiting for whatever their next extraction happens to be.
+        eventSource.on(event_types.CHAT_CHANGED, () => {
+            try {
+                tidyThreadsOnLoad();
+            } catch (err) {
+                console.error(LOG_PREFIX, 'Thread tidy on load failed', err);
+            }
+        });
         // The HUD has to re-evaluate on every chat switch: it hides when none is open.
         eventSource.on(event_types.CHAT_CHANGED, () => updateHUD());
         eventSource.on(event_types.CHAT_CHANGED, () => {

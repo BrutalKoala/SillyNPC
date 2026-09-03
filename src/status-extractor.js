@@ -1,9 +1,12 @@
 import { getContext } from '../../../../st-context.js';
 import { getSettings } from './settings.js';
-import { THREAD_KINDS, openThreads, coerceThread, addThread, closeThread } from './threads.js';
+import {
+    THREAD_KINDS, openThreads, coerceThread, addThread, closeThread,
+    activeThreads, touchThreads, pruneThreads,
+} from './threads.js';
 import { LOG_PREFIX, debugLog, SYSTEM_PROMPT } from './constants.js';
 export { SYSTEM_PROMPT };
-import { extractJSON, safeJsonParse, splitValue, describeConnection } from './utils.js';
+import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
 import { recordUsage } from './usage.js';
 import {
@@ -461,7 +464,14 @@ function describeAbsentButNamed(state, messageText, trackerSettings) {
 
 function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
     // What is already open, so the reader is not asked to find it again every message.
-    const openText = openThreads(state).map(t => `  - "${t.quote}"`).join('\n');
+    //
+    // The active ones only. This listed every open thread, which made the block grow with
+    // the pile: a chat carrying eighty of them paid eighty lines here on every single
+    // message, to stop the model re-proposing threads that mostly were not being sent to
+    // it anyway. The ones worth naming are the ones in play, and addThread still refuses
+    // an exact repeat of any of the rest.
+    const openText = activeThreads(state, currentMessageIndex())
+        .map(t => `  - "${t.quote}"`).join('\n');
     const limits = describeLimits(trackerSettings, state);
     const schema = describeCollections(trackerSettings);
     const example = buildDeltaExample(trackerSettings);
@@ -647,11 +657,21 @@ export function applyThreadsFromReply(parsed, messageId = null) {
 
     const proposed = Array.isArray(parsed?.threads) ? parsed.threads : [];
     const resolved = Array.isArray(parsed?.closed) ? parsed.closed : [];
-    if (!proposed.length && !resolved.length) return { opened: 0, closed: 0 };
+    const present = (Array.isArray(parsed?.characters) ? parsed.characters : [])
+        .map(c => c?.name)
+        .filter(Boolean);
+
+    // No early return on "nothing proposed" any more. Most messages open and close
+    // nothing, and those are exactly the messages that say a thread is still live: whoever
+    // it is about was in the scene. Leaving before touching them was what let a running
+    // obligation age as though the story had dropped it.
+    if (!proposed.length && !resolved.length && !present.length) return { opened: 0, closed: 0 };
 
     const state = loadStateFromMetadata();
+    const now = currentMessageIndex();
     let opened = 0;
     let closed = 0;
+    const touched = touchThreads(state, present, messageId ?? now);
 
     // Kept so the message can be told what it did: rebaseToSwipe rebuilds a swipe from
     // what was recorded against it, and a thread recorded nowhere is a thread that swipe
@@ -682,17 +702,61 @@ export function applyThreadsFromReply(parsed, messageId = null) {
         }
     }
 
-    if (opened || closed) {
+    // Only ever grew before. Every open thread also went into the next extraction prompt
+    // as "already open, do not list again", so a chat that had collected eighty of them
+    // was paying for eighty lines on every message while only the injected handful ever
+    // reached the story.
+    const pruned = pruneThreads(state, now);
+
+    if (opened || closed || touched || pruned.open || pruned.closed) {
         saveStateToMetadata(state, { label: 'Threads', recordHistory: false });
         // Only when there is a message to record against. The catch-up scan passes none:
         // it reads the whole story rather than one reply, so there is no swipe to return
         // to and nothing for a rebuild to put back.
-        if (messageId !== null && messageId !== undefined) {
+        //
+        // Only what this message did, too - a thread dropped by the cap was not closed by
+        // the reply, so a swipe back has nothing to undo about it.
+        if ((opened || closed) && messageId !== null && messageId !== undefined) {
             recordThreadChanges(messageId, { opened: openedThreads, closed: closedIds });
         }
-        debugLog(`Threads: opened ${opened}, closed ${closed}`);
+        debugLog(`Threads: opened ${opened}, closed ${closed}, touched ${touched}, `
+            + `pruned ${pruned.open} open and ${pruned.closed} settled`);
     }
-    return { opened, closed };
+    return { opened, closed, touched, pruned };
+}
+
+/**
+ * Brings an already-open chat within the caps.
+ *
+ * The caps arrived after the flooding did, so the chats that need them most are the ones
+ * that already have eighty threads in them and would otherwise carry that until their next
+ * extraction. Runs on chat load.
+ *
+ * It says what it removed rather than doing it quietly. Deleting sixty entries without a
+ * word would look like the feature had lost them, and the number is the thing that makes
+ * it read as tidying instead.
+ *
+ * @returns {{ open: number, closed: number }}
+ */
+export function tidyThreadsOnLoad() {
+    const trackerSettings = getSettings().statusTracker;
+    if (trackerSettings.threadsEnabled !== true) return { open: 0, closed: 0 };
+
+    const state = loadStateFromMetadata();
+    if (!Array.isArray(state?.threads) || !state.threads.length) return { open: 0, closed: 0 };
+
+    const pruned = pruneThreads(state, currentMessageIndex());
+    if (!pruned.open && !pruned.closed) return pruned;
+
+    saveStateToMetadata(state, { label: 'Threads', recordHistory: false });
+
+    const parts = [];
+    if (pruned.open) parts.push(`${pruned.open} stale`);
+    if (pruned.closed) parts.push(`${pruned.closed} settled`);
+    toastr.info(`Tidied ${parts.join(' and ')} thread${pruned.open + pruned.closed === 1 ? '' : 's'}. `
+        + 'Pin one to keep it for good.', 'SillyNPC');
+    debugLog(`Threads tidied on load: ${pruned.open} open, ${pruned.closed} settled`);
+    return pruned;
 }
 
 /**

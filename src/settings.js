@@ -497,8 +497,31 @@ export const defaultSettings = {
          * you have looked at what it catches on your own chat.
          */
         threadsEnabled: false,
-        /** How many open threads ride along in the scene block. Oldest first. */
+        /**
+         * How many open threads ride along in the scene block - the "active" ones.
+         *
+         * Highest scoring rather than oldest: see threadScore in threads.js for why
+         * ordering by age alone picked badly at both ends of the list.
+         */
         threadsInjectedMax: 8,
+        /**
+         * How many open threads are kept at all. Past this the lowest scoring is deleted.
+         *
+         * The reason there is a cap: nothing ever removed a thread, so a long chat reached
+         * eighty of them. Only the active handful were ever sent to the story, but every
+         * one of them was pasted into the extraction prompt on every message, so the pile
+         * cost more the bigger it got. Pinned threads do not count against this.
+         */
+        threadsOpenMax: 20,
+        /** How many settled threads stay as a record. Oldest deleted past this. */
+        threadsClosedKeep: 10,
+        /**
+         * Messages until a thread is worth half its kind's weight.
+         *
+         * Ageing is in messages, not time: a story left for a week and picked up where it
+         * stopped has not moved on, and one played hard for an hour has.
+         */
+        threadsHalfLife: 60,
         /**
          * Remove the tracker's own status block from a message once it has been read.
          *
