@@ -102,6 +102,57 @@ export function themeClassFor(theme) {
 }
 
 /**
+ * How the floating HUD is laid out. Each has a `.sillynpc-hud-<id>` block in style.css.
+ *
+ * This replaced a "Meter Style" setting that offered bar, segmented, rings and text. The
+ * two were never really independent: in every one of these the shape of the meter and the
+ * shape of the frame around it are the same decision - underlines drawn as segmented pips
+ * is not a thing anybody wants - so a layout decides both, and there is one setting where
+ * there were two.
+ *
+ * `meters` is which drawing routine the layout needs, and it is the field that keeps this
+ * honest: a layout wanting a fifth kind of meter is a layout that needs new code in
+ * ui-hud.js, not just a new block of CSS.
+ *
+ * @type {ReadonlyArray<{id: string, label: string, meters: 'bar'|'pips'|'ring', note: string}>}
+ */
+export const HUD_LAYOUTS = Object.freeze([
+    { id: 'plate', label: 'Bracket Plate', meters: 'bar',
+      note: 'A panel with the portrait held at its corners. The closest to how the HUD has always looked.' },
+    { id: 'blades', label: 'Stepped Blades', meters: 'bar',
+      note: 'One plate cut off at an angle, meters stepping in behind it.' },
+    { id: 'fan', label: 'Angled Fan', meters: 'bar',
+      note: 'Skewed slashes with nothing behind them, longest at the top. Depends on your stat colours being distinct.' },
+    { id: 'brackets', label: 'Corner Brackets', meters: 'bar',
+      note: 'No panel at all - four corner marks and thin meters. Lightest over a plain chat, hardest to read over a background image.' },
+    { id: 'underline', label: 'Underlines', meters: 'bar',
+      note: 'Each stat named, with its meter as a rule beneath it. The only layout where the names are always readable.' },
+    { id: 'pips', label: 'Pip Rows', meters: 'pips',
+      note: 'Notches rather than a fill, so a small change is a whole cell instead of a pixel.' },
+    { id: 'splitring', label: 'Split Ring', meters: 'ring',
+      note: 'One ring around the portrait, divided into a segment per stat. Compact enough for a corner.' },
+    { id: 'dock', label: 'Edge Dock', meters: 'bar',
+      note: 'Docked against the side of the screen with its outer half cut away. Takes the least room of any of them.' },
+]);
+
+const LAYOUT_IDS = new Set(HUD_LAYOUTS.map(l => l.id));
+
+/** The chosen layout, or the default when the setting holds something unknown. */
+export function hudLayoutFor(id) {
+    return HUD_LAYOUTS.find(l => l.id === id) || HUD_LAYOUTS[0];
+}
+
+/** Every layout class, so switching layouts can clear the one before it. */
+export function allHudLayoutClasses() {
+    return HUD_LAYOUTS.map(l => `sillynpc-hud-${l.id}`);
+}
+
+/** Whether an id names a layout this version ships. */
+export function isHudLayout(id) {
+    return LAYOUT_IDS.has(id);
+}
+
+/**
  * Chatty per-message / per-update logging, off by default.
  *
  * The extension logged on every state load, every stat merge and every HUD

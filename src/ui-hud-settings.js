@@ -2,6 +2,7 @@ import { getSettings, saveSettings } from './settings.js';
 import { buildSettingToggle, buildSettingSlider, buildSettingSelect } from './ui-shared.js';
 import { triggerReprocess } from './chat.js';
 import { updateHUD, resetHudPosition } from './ui-hud.js';
+import { HUD_LAYOUTS, hudLayoutFor } from './constants.js';
 
 /**
  * The floating HUD's settings tab.
@@ -88,36 +89,31 @@ export function renderHudView(container) {
             onChange: onApply
         }));
 
+        const layout = hudLayoutFor(settings.hudLayout);
+
         container.append(buildSettingSelect({
-            key: 'statusTracker.hudMeterStyle',
-            label: 'Meter Style',
-            options: [
-                { value: 'bar', label: 'Bar' },
-                { value: 'segmented', label: 'Segmented' },
-                { value: 'ring', label: 'Rings around the portrait' },
-                { value: 'text', label: 'Text only' },
-            ],
-            help: "How each stat marked Primary is drawn. Rings take the portrait's "
-                + 'shape, round or square, and sit on its edge. Rings fit three before they '
-                + 'get too thin, so any beyond that fall back to text. A stat whose value '
-                + 'has no number in it - or no maximum to fill against - is always shown '
-                + 'as text, because a bar for it would sit empty forever.',
+            key: 'statusTracker.hudLayout',
+            label: 'Layout',
+            options: HUD_LAYOUTS.map(l => ({ value: l.id, label: l.label })),
+            help: layout.note + ' A stat whose value has no number in it, or no maximum to '
+                + 'fill against, is shown as its value alone whichever layout you pick - a '
+                + 'meter for it would sit empty forever.',
             onChange,
         }));
 
-        // The two are the same idea measured differently, so only the one that applies
-        // to the chosen style is shown. A width slider does nothing to a ring, and a
-        // thickness slider does nothing to a bar.
-        if (settings.hudMeterStyle === 'ring') {
+        // Only the control the chosen layout actually uses. A width slider does nothing to
+        // a ring and a thickness slider does nothing to a bar, and a live-looking control
+        // that changes nothing is worse than one that is absent.
+        if (layout.meters === 'ring') {
             container.append(buildSettingSlider({
                 key: 'statusTracker.hudRingThickness',
                 label: 'Ring Thickness',
                 min: 2, max: 14, step: 1, suffix: 'px',
-                help: 'How heavy each ring is drawn. Thicker rings reach further out from '
+                help: 'How heavy the ring is drawn. A thicker ring reaches further out from '
                     + 'the portrait, and the panel grows to match.',
                 onChange: onApply,
             }));
-        } else if (settings.hudMeterStyle !== 'text') {
+        } else {
             container.append(buildSettingSlider({
                 key: 'statusTracker.hudMeterWidth',
                 label: 'Meter Width',

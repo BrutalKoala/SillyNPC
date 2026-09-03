@@ -2,7 +2,10 @@ import { eventSource } from '../../../../events.js';
 import { getSettings, saveSettings } from './settings.js';
 import { loadStateFromMetadata, findMatchingStatKey, getPersonaData, getPlayerImageUrl, resolveMaxValue, hasOpenChat } from './status-logic.js';
 import { openPlayerModal } from './ui-player-modal.js';
-import { allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR } from './constants.js';
+import {
+    allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR,
+    hudLayoutFor, allHudLayoutClasses,
+} from './constants.js';
 import { computeStatBar, splitValue, applyStatFormat } from './utils.js';
 
 let hudContainer = null;
@@ -270,7 +273,8 @@ export function updateHUD(updatedState = null) {
     const statsContainer = hudContainer.querySelector('.sillynpc-hud-stats');
     statsContainer.innerHTML = '';
 
-    const style = settings.hudMeterStyle || 'bar';
+    const layout = hudLayoutFor(settings.hudLayout);
+    const style = layout.meters;
     const primaryStats = settings.playerStats.filter(s => s.isPrimary && s.visible !== false);
 
     const meters = primaryStats.map(statDef => {
@@ -296,21 +300,27 @@ export function updateHUD(updatedState = null) {
     if (style === 'ring') {
         // The portrait size for this frame is decided below, so compute it here too
         // rather than reading a variable that has not been written yet.
-        paintPortraitRings(portrait, meters.filter(m => m.bar.numeric), {
+        //
+        // Six, where the old concentric rings managed three: segments share one
+        // circumference, so a fourth stat makes them shorter rather than pushing another
+        // ring outward and the panel wider with it. Past six they are too short to read.
+        const ringed = meters.filter(m => m.bar.numeric).slice(0, 6);
+        paintSplitRing(portrait, ringed, {
             square: settings.hudPortraitShape === 'square',
             size: portraitSizeFor(0, 'ring'),
             thickness: Number(settings.hudRingThickness) || 5,
         });
-        // Anything a ring cannot show still has to be readable, so text stats and any
-        // meter past the third fall back to a row rather than being dropped.
-        const leftOver = meters.filter((m, i) => !m.bar.numeric || i >= 3);
-        leftOver.forEach(m => statsContainer.append(buildMeterRow(m.statDef, m.rawValue, m.bar, 'text')));
+        // Anything a ring cannot show still has to be readable, so a stat with no ceiling
+        // and any meter past the sixth falls back to a row rather than being dropped.
+        const shown = new Set(ringed);
+        meters.filter(m => !shown.has(m))
+            .forEach(m => statsContainer.append(buildMeterRow(m.statDef, m.rawValue, m.bar, 'bar')));
     } else {
         portrait.querySelectorAll('.sillynpc-hud-rings').forEach(el => el.remove());
         meters.forEach(m => statsContainer.append(buildMeterRow(m.statDef, m.rawValue, m.bar, style)));
     }
 
-    applyHudProportions(hudContainer, meters.length, style);
+    applyHudProportions(hudContainer, meters.length, layout);
 }
 
 /**
@@ -345,14 +355,23 @@ export function portraitSizeFor(meterCount, style) {
     return Math.max(MIN, Math.min(MAX, rows * ROW + 16));
 }
 
-function applyHudProportions(container, meterCount, style) {
-    // Rings need room outside the portrait, and no reserved column beside it.
-    container.classList.toggle('meter-ring', style === 'ring');
-    // Text mode has no bar, so it has no bar width to reserve a column for - and the
-    // reserved width goes up to 260px, which was showing as a slab of empty panel beside
-    // the words.
-    container.classList.toggle('meter-text', style === 'text');
-    const size = portraitSizeFor(meterCount, style);
+/**
+ * The layout's class, the meter geometry, and the portrait's size.
+ *
+ * The class is removed and re-added by name rather than by clearing the attribute: three
+ * functions put classes on this element, and one of them clearing everything is the bug
+ * that made the portrait's shape and side settings do nothing for months.
+ */
+function applyHudProportions(container, meterCount, layout) {
+    container.classList.remove(...allHudLayoutClasses());
+    container.classList.add(`sillynpc-hud-${layout.id}`);
+
+    // Rings need room outside the portrait, and no reserved column beside it. Kept as its
+    // own class rather than folded into the layout class because the geometry rules -
+    // padding against the ring overhang - are about the meter shape, not the frame.
+    container.classList.toggle('meter-ring', layout.meters === 'ring');
+
+    const size = portraitSizeFor(meterCount, layout.meters);
     container.style.setProperty('--sillynpc-hud-portrait-size', `${size}px`);
 }
 
@@ -402,13 +421,16 @@ function meterColour(statDef) {
  * @param {object} statDef
  * @param {string} rawValue
  * @param {{ percent: number, numeric: boolean }} bar
- * @param {string} style One of bar, segmented, ring, text.
+ * @param {string} style Either 'bar' or 'pips' - what the chosen layout draws.
  * @returns {HTMLElement}
  */
 function buildMeterRow(statDef, rawValue, bar, style) {
     const row = document.createElement('div');
     row.className = 'sillynpc-hud-stat-row';
     row.title = `${statDef.name}: ${rawValue}`;
+    // The stat's own colour, on the row, so a layout can reach it from CSS without every
+    // piece inside having to be painted individually.
+    row.style.setProperty('--sillynpc-hud-stat-colour', meterColour(statDef));
 
     const label = applyStatFormat(statDef.format, {
         value: rawValue,
@@ -416,7 +438,15 @@ function buildMeterRow(statDef, rawValue, bar, style) {
         max: resolveMaxValue(statDef) || '',
     });
 
-    if (style === 'text' || !bar.numeric) {
+    // Written by every layout and shown by the ones that want it. Underlines is built
+    // around the names being readable; the rest hide it in CSS and let the colour say
+    // which stat is which.
+    const name = document.createElement('div');
+    name.className = 'sillynpc-hud-stat-name';
+    name.textContent = statDef.name;
+    row.append(name);
+
+    if (!bar.numeric) {
         const text = document.createElement('div');
         text.className = 'sillynpc-hud-stat-text';
         text.style.color = meterColour(statDef);
@@ -428,7 +458,7 @@ function buildMeterRow(statDef, rawValue, bar, style) {
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-hud-bar-wrap';
 
-    if (style === 'segmented') {
+    if (style === 'pips') {
         // Ten notches, filled from the left. Small changes are easier to see than on a
         // smooth fill, which is the point of asking for it.
         const SEGMENTS = 10;
@@ -507,16 +537,16 @@ export function ringRadius(size, thickness, index) {
 }
 
 /**
- * Draws the meters as arcs around the portrait instead of rows beneath it.
+ * Draws the meters as one ring around the portrait, divided into a segment per stat.
  *
- * Rings grow *outward* from the portrait's edge: the first sits on its border and each
- * further one wraps around the last. They used to nest inward from a fixed outer radius,
- * which put the first ring far from the image and walked the rest onto it - the reverse
- * of what a meter around a portrait should look like.
+ * This replaced concentric rings - one ring per stat, stacked outward. Those grew the
+ * panel with every stat added and were unreadable past three, because each new ring had to
+ * clear the last. Segments share a single circumference instead, so a fourth stat makes
+ * the segments shorter rather than the HUD wider.
  *
- * The ring takes the portrait's shape: a circle around a circle, a rounded square around a
- * square. `pathLength="100"` normalises each outline, so the dash offset is the percentage
- * directly and one routine can draw both.
+ * The ring takes the portrait's shape: a circle around a circle, a square around a square.
+ * `pathLength="100"` normalises either outline so a dash length is a percentage directly,
+ * which is what lets one routine draw both.
  *
  * @param {HTMLElement} portrait
  * @param {Array<{ statDef: object, rawValue: string, bar: object }>} meters
@@ -525,24 +555,21 @@ export function ringRadius(size, thickness, index) {
  * @param {number} options.size Portrait size in pixels.
  * @param {number} options.thickness Ring thickness in pixels.
  */
-function paintPortraitRings(portrait, meters, { square, size, thickness }) {
+function paintSplitRing(portrait, meters, { square, size, thickness }) {
     portrait.querySelectorAll('.sillynpc-hud-rings').forEach(el => el.remove());
     if (!meters.length) return;
 
-    const shown = meters.slice(0, 3);
-    const overhang = ringOverhang(shown.length, thickness);
-    // The SVG box covers the portrait plus the rings on both sides. Working in its own
-    // pixel units - rather than a fixed 0-100 space - keeps the thickness the user asked
-    // for the thickness they get, whatever size the portrait happens to be.
+    const overhang = ringOverhang(1, thickness);
+    const radius = ringRadius(size, thickness, 0);
     const box = size + overhang * 2;
+    const centre = box / 2;
 
     const NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('class', 'sillynpc-hud-rings');
     svg.setAttribute('viewBox', `0 0 ${box} ${box}`);
 
-    const outline = (radius) => {
-        const centre = box / 2;
+    const outline = () => {
         if (!square) {
             const circle = document.createElementNS(NS, 'circle');
             circle.setAttribute('cx', String(centre));
@@ -555,29 +582,37 @@ function paintPortraitRings(portrait, meters, { square, size, thickness }) {
         rect.setAttribute('y', String(centre - radius));
         rect.setAttribute('width', String(radius * 2));
         rect.setAttribute('height', String(radius * 2));
-        // No corner rounding at all. This used to round by `6 + thickness`, which made the
-        // rings rounder the thicker they were set - at a thickness chosen to make them
-        // visible they read as a stack of squircles rather than as a square frame, and
-        // corners are the one thing the square option is chosen for.
+        // No rx. Square means square, and rounding by the thickness made the ring less
+        // square the thicker it was drawn - the opposite of what the option is chosen for.
         return rect;
     };
 
-    shown.forEach((meter, index) => {
-        // Outward: the first ring's centre line sits half a stroke beyond the border.
-        const radius = ringRadius(size, thickness, index);
+    // A gap between neighbours so the segments read as separate meters rather than as one
+    // ring in changing colours. Held to a share of the slice rather than a fixed number,
+    // or six stats would be more gap than meter.
+    const slice = 100 / meters.length;
+    const gap = Math.min(4, slice * 0.22);
+    const span = slice - gap;
+
+    meters.forEach((meter, index) => {
+        const offset = -index * slice;
         const filled = Math.max(0, Math.min(100, meter.bar.percent));
 
-        const track = outline(radius);
+        const track = outline();
         track.setAttribute('class', 'sillynpc-hud-ring-track');
         track.setAttribute('stroke-width', String(thickness));
         track.setAttribute('pathLength', '100');
+        track.setAttribute('stroke-dasharray', `${span} ${100 - span}`);
+        track.setAttribute('stroke-dashoffset', String(offset));
 
-        const arc = outline(radius);
+        const lit = span * filled / 100;
+        const arc = outline();
         arc.setAttribute('class', 'sillynpc-hud-ring-arc');
         arc.setAttribute('stroke-width', String(thickness));
         arc.setAttribute('pathLength', '100');
         arc.setAttribute('stroke', meterColour(meter.statDef));
-        arc.setAttribute('stroke-dasharray', `${filled} 100`);
+        arc.setAttribute('stroke-dasharray', `${lit} ${100 - lit}`);
+        arc.setAttribute('stroke-dashoffset', String(offset));
 
         const title = document.createElementNS(NS, 'title');
         title.textContent = `${meter.statDef.name}: ${meter.rawValue}`;

@@ -551,12 +551,13 @@ export const defaultSettings = {
         hudPosition: 'top-right',
         hudScale: 1.0,
     /**
-     * How a primary stat is drawn on the HUD: 'bar', 'segmented', 'ring' or 'text'.
+     * How the whole HUD is laid out. One of HUD_LAYOUTS in constants.js.
      *
-     * One choice for the whole HUD rather than per stat, so the meters stay a set rather
-     * than a collection of unrelated widgets.
+     * Replaced hudMeterStyle, which offered bar, segmented, rings and text. The frame and
+     * the meter were never independent choices - see the note on HUD_LAYOUTS - so this is
+     * one setting where there were two, and old values migrate to their nearest layout.
      */
-    hudMeterStyle: 'bar',
+    hudLayout: 'plate',
     /** Width of a bar or segmented meter, in pixels. */
     hudMeterWidth: 92,
     /** Height of a bar or segmented meter, in pixels. */
@@ -843,6 +844,24 @@ export function normalizeSettings(settings) {
     if (settings.statusTracker?.historyDepth === 10) settings.statusTracker.historyDepth = 25;
 
     debugLog('Status tracker migration');
+
+    // hudMeterStyle became hudLayout: the meter's shape and the frame's shape turned out
+    // to be one decision rather than two. Each old value keeps whichever new layout draws
+    // its meters the same way, so nobody's HUD changes shape without them asking.
+    if (settings.statusTracker && settings.statusTracker.hudMeterStyle) {
+        const toLayout = {
+            bar: 'plate',            // a panel with plain bars, which is what it was
+            segmented: 'pips',       // notches, under a new name
+            ring: 'splitring',       // the only ring layout that survived the gallery
+            text: 'underline',       // names and values, with a rule instead of a bar
+        };
+        if (!settings.statusTracker.hudLayout) {
+            settings.statusTracker.hudLayout =
+                toLayout[settings.statusTracker.hudMeterStyle] || 'plate';
+        }
+        delete settings.statusTracker.hudMeterStyle;
+    }
+
     // Schema Migration: Migrate old displayStyle to unified menuStyle
     if (settings.statusTracker && settings.statusTracker.displayStyle) {
         const legacyThemeMap = {
