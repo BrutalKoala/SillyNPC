@@ -2201,9 +2201,11 @@ span.sillynpc-review-to {
     border-radius: 50%;
     background-size: cover;
     background-position: center var(--sillynpc-portrait-focus, top);
-    border: 2px solid var(--sillynpc-accent);
+    /* 1px, not 2. At 2 the accent read as a frame around the picture rather than an edge
+       to it, which with the panel padding outside it made the portrait look boxed in. */
+    border: 1px solid var(--sillynpc-accent);
     cursor: pointer;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
     flex-shrink: 0;
 }
 
@@ -3160,7 +3162,9 @@ span.sillynpc-review-to {
 
 .sillynpc-hud-container {
     gap: var(--sillynpc-space-sm);
-    padding: var(--sillynpc-space-sm);
+    /* 4px rather than 8. The panel is a backing plate for the portrait and its meters,
+       and at 8 there was more panel than there was reason for it. */
+    padding: var(--sillynpc-space-xs);
     border-radius: var(--sillynpc-radius-md);
 }
 
@@ -3194,14 +3198,19 @@ span.sillynpc-review-to {
     display: none;
 }
 
-.sillynpc-hud-container.meter-ring .sillynpc-hud-stats {
+/* Neither rings nor plain text draws a bar, so neither has a bar width to reserve a
+   column for. Text mode was holding open up to 260px of empty panel beside the words. */
+.sillynpc-hud-container.meter-ring .sillynpc-hud-stats,
+.sillynpc-hud-container.meter-text .sillynpc-hud-stats {
     min-width: 0;
 }
 
 /* Rings sit outside the portrait, so the panel needs room or they cross its edge. The
    overhang is set on the portrait by the painter, so it is read from there. */
 .sillynpc-hud-container.meter-ring {
-    padding: calc(var(--sillynpc-space-xs) + var(--sillynpc-hud-ring-overhang, 8px));
+    /* Cannot go below the overhang or the rings cross the panel edge - they are inset by
+       calc(overhang * -1) - so the 2px is clearance, not taste. */
+    padding: calc(var(--sillynpc-hud-ring-overhang, 8px) + 2px);
 }
 
 /* With rings and nothing else, the panel is a rounded rectangle wrapped around a circle -

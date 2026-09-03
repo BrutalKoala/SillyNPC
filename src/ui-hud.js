@@ -28,6 +28,18 @@ const HUD_ORIGINS = {
     'bottom-right': 'bottom right',
 };
 
+/**
+ * The corner classes, which are the ones that have to be cleared before another is set.
+ *
+ * Named rather than cleared wholesale. Three separate functions put classes on this
+ * element - the corner and theme here, the portrait's shape and side in
+ * applyHudAppearance, the meter style in applyHudProportions - and for a long time this
+ * one assigned `className` outright, so it silently deleted the other two's work every
+ * time the HUD updated. That is why choosing a portrait side or shape appeared to do
+ * nothing at all unless the meter style happened to be re-applied afterwards.
+ */
+const HUD_CORNERS = Object.keys(HUD_ORIGINS);
+
 /** How far the pointer must travel before a press on the portrait counts as a drag. */
 const DRAG_THRESHOLD = 5;
 
@@ -117,7 +129,9 @@ export function initHUD() {
         window.addEventListener('resize', keepHudOnScreen);
     }
     
-    hudContainer.className = `sillynpc-hud-container ${settings.hudPosition}`;
+    hudContainer.classList.add('sillynpc-hud-container');
+    hudContainer.classList.remove(...HUD_CORNERS);
+    hudContainer.classList.add(settings.hudPosition);
     hudContainer.style.position = 'fixed';
     // z-index comes from --sillynpc-z-hud so the HUD sits above the chat but below
     // SillyTavern's own panels, drawers and menus. An inline 10000 here used to beat
@@ -200,7 +214,12 @@ export function updateHUD(updatedState = null) {
     // restore the corner class and origin under the cursor, snapping the HUD away from
     // the hand holding it.
     if (!isDragging) {
-        hudContainer.className = `sillynpc-hud-container ${hasManualPos ? '' : settings.hudPosition} ${themeClass}`;
+        // The corner and the theme only. Assigning className here wiped the portrait's
+        // shape and side, which applyHudAppearance had set eight lines earlier - see
+        // HUD_CORNERS. The theme classes were already removed above.
+        hudContainer.classList.remove(...HUD_CORNERS);
+        if (!hasManualPos) hudContainer.classList.add(settings.hudPosition);
+        hudContainer.classList.add(themeClass);
         // A dragged HUD is placed by left/top, so it genuinely does grow from its top-left.
         hudContainer.style.transformOrigin = hasManualPos
             ? 'top left'
@@ -329,6 +348,10 @@ export function portraitSizeFor(meterCount, style) {
 function applyHudProportions(container, meterCount, style) {
     // Rings need room outside the portrait, and no reserved column beside it.
     container.classList.toggle('meter-ring', style === 'ring');
+    // Text mode has no bar, so it has no bar width to reserve a column for - and the
+    // reserved width goes up to 260px, which was showing as a slab of empty panel beside
+    // the words.
+    container.classList.toggle('meter-text', style === 'text');
     const size = portraitSizeFor(meterCount, style);
     container.style.setProperty('--sillynpc-hud-portrait-size', `${size}px`);
 }
