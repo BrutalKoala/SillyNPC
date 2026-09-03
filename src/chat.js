@@ -14,6 +14,11 @@ import { faceFor, faceAssignmentVersion } from './default-portraits.js';
 // chat.js for them.
 import { getIgnoredSpeakerLabels, normaliseSpeakerLabel } from './speaker-labels.js';
 export { getIgnoredSpeakerLabels, normaliseSpeakerLabel };
+// And again: Fill has to ask whether a character is in the story before it describes
+// one, and cannot import this file - chat.js reaches character-fill.js through six
+// modules. Every existing caller already asks chat.js for it.
+import { charactersMentionedIn } from './mentions.js';
+export { charactersMentionedIn };
 // Same again: the panels that want the chat redrawn are imported *by* this file, so the
 // handle lives where they can reach it.
 import { triggerReprocess, setReprocessCallback } from './reprocess.js';
@@ -80,51 +85,6 @@ function getOptimizedPatterns(characters) {
     return cachedOptimizedPatterns;
 }
 
-/**
- * Characters this text names, whether or not they speak.
- *
- * The decorator's matcher is not reusable here: it requires a trailing colon, because it
- * is looking for speaker lines to put an avatar against. "Joe walks in from the rain"
- * names Joe without him saying anything, and that is exactly the case that matters - the
- * reader needs to know Joe already has a card before it decides he is a new character with
- * nothing to his name.
- *
- * Longest name first, so "The Fae Queen" is not matched as "The Fae". Word boundaries on
- * both sides, so "Ann" does not match inside "Announcement".
- *
- * @param {string} text
- * @param {Array<object>} [characters] Defaults to the ones active in this chat.
- * @returns {object[]} The matched character records, each at most once.
- */
-export function charactersMentionedIn(text, characters = null) {
-    const body = String(text || '');
-    if (!body.trim()) return [];
-
-    const cast = characters || getActiveCharacters();
-    const caseInsensitive = getSettings().caseInsensitive;
-    const found = new Map();
-
-    const candidates = [];
-    for (const char of cast) {
-        const names = [
-            char.name,
-            ...(char.aliases || []).filter(a => !a.isRegex && a.pattern).map(a => a.pattern),
-        ].filter(Boolean);
-        for (const name of names) candidates.push({ name, char });
-    }
-    candidates.sort((a, b) => b.name.length - a.name.length);
-
-    for (const { name, char } of candidates) {
-        if (found.has(char)) continue;
-        const pattern = new RegExp(
-            `(?<![\\p{L}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{N}_])`,
-            caseInsensitive ? 'ui' : 'u',
-        );
-        if (pattern.test(body)) found.set(char, true);
-    }
-
-    return [...found.keys()];
-}
 
 /**
  * A short key that changes when the picture does.

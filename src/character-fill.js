@@ -6,6 +6,8 @@ import { requestExtraction, coerceToUpdate, describeCollections } from './status
 import { applyUpdate, resolveMaxValue, loadStateFromMetadata } from './status-logic.js';
 import { describeTrackedFacts, describeProfile, buildLoreExcerpt, createLoreEntry, generateLoreContent, saveLoreContent } from './api.js';
 import { tryAutoSyncLorebook, getChatLorebookName } from './lorebook.js';
+import { charactersMentionedIn } from './mentions.js';
+import { getPersonaData } from './status-logic.js';
 
 /**
  * Filling in a character card that was created from a chat, or by hand, and is empty.
@@ -151,20 +153,71 @@ export const PROFILE_SYSTEM_PROMPT = [
 ].join('\n');
 
 /**
+ * What there is to go on, before anything is sent.
+ *
+ * Four cases, and the one that mattered is the last: a character with no entry who has not
+ * appeared yet. Fill used to send the recent story anyway, and the recent story is the
+ * reader's own messages and their persona - so the model described the persona, because
+ * that was the only person in front of it. Withholding the story is what makes that
+ * impossible rather than merely discouraged.
+ *
+ * An entry the reader wrote by hand but never linked counts. fillLore has always looked
+ * for one; fillProfile never did, so a perfectly good description sat unread unless the
+ * link had been made by hand.
+ *
+ * @param {object} char
+ * @returns {Promise<{ story: string, lore: string, enough: boolean }>}
+ */
+export async function fillSources(char) {
+    // The linked entry, or one that matches by name and was never linked to.
+    let lore = await readLoreEntry(char);
+    if (!lore && !char?.lorebook) {
+        if (await tryAutoSyncLorebook(char, { silent: true })) {
+            lore = await readLoreEntry(char);
+        }
+    }
+
+    /* Name and non-regex aliases, on word boundaries, honouring the case-insensitive
+       setting - charactersMentionedIn is that matcher and is what decides who the tracker
+       reads about, so Fill agreeing with it is worth more than a second rule that could
+       disagree. Passed this one character rather than the cast: the question is whether
+       *they* are in it. */
+    const excerpt = buildLoreExcerpt(getContext()?.chat || []);
+    const mentioned = excerpt.text
+        ? charactersMentionedIn(excerpt.text, [char]).length > 0
+        : false;
+
+    return {
+        story: mentioned ? excerpt.text : '',
+        lore,
+        enough: Boolean(mentioned || lore),
+    };
+}
+
+/**
  * The ask, generated from the field list so a field cannot exist without being asked for.
  */
-function buildProfilePrompt(char, wanted, lore) {
+function buildProfilePrompt(char, wanted, sources) {
     const parts = [`Character: ${char.name}`];
+
+    // Named so the story cannot be mistaken for a description of them. The reader writes
+    // most of what is in an excerpt, so their persona is the best-described person in it
+    // by some distance, and the subject may be a passing mention.
+    const persona = getPersonaData();
+    if (persona?.name && persona.name !== char.name) {
+        parts.push(`${persona.name} is the reader's own character, not the subject. `
+            + `Nothing about ${persona.name} belongs on ${char.name}'s profile.`);
+    }
 
     const known = describeProfile(char);
     if (known) parts.push(`Already known about them, do not contradict it:\n${known}`);
-    if (lore) parts.push(`Their lorebook entry:\n${lore}`);
+    if (sources.lore) parts.push(`Their lorebook entry:\n${sources.lore}`);
 
     const facts = describeTrackedFacts(char);
     if (facts) parts.push(`What the tracker records about them:\n${facts}`);
 
-    const excerpt = buildLoreExcerpt(getContext()?.chat || []);
-    if (excerpt.text) parts.push(`Recent story:\n${excerpt.text}`);
+    // Only when they are actually in it. See fillSources.
+    if (sources.story) parts.push(`Recent story:\n${sources.story}`);
 
     parts.push(
         'Fill in these fields:\n'
@@ -191,8 +244,17 @@ export async function fillProfile(char) {
     const wanted = missingProfileFields(char);
     if (wanted.length === 0) return { ok: true, filled: [] };
 
-    const lore = await readLoreEntry(char);
-    const prompt = buildProfilePrompt(char, wanted, lore);
+    const sources = await fillSources(char);
+    if (!sources.enough) {
+        return {
+            ok: true, filled: [],
+            reason: `Nothing to go on: ${char.name} has no lorebook entry and is not `
+                + 'mentioned in the recent story. Write them into a message, or give them '
+                + 'an entry, and try again.',
+        };
+    }
+
+    const prompt = buildProfilePrompt(char, wanted, sources);
     const raw = await requestExtraction(
         prompt, null, getSettings().statusTracker, PROFILE_SYSTEM_PROMPT, { usageKind: 'fill' });
     const answer = coerceToUpdate(raw);
