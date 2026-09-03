@@ -494,6 +494,13 @@ export function renderStatusTrackerBox(mesEl) {
     
     const box = document.createElement('div');
     box.className = `sillynpc-status-box sillynpc-theme-${theme}`;
+
+    // Its own scale, separate from the menus'. This box sits in the middle of the story
+    // and competes with the prose around it, so somebody who wants it out of the way
+    // usually does not want the settings panels shrunk to match.
+    const trackerScale = Number(getSettings().trackerFontScale);
+    box.style.setProperty('--sillynpc-font-scale',
+        String(Number.isFinite(trackerScale) && trackerScale > 0 ? trackerScale : 1));
     
     // Add header buttons inside the box
     const headerBtns = document.createElement('div');

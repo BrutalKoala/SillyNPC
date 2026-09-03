@@ -86,10 +86,18 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     background: transparent;
     color: var(--sillynpc-fg-primary);
     font-family: var(--sillynpc-font-family);
-    font-size: var(--sillynpc-font-size-base);
+    font-size: calc(var(--sillynpc-font-size-base) * var(--sillynpc-font-scale, 1));
     line-height: var(--sillynpc-line-height);
     box-sizing: border-box;
     transition: background 0.3s, color 0.3s, border-color 0.3s;
+}
+
+/* The sheet never had a text size of its own - it took SillyTavern's - so the theme's
+   font-size-base has never reached it. Scaling `em` rather than naming a size keeps that
+   exactly as it was at 1, and still lets the menu's slider move it. Correcting it to the
+   theme's size would be a change nobody asked for, on every sheet, for everybody. */
+.sillynpc-player-sheet {
+    font-size: calc(1em * var(--sillynpc-font-scale, 1));
 }
 
 .sillynpc-manage-layout {
@@ -1437,7 +1445,10 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 }
 
 .sillynpc-editor-left {
-    flex: 0 0 260px;
+    /* Percentage, not vw: this column lives in a dialog, and a narrow dialog on a wide
+       monitor would take a viewport unit as permission to stay huge. See the note on
+       .sillynpc-sheet-sidebar. */
+    flex: 0 0 clamp(130px, 30%, 260px);
     max-width: 100%;
 }
 
@@ -1739,7 +1750,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     border-radius: var(--sillynpc-radius-md) !important;
     padding: var(--sillynpc-space-sm) var(--sillynpc-space-md) !important;
     font-family: var(--sillynpc-font-family) !important;
-    font-size: var(--sillynpc-font-size-base) !important;
+    font-size: calc(var(--sillynpc-font-size-base) * var(--sillynpc-font-scale, 1)) !important;
     line-height: var(--sillynpc-line-height) !important;
     color: var(--sillynpc-fg-primary) !important;
     box-shadow: var(--sillynpc-shadow) !important;
@@ -2330,7 +2341,11 @@ span.sillynpc-review-to {
    entry is several paragraphs: in a fixed column with nothing to scroll it flattened the
    portrait on the way past. It has a tab of its own now. */
 .sillynpc-sheet-sidebar {
-    flex: 0 0 240px;
+    /* Was a flat 240px that could not shrink, which on a 360px phone left the text a
+       third of the width behind a portrait taking the rest - the "it blocks the text"
+       report. The cap is what it always was on a full-size dialog; the floor is the
+       point below which the picture stops being worth its space. */
+    flex: 0 0 clamp(130px, 28%, 240px);
     display: flex;
     flex-direction: column;
     gap: 15px;
@@ -3325,7 +3340,7 @@ span.sillynpc-review-to {
 .sillynpc-stat-title {
     margin: 0;
     color: var(--sillynpc-fg-primary);
-    font-size: var(--sillynpc-font-size-base);
+    font-size: calc(var(--sillynpc-font-size-base) * var(--sillynpc-font-scale, 1));
 }
 
 /* Label left, number right. The numbers line up in a column whatever the label is, which
@@ -3534,7 +3549,7 @@ textarea.sillynpc-profile-input {
 /* Matched to .sillynpc-editor-left rather than chosen: flipping between Profile
    and Edit should not resize the portrait under the cursor. */
 .sillynpc-cv-left {
-    flex: 0 0 260px;
+    flex: 0 0 clamp(130px, 30%, 260px);
     display: flex;
     flex-direction: column;
     gap: var(--sillynpc-space-sm);
@@ -3682,9 +3697,37 @@ textarea.sillynpc-profile-input {
     border-radius: var(--sillynpc-radius-sm);
 }
 
+/* Below this the two-column layouts stop being a layout: shrinking a column further makes
+   both halves too narrow to read, so the portrait takes a turn at full width and hands the
+   rest of the space back underneath it. The character view has done this since it was
+   written; the player sheet and the editor never did, which is why the sheet was the one
+   that got reported. */
 @media (max-width: 700px) {
     .sillynpc-cv-body { flex-direction: column; align-items: center; }
-    .sillynpc-cv-left { flex: 0 0 auto; width: 200px; }
+    .sillynpc-cv-left { flex: 0 0 auto; width: min(200px, 60%); }
+
+    .sillynpc-sheet-body,
+    .sillynpc-editor-main {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* Stacked, the column is a block above the content rather than a column beside it, so
+       the clamp above no longer applies - it was sizing it against a row. */
+    .sillynpc-sheet-sidebar,
+    .sillynpc-editor-left {
+        flex: 0 0 auto;
+        width: min(200px, 60%);
+        /* It scrolled as a full-height column; stacked there is nothing to scroll and a
+           fixed height would leave the picture floating in it. */
+        overflow-y: visible;
+        padding-right: 0;
+    }
+
+    .sillynpc-sheet-main,
+    .sillynpc-editor-right {
+        width: 100%;
+    }
 }
 
 /* ─── Player sheet: one page instead of a tab per collection ────────────────

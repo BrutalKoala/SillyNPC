@@ -784,6 +784,13 @@ export function updateExtensionTheme(root, popupInstance = null) {
     if (!isSillyNPCTheme && style !== 'default') {
         container.classList.add(`sillynpc-theme-${style}`);
     }
+
+    // Text size, as a multiplier of whatever the theme sets rather than a size of its own,
+    // so a theme that ships larger type stays proportionally itself. Set here because this
+    // is the one function every menu and sheet goes through to be themed.
+    const menuScale = Number(getSettings().menuFontScale);
+    container.style.setProperty('--sillynpc-font-scale',
+        String(Number.isFinite(menuScale) && menuScale > 0 ? menuScale : 1));
     
     // Target the actual SillyTavern Popup dialog element
     const dlg = popupInstance?.dlg || container.closest('.popup, #dialogue_popup');

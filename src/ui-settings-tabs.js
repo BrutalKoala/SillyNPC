@@ -60,6 +60,23 @@ export function renderAppearanceView(view, onReprocessMessages, updateExtensionT
         options: [{ value: 'default', label: 'Seamless Native' }, ...THEME_OPTIONS],
         onChange: () => { updateAllExtensionThemes(); reprocess(); },
     }));
+    view.append(buildSettingSlider({
+        key: 'menuFontScale',
+        label: 'Menu Text Size',
+        min: 0.8, max: 1.5, step: 0.05, suffix: 'x',
+        help: 'Text in the menus, the character pages and the player sheet, against what '
+            + 'the chosen theme sets - so a theme with larger type stays larger.',
+        onChange: () => updateAllExtensionThemes(),
+    }));
+    view.append(buildSettingSlider({
+        key: 'trackerFontScale',
+        label: 'Tracker Text Size',
+        min: 0.8, max: 1.5, step: 0.05, suffix: 'x',
+        help: 'Text in the status box in the chat. Separate from the menus because the box '
+            + 'sits in the middle of the story and competes with the prose around it - '
+            + 'wanting it smaller there is not wanting the settings smaller too.',
+        onChange: reprocess,
+    }));
     view.append(buildSettingSelect({ key: 'dividerStyle', label: 'Speech Block Dividers', options: [{value:'subtle',label:'Subtle Fade'},{value:'bold',label:'Solid Accent'},{value:'dashed',label:'Dashed Line'},{value:'none',label:'No Dividers'}], onChange: reprocess }));
     view.append(buildSettingSlider({
         key: 'speechPadY',

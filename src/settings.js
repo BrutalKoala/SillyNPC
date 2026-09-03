@@ -18,6 +18,20 @@ export const defaultSettings = {
     enabled: true,
     applyColors: true,
     /**
+     * Text size in the menus and sheets, and in the in-chat tracker box, as a multiplier
+     * of whatever the chosen theme sets.
+     *
+     * Two rather than one because they are read in different places and at different
+     * distances: the menu is a panel you are working in, and the box sits in the middle of
+     * the story where it competes with the prose around it. Somebody who wants the tracker
+     * out of the way usually does not want the settings shrunk with it.
+     *
+     * A multiplier rather than a size, so a theme that ships larger type - Fantasy HUD sets
+     * 16px, Terminal 13px - stays proportionally itself.
+     */
+    menuFontScale: 1.0,
+    trackerFontScale: 1.0,
+    /**
      * Whether the story model is told how to lay dialogue out.
      *
      * On by default: everything this extension draws in the chat depends on the answer
