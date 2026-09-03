@@ -8,7 +8,7 @@ import {
     registerActiveCharacter, reconcileScenePresence, resolvePersonaSpeaker,
     getPlayerImageUrl, getCurrentPersonaKey,
 } from './status-logic.js';
-import { faceFor } from './default-portraits.js';
+import { faceFor, faceAssignmentVersion } from './default-portraits.js';
 // Re-exported from their new home: status-logic.js needs them and cannot import this
 // file, because this file imports status-logic.js. Every existing caller already asks
 // chat.js for them.
@@ -189,6 +189,9 @@ export function chatRenderSignature() {
         char.category,
         char.imageFit,
         imageKey(char.imageUrl),
+        // Shown in the tracker box, and editable from the character page - which
+        // asked for a redraw that a signature blind to them would have declined.
+        JSON.stringify(char.statusOverrides || {}),
         (char.aliases || []).map(alias => `${alias.pattern}~${alias.isRegex}`).join(','),
     ].join('|')).join(';');
 
@@ -224,6 +227,9 @@ export function chatRenderSignature() {
         JSON.stringify(tracker.npcStats || []),
         JSON.stringify(tracker.collections || []),
         settings.trackerFontScale,
+        // Not a setting at all: which face a stranger wears is chat metadata, and
+        // "Redraw every face" changes it without touching anything else here.
+        faceAssignmentVersion(),
     ].join('|');
 
     // Which characters this chat is scoped to decides who gets decorated at all.

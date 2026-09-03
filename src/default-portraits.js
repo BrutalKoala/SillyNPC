@@ -164,6 +164,20 @@ function facesRecord({ create = false } = {}) {
     return record;
 }
 
+/**
+ * Bumped whenever the assignments are thrown away.
+ *
+ * Which face a stranger wears is chat metadata, not a setting, so the chat's render
+ * signature cannot see it - and "Redraw every face" changes what is on screen without
+ * changing anything the signature reads. Counting the resets is enough for it to notice.
+ */
+let faceVersion = 0;
+
+/** How many times the assignments have been forgotten this session. */
+export function faceAssignmentVersion() {
+    return faceVersion;
+}
+
 /** Everything this chat has handed out, for the panel that lists it. */
 export function getRuns() {
     return facesRecord()?.runs ?? [];
@@ -174,6 +188,7 @@ export function clearRuns() {
     const record = facesRecord({ create: true });
     if (!record) return;
     record.runs = [];
+    faceVersion++;
     getContext()?.saveMetadataDebounced?.();
 }
 
