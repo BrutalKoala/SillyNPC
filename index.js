@@ -21,8 +21,8 @@ import {
 } from './src/characters.js';
 import { tryAutoSyncLorebook, syncLorebookScope } from './src/lorebook.js';
 import { initStatusLogic, hasOpenChat } from './src/status-logic.js';
-import { rebaseToSwipe } from './src/status-snapshots.js';
-import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad } from './src/status-extractor.js';
+import { rebaseToSwipe, revertToBase } from './src/status-snapshots.js';
+import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad, forgetExtractionsFrom } from './src/status-extractor.js';
 import { initHUD, updateHUD } from './src/ui-hud.js';
 import { openPlayerModal } from './src/ui-player-modal.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
@@ -102,6 +102,59 @@ function onSwipe(messageId) {
         console.error(LOG_PREFIX, 'onSwipe error', err);
     }
     onMessageRendered(messageId);
+}
+
+/**
+ * The tracker follows a Regenerate, which is not a swipe.
+ *
+ * Regenerate deletes the newest reply and writes another in its place. SillyTavern says so
+ * only by emitting MESSAGE_DELETED - MESSAGE_SWIPED comes from the swipe arrows alone - and
+ * the payload there is the new chat length, which is identical whether the tail or the
+ * middle was removed. So the generation type is what this reads instead: it is unambiguous,
+ * and it arrives before the truncation, while the doomed message is still the last one.
+ *
+ * Two things have to happen, and neither used to. The changes that reply applied are undone,
+ * or the replacement stacks on top of a reply nobody can see. And the guard that remembers
+ * which messages have been read has to forget this index, because the replacement lands on
+ * the same number and would otherwise be waved through as already extracted - which is why
+ * the numbers did not merely drift after a Regenerate, they stopped moving entirely.
+ */
+function onRegenerateStarted(type, _data, dryRun) {
+    if (dryRun || type !== 'regenerate') return;
+    try {
+        const messageId = (getContext()?.chat?.length ?? 0) - 1;
+        if (messageId < 0) return;
+
+        forgetExtractionsFrom(messageId);
+        const result = revertToBase(messageId);
+        if (!result.reverted && result.reason === 'no base') {
+            // Same reasoning as the swipe path: never a silent disagreement between the
+            // tracker and the reply on screen.
+            toastr.warning(
+                'The tracker could not undo the reply being regenerated, so it may not '
+                + 'match the new one.',
+                'SillyNPC');
+        }
+    } catch (err) {
+        console.error(LOG_PREFIX, 'onRegenerateStarted error', err);
+    }
+}
+
+/**
+ * Stale guard entries are dropped whenever messages go away.
+ *
+ * Message ids are positions, not identities, so anything from here on is a number that will
+ * be handed to a different message later. Only the forgetting is safe to do here: the
+ * payload cannot distinguish deleting the last message from deleting one in the middle, and
+ * reverting the wrong one would discard state silently. See the regenerate handler above,
+ * which knows exactly what it is undoing.
+ */
+function onMessageDeleted(newLength) {
+    try {
+        forgetExtractionsFrom(newLength);
+    } catch (err) {
+        console.error(LOG_PREFIX, 'onMessageDeleted error', err);
+    }
 }
 
 async function addSettingsPanel() {
@@ -340,6 +393,9 @@ jQuery(async () => {
         // fires. The new text arrived undecorated and stayed that way until something
         // else redrew the chat.
         eventSource.on(event_types.MESSAGE_SWIPED, onSwipe);
+        // Regenerate is not a swipe, and says so through neither of the events above.
+        eventSource.on(event_types.GENERATION_STARTED, onRegenerateStarted);
+        eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted);
         eventSource.on(event_types.MORE_MESSAGES_LOADED, () => {
             // The signature describes the settings, not the DOM, and these two change
             // which messages exist without changing a setting - so they have to say

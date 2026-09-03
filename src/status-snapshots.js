@@ -474,3 +474,34 @@ export function rebaseToSwipe(messageId) {
     debugLog(`Rebased onto swipe of message ${messageId}: ${rows.length} change(s)`);
     return { rebased: true, reason: rows.length ? 'restored' : 'back to the base' };
 }
+
+/**
+ * Puts the tracker back to before a message that is about to stop existing.
+ *
+ * rebaseToSwipe's sibling, and the difference is that nothing is replayed. A swipe is a
+ * message being *replaced*, so the incoming swipe's own record goes back on top; this is a
+ * message being *removed*, and the rows and thread changes it recorded die with it.
+ *
+ * Written for Regenerate, which is not a swipe: SillyTavern truncates the chat and emits
+ * MESSAGE_DELETED, never MESSAGE_SWIPED, so nothing here used to run at all. The discarded
+ * reply's stat changes and threads stayed applied, the replacement was refused by the
+ * extraction guard as already read, and the tracker held the wrong numbers from then on.
+ *
+ * The base is deliberately left in place. The replacement occupies the same index, so the
+ * state remembered before the old one is exactly the right base for the new one, and
+ * rememberSwipeBase declines to overwrite an entry that already names that message.
+ *
+ * @param {string|number} messageId
+ * @returns {{ reverted: boolean, reason: string }}
+ */
+export function revertToBase(messageId) {
+    const base = getSwipeBase(messageId);
+    // Same refusal as rebaseToSwipe: without a known starting point the only alternative is
+    // to invent one, and a wrong revert throws away state silently.
+    if (!base) return { reverted: false, reason: 'no base' };
+
+    saveStateToMetadata(base, { recordHistory: false });
+    invalidateTimeline();
+    debugLog(`Reverted to the state before message ${messageId}`);
+    return { reverted: true, reason: 'back to the base' };
+}

@@ -75,6 +75,35 @@ export function resetExtractionState() {
 }
 
 /**
+ * Forgets that messages from this index onward were ever read.
+ *
+ * The guard is keyed `messageId:swipeId`, and message ids are positions rather than
+ * identities - delete the newest message and the next one written takes its number back.
+ * Regenerate does exactly that, and the replacement arrives at the same index on swipe 0,
+ * so the key was already in the set and the new reply was refused with 'already extracted'
+ * - the tracker kept the discarded reply's numbers and never looked at the one on screen.
+ *
+ * Always safe: an index past the end of the chat has nothing to re-read, so the only thing
+ * a stale entry there can do is refuse whatever occupies that position next.
+ *
+ * @param {string|number} index
+ * @returns {number} How many were forgotten.
+ */
+export function forgetExtractionsFrom(index) {
+    const from = Number(index);
+    if (!Number.isFinite(from)) return 0;
+
+    let forgotten = 0;
+    for (const key of [...extractedMessages]) {
+        if (Number(String(key).split(':')[0]) >= from && extractedMessages.delete(key)) {
+            forgotten += 1;
+        }
+    }
+    if (forgotten) debugLog(`Forgot ${forgotten} extraction(s) from message ${from} on`);
+    return forgotten;
+}
+
+/**
  * A JSON schema describing exactly the stats and collections this user has configured.
  *
  * Deliberately restricted to the keywords Google's structured-output subset accepts:
