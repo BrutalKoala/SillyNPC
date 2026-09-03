@@ -335,9 +335,17 @@ export function describeThreads(state, now) {
     const active = activeThreads(state, now);
     if (!active.length) return '';
 
+    // "About X - " rather than "X: ". A name, a colon, then a sentence is the speaker-label
+    // shape - see speaker-labels.js, which exists because a narrator writing "**Cost**: 3
+    // Energy" was read as somebody speaking. But `who` is who the thread is ABOUT, so that
+    // shape said the opposite of what it meant, on a line that also carries a verbatim
+    // quote and is injected a message or two from the live scene.
     const lines = active.map(t => {
-        const who = t.who ? `${t.who}: ` : '';
+        const who = t.who ? `About ${t.who} - ` : '';
         return `- ${who}${t.text} ("${t.quote}")`;
     });
-    return `Open threads:\n${lines.join('\n')}`;
+    // Said outright, for the same reason: this is what was already said, not what to say.
+    const header = 'Open threads (raised earlier in the story, already said - context, '
+        + 'not lines to repeat):';
+    return `${header}\n${lines.join('\n')}`;
 }
