@@ -4,6 +4,9 @@ import { loadWorldInfo, saveWorldInfo, createWorldInfoEntry } from '../../../../
 import { executeSlashCommandsOnChatInput } from '../../../../slash-commands.js';
 import { saveBase64AsFile } from '../../../../utils.js';
 import { LOG_PREFIX, debugLog, PORTRAIT_SHAPES, DEFAULT_PORTRAIT_SHAPE, PROFILE_FIELDS } from './constants.js';
+// The chat draws this picture beside every line the character speaks, so changing it
+// leaves the chat stale. reprocess.js holds the handle so any module can ask.
+import { triggerReprocess } from './reprocess.js';
 import { getSettings, saveSettings, defaultSettings, resolveImagePrompt } from './settings.js';
 import { recordUsage } from './usage.js';
 import { escapeRegExp, describeConnection, resolveImageFolder } from './utils.js';
@@ -665,6 +668,8 @@ export async function adoptImageForCharacter(char, dataUri) {
     if (!char.images.includes(stored)) char.images.push(stored);
     char.imageUrl = stored;
     saveSettings();
+    // The picture on every line this character speaks has just changed.
+    triggerReprocess();
     return stored;
 }
 
@@ -718,6 +723,7 @@ export async function removeCharacterImage(char, path, { deleteFile = false } = 
     }
 
     saveSettings();
+    triggerReprocess();
     return { removed: at >= 0, deletedFile };
 }
 

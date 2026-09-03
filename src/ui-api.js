@@ -1,4 +1,7 @@
 import { POPUP_TYPE, POPUP_RESULT, Popup } from '../../../../popup.js';
+// The chat shows this picture beside every line the character speaks, so changing
+// it has to redraw. reprocess.js rather than chat.js: chat.js imports this file.
+import { triggerReprocess } from './reprocess.js';
 import { getRequestHeaders } from '../../../../../script.js';
 import { pickAndProcessImage } from './utils.js';
 import { world_names } from '../../../../world-info.js';
@@ -505,6 +508,7 @@ export async function generateCharacterImage(char, { onSave } = {}) {
     if (!char.images.includes(imageUrl)) char.images.push(imageUrl);
     if (action === 'use') char.imageUrl = imageUrl;
     saveSettings();
+    if (action === 'use') triggerReprocess();
 
     toastr.success(
         action === 'use' ? 'Character image updated.' : 'Image saved to this character.',

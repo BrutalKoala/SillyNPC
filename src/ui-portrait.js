@@ -1,4 +1,7 @@
 import { POPUP_TYPE, POPUP_RESULT, Popup } from '../../../../popup.js';
+// The chat shows this picture beside every line the character speaks, so changing
+// it has to redraw. reprocess.js rather than chat.js: chat.js imports this file.
+import { triggerReprocess } from './reprocess.js';
 import { saveSettings } from './settings.js';
 import { pickAndProcessImage } from './utils.js';
 import { adoptImageForCharacter, removeCharacterImage } from './api.js';
@@ -71,6 +74,7 @@ export function buildPortraitBlock(char, { onChange }) {
             const next = (from + delta + gallery.length) % gallery.length;
             char.imageUrl = gallery[next];
             saveSettings();
+            triggerReprocess();
             onChange();
         };
 
@@ -184,7 +188,12 @@ export function buildPortraitBlock(char, { onChange }) {
     clearImgBtn.className = 'menu_button clear-btn';
     if (!char.imageUrl) clearImgBtn.disabled = true;
     clearImgBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Clear';
-    clearImgBtn.addEventListener('click', () => { char.imageUrl = ''; saveSettings(); onChange(); });
+    clearImgBtn.addEventListener('click', () => {
+        char.imageUrl = '';
+        saveSettings();
+        triggerReprocess();
+        onChange();
+    });
     
     imgBtns.append(browseBtn, clearImgBtn);
 

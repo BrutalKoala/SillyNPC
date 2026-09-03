@@ -1,4 +1,7 @@
 import { Popup, POPUP_TYPE } from '../../../../popup.js';
+// The chat shows this picture beside every line the character speaks, so changing
+// it has to redraw. reprocess.js rather than chat.js: chat.js imports this file.
+import { triggerReprocess } from './reprocess.js';
 import { saveSettings } from './settings.js';
 import { LOG_PREFIX, debugLog } from './constants.js';
 import { auditCharacter, fillProfile, fillLore, fillData } from './character-fill.js';
@@ -164,6 +167,7 @@ export async function fillCharacter(char, { onSave } = {}) {
             // one in use rather than sitting in the gallery unused.
             char.imageUrl = imageUrl;
             saveSettings();
+            triggerReprocess();
             done.push('Portrait: drawn');
         }
     } catch (err) {
