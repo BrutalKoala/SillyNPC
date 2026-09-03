@@ -11,6 +11,7 @@ import { getSettings, saveSettings, defaultSettings, resolveImagePrompt } from '
 import { recordUsage } from './usage.js';
 import { escapeRegExp, describeConnection, resolveImageFolder } from './utils.js';
 import { loadStateFromMetadata } from './status-logic.js';
+import { charactersMentionedIn } from './mentions.js';
 
 /**
  * Creates a new entry in a lorebook.
@@ -238,7 +239,7 @@ const WORLD_FACTS_CAP = 8000;
  * @param {string} name
  * @returns {Promise<string>} Empty when switched off, unavailable, or nothing matched.
  */
-async function retrieveWorldFacts(name) {
+export async function retrieveWorldFacts(name) {
     if (!getSettings().loreUseDataBank) return '';
 
     // The parser splits on newlines and pipes and reads quotes, so a name carrying any of
@@ -402,27 +403,36 @@ async function requestLore(prompt) {
 }
 
 /**
- * Generates lore tags and content using an LLM.
+ * The ask sent to the lore writer.
  *
- * @param {object} char Character object
- * @param {string} world Lorebook name
- * @param {number} uid Entry UID
- * @returns {Promise<{ tags: string, content: string, followedFormat: boolean, excerpt: object }>}
+ * Separated from the request so the one rule worth checking - which of the story reaches
+ * the writer - can be checked without asking a model anything.
+ *
+ * @param {object} char
+ * @param {object} [options]
+ * @param {string} [options.existingLore] The entry's current contents, when rewriting one.
+ * @param {string} [options.worldFacts] What the Data Bank holds about them.
+ * @returns {string}
  */
-export async function generateLoreContent(char, world, uid) {
-    let existingLore = '';
-    try {
-        const worldData = await loadWorldInfo(world);
-        const entries = worldData.entries;
-        const entry = Array.isArray(entries) ? entries.find(e => Number(e.uid) === Number(uid)) : entries[uid];
-        if (entry) existingLore = entry.content || '';
-    } catch (e) {
-        console.warn(LOG_PREFIX, 'Failed to load existing lore for generation', e);
-    }
-
+export function buildLorePrompt(char, { existingLore = '', worldFacts = '' } = {}) {
     const excerpt = buildLoreExcerpt(chat || []);
-    const recentMessages = excerpt.text;
-    const worldFacts = await retrieveWorldFacts(char.name);
+
+    /* The story goes in only when this character is actually in it.
+
+       It went in unconditionally, and an excerpt is mostly the reader's own messages and
+       their persona's narration - so asking for an entry about somebody who has not
+       appeared yet handed the writer a page about one person and the name of another. It
+       wrote about the person it could see. The profile had the same fault and the same
+       fix; this is the other half of it, and without it a profile filled from a fresh
+       entry would be filled from that mistake instead of refusing.
+
+       Done here rather than in the prompt text because generationPrompt is a template the
+       reader can rewrite: wording added to the shipped one would never reach anybody who
+       has customised theirs, which is how [CONTEXT] was lost from the image template. */
+    const inStory = excerpt.text
+        ? charactersMentionedIn(excerpt.text, [char]).length > 0
+        : false;
+    const recentMessages = inStory ? excerpt.text : '';
 
     const template = getSettings().generationPrompt;
     let prompt = template
@@ -439,6 +449,31 @@ export async function generateLoreContent(char, world, uid) {
     if (worldFacts && !template.includes('[WORLD]')) {
         prompt += `\n\nFrom the setting's reference material:\n${worldFacts}`;
     }
+
+    return prompt;
+}
+
+/**
+ * Generates lore tags and content using an LLM.
+ *
+ * @param {object} char Character object
+ * @param {string} world Lorebook name
+ * @param {number} uid Entry UID
+ * @returns {Promise<{ tags: string, content: string, followedFormat: boolean, excerpt: object }>}
+ */
+export async function generateLoreContent(char, world, uid, { worldFacts = null } = {}) {
+    let existingLore = '';
+    try {
+        const worldData = await loadWorldInfo(world);
+        const entries = worldData.entries;
+        const entry = Array.isArray(entries) ? entries.find(e => Number(e.uid) === Number(uid)) : entries[uid];
+        if (entry) existingLore = entry.content || '';
+    } catch (e) {
+        console.warn(LOG_PREFIX, 'Failed to load existing lore for generation', e);
+    }
+
+    const facts = worldFacts ?? await retrieveWorldFacts(char.name);
+    const prompt = buildLorePrompt(char, { existingLore, worldFacts: facts });
 
     const text = await requestLore(prompt);
 

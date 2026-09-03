@@ -4,7 +4,9 @@ import { Popup, POPUP_TYPE } from '../../../../popup.js';
 import { triggerReprocess } from './reprocess.js';
 import { saveSettings } from './settings.js';
 import { LOG_PREFIX, debugLog } from './constants.js';
-import { auditCharacter, fillProfile, fillLore, fillData } from './character-fill.js';
+import {
+    auditCharacter, fillProfile, fillLore, fillData, fillSources, loreBeforeProfile,
+} from './character-fill.js';
 import { generateCharacterImageLogic } from './api.js';
 
 /**
@@ -112,32 +114,62 @@ export async function fillCharacter(char, { onSave } = {}) {
 
     const done = [];
 
-    try {
-        // Before the lore entry and the portrait, both of which read what this writes.
-        if (chosen.profile) {
-            toastr.info('Reading the story for who they are...', 'SillyNPC');
-            const result = await fillProfile(char);
-            if (!result.ok) {
-                toastr.error(`Profile: ${result.reason}`, 'SillyNPC');
-                onSave?.();
-                return;
-            }
-            done.push(result.filled.length
-                ? `Profile: filled ${result.filled.join(', ')}`
-                : `Profile: ${result.reason || 'nothing to fill'}`);
-            onSave?.();
-        }
+    /**
+     * Whether the lore entry has to come first.
+     *
+     * The profile ran first because the lore writer reads the profile fields. Then the
+     * profile learned to read the lore entry, and on an empty card it began asking for
+     * something the next step was about to create - so it declined, wrote the entry
+     * anyway, and left the reader to run Fill a second time for the profile it had just
+     * earned the material for.
+     *
+     * Asked rather than assumed, because reversing it always would cost every lore entry
+     * the profile fields it was ordered this way to have. fillSources answers before any
+     * request is made, so a refusal costs nothing and the order is free.
+     */
+    // Guarded rather than asked unconditionally: fillSources links an existing entry as a
+    // side effect, and somebody who ticked only the portrait has not asked for anything to
+    // be written to their lorebook.
+    const loreFirst = chosen.profile && chosen.lore
+        && loreBeforeProfile(chosen, await fillSources(char));
 
-        if (chosen.lore) {
-            toastr.info('Looking for a lore entry...', 'SillyNPC');
-            const result = await fillLore(char);
-            if (!result.ok) {
-                toastr.error(`Lore: ${result.reason}`, 'SillyNPC');
-                onSave?.();
-                return;
-            }
-            done.push(`Lore: ${result.action}`);
+    /** @returns {Promise<boolean>} False when the run should stop. */
+    const runProfile = async () => {
+        toastr.info('Reading the story for who they are...', 'SillyNPC');
+        const result = await fillProfile(char);
+        if (!result.ok) {
+            toastr.error(`Profile: ${result.reason}`, 'SillyNPC');
             onSave?.();
+            return false;
+        }
+        done.push(result.filled.length
+            ? `Profile: filled ${result.filled.join(', ')}`
+            : `Profile: ${result.reason || 'nothing to fill'}`);
+        onSave?.();
+        return true;
+    };
+
+    /** @returns {Promise<boolean>} False when the run should stop. */
+    const runLore = async () => {
+        toastr.info('Looking for a lore entry...', 'SillyNPC');
+        const result = await fillLore(char);
+        if (!result.ok) {
+            toastr.error(`Lore: ${result.reason}`, 'SillyNPC');
+            onSave?.();
+            return false;
+        }
+        done.push(`Lore: ${result.action}`);
+        onSave?.();
+        return true;
+    };
+
+    try {
+        // Both read what the other writes, so which goes first is decided above rather
+        // than fixed here. The portrait and the fields come after either way.
+        const first = loreFirst ? ['lore', 'profile'] : ['profile', 'lore'];
+        for (const step of first) {
+            if (step === 'profile' && chosen.profile && !(await runProfile())) return;
+            if (step === 'lore' && chosen.lore && !(await runLore())) return;
         }
 
         if (chosen.data || chosen.belongings) {
