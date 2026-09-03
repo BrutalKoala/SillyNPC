@@ -3176,8 +3176,17 @@ span.sillynpc-review-to {
     border-color: var(--sillynpc-hud-portrait-border, var(--sillynpc-accent));
 }
 
-.sillynpc-hud-container.portrait-square .sillynpc-hud-portrait {
-    border-radius: var(--sillynpc-radius-sm);
+/* Square means square, everywhere the panel draws a corner.
+
+   Each of these had its own rounding from the base rules - the panel 8px, the portrait 4,
+   the meter track 8, a segment 1 - so choosing "square" changed the outline of the picture
+   and left everything around it curved. The rings were the worst of it: they rounded by
+   6 plus their own thickness, so the thicker they were set the less square they looked. */
+.sillynpc-hud-container.portrait-square,
+.sillynpc-hud-container.portrait-square .sillynpc-hud-portrait,
+.sillynpc-hud-container.portrait-square .sillynpc-hud-bar-wrap,
+.sillynpc-hud-container.portrait-square .sillynpc-hud-segment {
+    border-radius: 0;
 }
 
 /* Explicit sides win over whatever the docked corner implies, so a HUD in the top-left

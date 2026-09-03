@@ -549,9 +549,10 @@ function paintPortraitRings(portrait, meters, { square, size, thickness }) {
         rect.setAttribute('y', String(centre - radius));
         rect.setAttribute('width', String(radius * 2));
         rect.setAttribute('height', String(radius * 2));
-        // Follows the portrait's own corner rounding rather than a fixed curve, so the
-        // frame stays parallel to the edge it wraps.
-        rect.setAttribute('rx', String(Math.min(radius, 6 + thickness)));
+        // No corner rounding at all. This used to round by `6 + thickness`, which made the
+        // rings rounder the thicker they were set - at a thickness chosen to make them
+        // visible they read as a stack of squircles rather than as a square frame, and
+        // corners are the one thing the square option is chosen for.
         return rect;
     };
 
