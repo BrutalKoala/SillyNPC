@@ -347,12 +347,16 @@ export function updateHUD(updatedState = null) {
  * @returns {number}
  */
 export function portraitSizeFor(meterCount, style) {
-    const ROW = 18;   // one meter row plus its gap
-    const MIN = 52;
-    const MAX = 96;
+    const ROW = 22;   // one meter row plus its gap
+    const MIN = 72;
+    const MAX = 120;
     // Rings wrap the portrait rather than stacking beside it, so they add no height.
     const rows = style === 'ring' ? 0 : meterCount;
-    return Math.max(MIN, Math.min(MAX, rows * ROW + 16));
+    // The portrait is the thing being looked at and the meters are the caption. It used to
+    // measure exactly the height of the column beside it, which made it the smaller half
+    // of the HUD at every stat count - so it is deliberately a little taller than the
+    // column now, and it starts larger with one stat rather than shrinking to a token.
+    return Math.max(MIN, Math.min(MAX, rows * ROW + 26));
 }
 
 /**
@@ -588,10 +592,19 @@ function paintSplitRing(portrait, meters, { square, size, thickness }) {
     };
 
     // A gap between neighbours so the segments read as separate meters rather than as one
-    // ring in changing colours. Held to a share of the slice rather than a fixed number,
-    // or six stats would be more gap than meter.
+    // ring in changing colours.
+    //
+    // It has to grow with the thickness. The gap is in path units - hundredths of the
+    // circumference - while a round cap sticks out by half the stroke width in real
+    // pixels at each end, so two neighbours eat a whole stroke width of the space between
+    // them. At a thin ring a flat 4 was plenty; at the thickest the caps closed it
+    // completely and the segments ran together. A square ring uses butt caps and needs
+    // none of that, only enough to be seen.
+    const perimeter = square ? 8 * radius : 2 * Math.PI * radius;
+    const capUnits = (square ? 0 : thickness) / perimeter * 100;
     const slice = 100 / meters.length;
-    const gap = Math.min(4, slice * 0.22);
+    // Never more than half the slice, or six stats would be more gap than meter.
+    const gap = Math.min(slice * 0.5, Math.max(4, capUnits + 2));
     const span = slice - gap;
 
     meters.forEach((meter, index) => {

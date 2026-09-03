@@ -3136,13 +3136,21 @@ span.sillynpc-review-to {
     opacity: 0.35;
 }
 
+/* Both of them, or they disagree. The track carried no rotation while the arc did,
+   which was invisible while a track was a whole circle - a rotated circle is the same
+   circle - and obvious the moment the ring was split into segments, because then the
+   track is dashed too and its gaps sat a quarter turn from the arc's. */
+.sillynpc-hud-ring-track,
 .sillynpc-hud-ring-arc {
-    fill: none;
-    stroke-linecap: round;
     /* From the top rather than from three o'clock, which is where a meter is expected to
        start filling. */
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
+}
+
+.sillynpc-hud-ring-arc {
+    fill: none;
+    stroke-linecap: round;
     transition: stroke-dasharray 0.3s ease;
 }
 
@@ -3156,13 +3164,11 @@ span.sillynpc-review-to {
    A square rotated a quarter turn about its centre maps onto itself, so dropping the
    rotation changes nothing but where the fill begins: the top-left corner, which is what
    the rotation was reaching for in the first place. */
+.sillynpc-hud-container.portrait-square .sillynpc-hud-ring-track,
 .sillynpc-hud-container.portrait-square .sillynpc-hud-ring-arc {
     stroke-linecap: butt;
     transform: none;
 }
-
-/* Nothing hides the rings: a square portrait falls back to bars in the renderer, so the
-   meters are still shown rather than silently disappearing. */
 
 /* ── HUD proportions ───────────────────────────────────────────────────────
 
@@ -3368,14 +3374,19 @@ span.sillynpc-review-to {
     border-radius: 0;
     background: color-mix(in srgb, var(--sillynpc-fg-primary) 20%, transparent);
 }
-/* Against the row, not the rail: the rail is too thin to hold a number. */
+/* Beside the rail, not above it. The rail is too thin to hold a number, so the number
+   goes next to it - and the rail gives up the width to make room. Anchoring it to the
+   row's top edge put every number over the row above instead. */
 .sillynpc-hud-brackets .sillynpc-hud-stat-row { position: relative; }
-.sillynpc-hud-brackets .sillynpc-hud-bar-wrap { position: static; }
+.sillynpc-hud-brackets .sillynpc-hud-bar-wrap {
+    position: static;
+    width: calc(var(--sillynpc-hud-meter-width, 92px) - 3.4em);
+}
 .sillynpc-hud-brackets .sillynpc-hud-bar-text {
     position: absolute;
-    inset: auto 0 100% auto;
+    inset: 0 0 0 auto;
     width: auto;
-    height: auto;
+    justify-content: flex-end;
     font-size: 0.72em;
 }
 
@@ -3419,9 +3430,16 @@ span.sillynpc-review-to {
    pixel. The cells divide the meter width, so the slider still means something. */
 .sillynpc-hud-container.sillynpc-hud-pips { gap: var(--sillynpc-space-sm); }
 .sillynpc-hud-pips .sillynpc-hud-stats { gap: 4px; }
+/* No border. A 1px border on each of ten cells is two pixels of every cell spent on
+   something invisible, and it is what made the columns look unequal: the cells share out
+   the leftover width and the borders push that share into fractions, which the browser
+   then paints a pixel apart. Wider meters hid it because the fraction got smaller.
+   flex-basis 0 divides the whole width rather than what is left after the content. */
 .sillynpc-hud-pips .sillynpc-hud-segment {
+    flex: 1 1 0;
+    min-width: 0;
+    border: 0;
     border-radius: 1px;
-    border-color: transparent;
     background: color-mix(in srgb, var(--sillynpc-fg-primary) 16%, transparent);
 }
 /* Painted in JS, so this only has to add the glow the lit ones carry. */
@@ -3494,6 +3512,44 @@ span.sillynpc-review-to {
     border-radius: 0 1em 1em 0;
     border-left: 0;
     border-right: 1px solid var(--sillynpc-border);
+}
+
+/* An explicit Portrait Side wins over the corner. Making the corner decide outright was
+   meant to stop a dock pointing inland, but it also made the Left/Right setting do nothing
+   at all on this layout - a control that silently ignores you is worse than one that lets
+   you make it look wrong. The corner is still the default, on "Follow the corner". */
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-left {
+    flex-direction: row;
+    padding: var(--sillynpc-space-xs) var(--sillynpc-space-md) var(--sillynpc-space-xs) 0;
+    border-left: 0;
+    border-right: 1px solid var(--sillynpc-border);
+    border-radius: 0 2em 2em 0;
+}
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-left .sillynpc-hud-portrait {
+    margin-left: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
+    margin-right: 0;
+}
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-left .sillynpc-hud-bar-wrap {
+    border-radius: 0 1em 1em 0;
+    border-left: 0;
+    border-right: 1px solid var(--sillynpc-border);
+}
+
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-right {
+    flex-direction: row-reverse;
+    padding: var(--sillynpc-space-xs) 0 var(--sillynpc-space-xs) var(--sillynpc-space-md);
+    border-right: 0;
+    border-left: 1px solid var(--sillynpc-border);
+    border-radius: 2em 0 0 2em;
+}
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-right .sillynpc-hud-portrait {
+    margin-right: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
+    margin-left: 0;
+}
+.sillynpc-hud-container.sillynpc-hud-dock.portrait-right .sillynpc-hud-bar-wrap {
+    border-radius: 1em 0 0 1em;
+    border-right: 0;
+    border-left: 1px solid var(--sillynpc-border);
 }
 
 /* Icon-and-label buttons. SillyTavern styles .menu_button as a flex container, which turns
