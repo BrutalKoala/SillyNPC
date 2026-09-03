@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { mentionsName } from './mentions.js';
 
 /**
  * Things said and done that are not finished with.
@@ -231,6 +232,26 @@ export function activeThreads(state, now) {
 }
 
 /**
+ * Every way one of these names might be written in a thread's `who`.
+ *
+ * The whole name, and each part of it that is long enough to identify somebody. The
+ * tracker's name for a character is whatever the extractor first reported - often the full
+ * "Varga Elza" - while the same reply writes `who` as "Elza", so the whole name on its own
+ * matches nothing.
+ *
+ * The three-character floor is on the parts only, never on the whole name. A two-letter
+ * fragment pulled out of somebody's name is a coincidence waiting to happen, but a
+ * character actually called "Bo" is called that, and the word boundaries already stop them
+ * matching inside "Bob".
+ */
+function nameForms(name) {
+    const whole = String(name || '').trim().toLowerCase();
+    if (!whole) return [];
+    const parts = whole.split(/\s+/).filter(p => p.length >= 3 && p !== whole);
+    return [whole, ...parts];
+}
+
+/**
  * Records that the story has just dealt with whoever these threads are about.
  *
  * Called with the characters the extractor found in a message. Matching on `who` is coarse
@@ -238,20 +259,28 @@ export function activeThreads(state, now) {
  * the extractor already knows who was in the scene, and it is the difference between
  * scoring a live obligation as live and scoring it as cold.
  *
+ * `who` is free text the model wrote, so this is a search rather than a comparison. It
+ * used to be `present.has(who)`, an exact match of the whole string, and in a real chat
+ * that matched almost nothing: `who` is written "Elza" where the tracker holds "Varga
+ * Elza", and a thread about the whole party arrives as "Kristof, Elza, and David", which
+ * can never equal one name. Those are the threads the story is most actively engaged with,
+ * and they were the ones ageing fastest.
+ *
+ * Word boundaries on both sides, the same rule charactersMentionedIn uses, so "Ann" does
+ * not touch a thread about "Annamaria".
+ *
  * @param {string[]} names Who appeared.
  * @param {number} messageId The message they appeared in.
  * @returns {number} How many threads were touched.
  */
 export function touchThreads(state, names, messageId) {
-    const present = new Set((names || [])
-        .map(n => String(n || '').trim().toLowerCase())
-        .filter(Boolean));
-    if (!present.size) return 0;
+    const forms = [...new Set((names || []).flatMap(nameForms))];
+    if (!forms.length) return 0;
 
     let touched = 0;
     for (const thread of openThreads(state)) {
-        const who = String(thread.who || '').trim().toLowerCase();
-        if (!who || !present.has(who)) continue;
+        const who = String(thread.who || '').trim();
+        if (!who || !forms.some(form => mentionsName(who, form))) continue;
         thread.touched = messageId;
         touched += 1;
     }

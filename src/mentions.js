@@ -17,6 +17,32 @@ import { escapeRegExp } from './utils.js';
  */
 
 /**
+ * Whether a piece of text names somebody, as a whole word.
+ *
+ * The boundaries are the whole point, and they are letter-and-digit rather than \b: \b
+ * treats an accented letter as a boundary, so "Kristof" would match inside "Kristofnak"
+ * and every Hungarian name would match its own inflections. Extracted so the two other
+ * callers cannot drift from it - the thread toucher asks this of a thread's `who`, and the
+ * extractor asks it of the latest message.
+ *
+ * @param {string} text
+ * @param {string} name
+ * @param {boolean} [caseInsensitive] Defaults to true, which is right for anything a model
+ *   wrote. Only the chat decorator has a reason to say otherwise.
+ * @returns {boolean}
+ */
+export function mentionsName(text, name, caseInsensitive = true) {
+    const body = String(text || '');
+    const needle = String(name || '').trim();
+    if (!body || !needle) return false;
+    const pattern = new RegExp(
+        `(?<![\\p{L}\\p{N}_])${escapeRegExp(needle)}(?![\\p{L}\\p{N}_])`,
+        caseInsensitive ? 'ui' : 'u',
+    );
+    return pattern.test(body);
+}
+
+/**
  * Characters this text names, whether or not they speak.
  *
  * The decorator's matcher is not reusable here: it requires a trailing colon, because it
@@ -52,11 +78,7 @@ export function charactersMentionedIn(text, characters = null) {
 
     for (const { name, char } of candidates) {
         if (found.has(char)) continue;
-        const pattern = new RegExp(
-            `(?<![\\p{L}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{N}_])`,
-            caseInsensitive ? 'ui' : 'u',
-        );
-        if (pattern.test(body)) found.set(char, true);
+        if (mentionsName(body, name, caseInsensitive)) found.set(char, true);
     }
 
     return [...found.keys()];

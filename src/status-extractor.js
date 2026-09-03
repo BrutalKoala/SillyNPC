@@ -8,6 +8,7 @@ import { LOG_PREFIX, debugLog, SYSTEM_PROMPT } from './constants.js';
 export { SYSTEM_PROMPT };
 import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
+import { mentionsName } from './mentions.js';
 import { recordUsage } from './usage.js';
 import {
     loadStateFromMetadata,
@@ -649,17 +650,33 @@ export function coerceToUpdate(raw) {
  *
  * @param {object} parsed The reply.
  * @param {string|number|null} messageId Which message opened them.
+ * @param {string} [messageText] The message itself, used only to decide whether the player
+ *   was named in it. The history scan does not pass one, and does not need to.
  * @returns {{ opened: number, closed: number }}
  */
-export function applyThreadsFromReply(parsed, messageId = null) {
+export function applyThreadsFromReply(parsed, messageId = null, messageText = '') {
     const trackerSettings = getSettings().statusTracker;
     if (trackerSettings.threadsEnabled !== true) return { opened: 0, closed: 0 };
 
     const proposed = Array.isArray(parsed?.threads) ? parsed.threads : [];
     const resolved = Array.isArray(parsed?.closed) ? parsed.closed : [];
+    const state = loadStateFromMetadata();
     const present = (Array.isArray(parsed?.characters) ? parsed.characters : [])
         .map(c => c?.name)
         .filter(Boolean);
+
+    /* The player, who is never in `characters` - they are reported under `player` - and so
+       could never touch a thread about themselves. In a real chat most threads are about
+       the player, and those were the ones ageing fastest.
+
+       Only when the reply actually names them, rather than always. They are in every scene
+       by definition, so counting them unconditionally would mean their threads never
+       decayed at all and simply held the cap by weight. Naming is the honest signal: a
+       reply that says "Kristof, you're the one holding the line" is engaging with them,
+       and one that never mentions them is not. Second-person narration means this is
+       often false, which is the point. */
+    const playerName = String(state?.player?.name || '').trim();
+    if (playerName && mentionsName(messageText, playerName)) present.push(playerName);
 
     // No early return on "nothing proposed" any more. Most messages open and close
     // nothing, and those are exactly the messages that say a thread is still live: whoever
@@ -667,7 +684,6 @@ export function applyThreadsFromReply(parsed, messageId = null) {
     // obligation age as though the story had dropped it.
     if (!proposed.length && !resolved.length && !present.length) return { opened: 0, closed: 0 };
 
-    const state = loadStateFromMetadata();
     const now = currentMessageIndex();
     let opened = 0;
     let closed = 0;
@@ -848,7 +864,7 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // They are also not held for review. A thread costs a line in the prompt and
         // closing a wrong one is a click; holding them would mean a decision per message
         // about something that is only ever context.
-        applyThreadsFromReply(parsed, messageId);
+        applyThreadsFromReply(parsed, messageId, String(messageText));
 
         // Propose, then decide. A dry run says what the update would do, so additions,
         // removals and implausible jumps can be held back for a look rather than
