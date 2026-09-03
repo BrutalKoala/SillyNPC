@@ -3146,6 +3146,21 @@ span.sillynpc-review-to {
     transition: stroke-dasharray 0.3s ease;
 }
 
+/* A square ring's seam, and why it was showing as a rounded bottom-left corner.
+
+   Two things met there. The arc is drawn with a round linecap, which suits a circular
+   meter and is a blob on a square one; and the rotation that starts a circle at twelve
+   o'clock does nothing useful to a rect, whose path already begins at its top-left corner
+   - it only moved that start, and both of its caps, round to the bottom left.
+
+   A square rotated a quarter turn about its centre maps onto itself, so dropping the
+   rotation changes nothing but where the fill begins: the top-left corner, which is what
+   the rotation was reaching for in the first place. */
+.sillynpc-hud-container.portrait-square .sillynpc-hud-ring-arc {
+    stroke-linecap: butt;
+    transform: none;
+}
+
 /* Nothing hides the rings: a square portrait falls back to bars in the renderer, so the
    meters are still shown rather than silently disappearing. */
 

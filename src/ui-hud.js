@@ -465,8 +465,14 @@ function buildMeterRow(statDef, rawValue, bar, style) {
  */
 const RING_GAP = 1;
 
-/** The portrait's own border, which the first ring has to clear. */
-const PORTRAIT_BORDER = 2;
+/**
+ * The portrait's own border, which the first ring has to clear.
+ *
+ * Must match `.sillynpc-hud-portrait`'s border-width. It said 2 for a while after that
+ * border was thinned to 1, so every ring sat a pixel further out than it was meant to and
+ * the panel reserved a pixel of padding for space nothing occupied.
+ */
+const PORTRAIT_BORDER = 1;
 
 /**
  * How far outside the portrait the rings reach, in pixels.
