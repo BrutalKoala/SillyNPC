@@ -4,10 +4,7 @@ import { getSettings, saveSettings } from './settings.js';
 import { debugLog, PROFILE_FIELDS } from './constants.js';
 import { requestExtraction, coerceToUpdate, describeCollections } from './status-extractor.js';
 import { applyUpdate, resolveMaxValue, loadStateFromMetadata } from './status-logic.js';
-import {
-    describeTrackedFacts, describeProfile, buildLoreExcerpt, createLoreEntry,
-    generateLoreContent, saveLoreContent, retrieveWorldFacts,
-} from './api.js';
+import { describeTrackedFacts, describeProfile, buildLoreExcerpt, createLoreEntry, generateLoreContent, saveLoreContent } from './api.js';
 import { tryAutoSyncLorebook, getChatLorebookName } from './lorebook.js';
 import { charactersMentionedIn } from './mentions.js';
 import { getPersonaData } from './status-logic.js';
@@ -198,29 +195,6 @@ export async function fillSources(char) {
 }
 
 /**
- * Whether the lore entry has to be written before the profile is filled.
- *
- * The profile ran first because the lore writer reads the profile fields. Then the profile
- * learned to read the lore entry, and on an empty card it began asking for something the
- * next step was about to create - so it declined, the entry was written anyway, and Fill
- * had to be run a second time for the profile it had just earned the material for.
- *
- * Conditional rather than simply reversed: a character who *is* in the story can have their
- * profile filled first, and then the entry gets those fields, which is what the original
- * order was for. Only the empty card needs the swap.
- *
- * Named and exported so the rule is stated once and can be checked. Inline in the runner it
- * was three conditions in a line nothing could reach.
- *
- * @param {{ profile?: boolean, lore?: boolean }} chosen What the plan ticked.
- * @param {{ enough: boolean }} sources What fillSources found.
- * @returns {boolean}
- */
-export function loreBeforeProfile(chosen, sources) {
-    return Boolean(chosen?.profile && chosen?.lore && !sources?.enough);
-}
-
-/**
  * The ask, generated from the field list so a field cannot exist without being asked for.
  */
 function buildProfilePrompt(char, wanted, sources) {
@@ -237,13 +211,27 @@ function buildProfilePrompt(char, wanted, sources) {
 
     const known = describeProfile(char);
     if (known) parts.push(`Already known about them, do not contradict it:\n${known}`);
-    if (sources.lore) parts.push(`Their lorebook entry:\n${sources.lore}`);
+
+    /* The story first, and said to be the better source.
+
+       A lorebook entry is written to steer a scene, so it is often broad where a profile
+       wants the particular - and it may itself have been written from a chat this
+       character was barely in. What they were seen doing beats what an entry says about
+       them, so the story leads and the entry backs it up.
+
+       The story is here at all only when they are in it. See fillSources. */
+    if (sources.story) {
+        parts.push(`Recent story - the best source, describe them from what they do here:\n`
+            + sources.story);
+    }
+
+    if (sources.lore) {
+        parts.push((sources.story ? 'Their lorebook entry, as background' : 'Their lorebook entry')
+            + `:\n${sources.lore}`);
+    }
 
     const facts = describeTrackedFacts(char);
     if (facts) parts.push(`What the tracker records about them:\n${facts}`);
-
-    // Only when they are actually in it. See fillSources.
-    if (sources.story) parts.push(`Recent story:\n${sources.story}`);
 
     parts.push(
         'Fill in these fields:\n'
@@ -347,33 +335,18 @@ export async function fillLore(char) {
         };
     }
 
-    /* Asked before anything is created, not after.
+    /* No test on whether there is anything to write from.
 
-       An entry is created and then written into, so a refusal further down would leave an
-       empty one behind in the reader's lorebook - a worse outcome than the refusal it was
-       reporting.
+       An entry is worth having for a character who has not appeared yet - that is most of
+       what somebody is doing when they make a card in advance - and the lore writer reads
+       the Data Bank and its own configurable slice of the chat, which is a different and
+       larger question than "is this name in the last fifteen messages".
 
-       Broader than the profile's test, because an entry has a source the profile does not
-       use: a character indexed in the Data Bank can be described from the setting alone,
-       with nothing in the story at all. The facts are fetched once here and handed on, so
-       asking does not cost a second lookup. */
-    const excerpt = buildLoreExcerpt(getContext()?.chat || []);
-    const inStory = excerpt.text
-        ? charactersMentionedIn(excerpt.text, [char]).length > 0
-        : false;
-    const worldFacts = await retrieveWorldFacts(char.name);
-
-    if (!inStory && !worldFacts) {
-        return {
-            ok: false, action: 'none',
-            reason: `Nothing to write from: ${char.name} is not mentioned in the recent `
-                + 'story and nothing about them is in the Data Bank. Write them into a '
-                + 'message first, or add them to the Data Bank.',
-        };
-    }
-
+       The profile is the one that must not describe somebody it has never been told about;
+       see fillSources. Applying the same test here refused far more than intended, because
+       its Data Bank half is switched off by default. */
     const { uid } = await createLoreEntry(char, world, char.name);
-    const { content, tags } = await generateLoreContent(char, world, uid, { worldFacts });
+    const { content, tags } = await generateLoreContent(char, world, uid);
     if (!String(content || '').trim()) {
         return { ok: false, action: 'none', reason: 'The lore writer returned nothing usable.' };
     }

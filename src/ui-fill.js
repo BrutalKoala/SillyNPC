@@ -4,9 +4,7 @@ import { Popup, POPUP_TYPE } from '../../../../popup.js';
 import { triggerReprocess } from './reprocess.js';
 import { saveSettings } from './settings.js';
 import { LOG_PREFIX, debugLog } from './constants.js';
-import {
-    auditCharacter, fillProfile, fillLore, fillData, fillSources, loreBeforeProfile,
-} from './character-fill.js';
+import { auditCharacter, fillProfile, fillLore, fillData } from './character-fill.js';
 import { generateCharacterImageLogic } from './api.js';
 
 /**
@@ -59,14 +57,16 @@ async function askPlan(char, audit) {
 
     const intro = document.createElement('small');
     intro.className = 'notes';
-    intro.textContent = 'Each stage feeds the next: the lore entry is what the fields are '
-        + 'read from, and both describe the portrait. Nothing already filled in is '
-        + 'overwritten, and nothing you already carry is removed.';
+    intro.textContent = 'Each stage feeds the next: the lore entry and the story are what '
+        + 'the profile is written from, and all of it describes the portrait. Nothing '
+        + 'already filled in is overwritten, and nothing you already carry is removed.';
     wrap.append(intro);
 
+    // Numbered in the order they run, which is also the order they feed each other. The
+    // entry is written or linked first because the profile reads it.
     wrap.append(
-        stageRow('profile', '1. Profile', audit.profile),
-        stageRow('lore', '2. Lore entry', audit.lore),
+        stageRow('lore', '1. Lore entry', audit.lore),
+        stageRow('profile', '2. Profile', audit.profile),
         stageRow('data', '3. Tracker fields', audit.data),
         stageRow('belongings', '4. Belongings (optional)', audit.belongings),
         stageRow('image', '5. Portrait', audit.image),
@@ -114,25 +114,6 @@ export async function fillCharacter(char, { onSave } = {}) {
 
     const done = [];
 
-    /**
-     * Whether the lore entry has to come first.
-     *
-     * The profile ran first because the lore writer reads the profile fields. Then the
-     * profile learned to read the lore entry, and on an empty card it began asking for
-     * something the next step was about to create - so it declined, wrote the entry
-     * anyway, and left the reader to run Fill a second time for the profile it had just
-     * earned the material for.
-     *
-     * Asked rather than assumed, because reversing it always would cost every lore entry
-     * the profile fields it was ordered this way to have. fillSources answers before any
-     * request is made, so a refusal costs nothing and the order is free.
-     */
-    // Guarded rather than asked unconditionally: fillSources links an existing entry as a
-    // side effect, and somebody who ticked only the portrait has not asked for anything to
-    // be written to their lorebook.
-    const loreFirst = chosen.profile && chosen.lore
-        && loreBeforeProfile(chosen, await fillSources(char));
-
     /** @returns {Promise<boolean>} False when the run should stop. */
     const runProfile = async () => {
         toastr.info('Reading the story for who they are...', 'SillyNPC');
@@ -164,13 +145,19 @@ export async function fillCharacter(char, { onSave } = {}) {
     };
 
     try {
-        // Both read what the other writes, so which goes first is decided above rather
-        // than fixed here. The portrait and the fields come after either way.
-        const first = loreFirst ? ['lore', 'profile'] : ['profile', 'lore'];
-        for (const step of first) {
-            if (step === 'profile' && chosen.profile && !(await runProfile())) return;
-            if (step === 'lore' && chosen.lore && !(await runLore())) return;
-        }
+        /* The entry first, then the profile that reads it.
+
+           The profile used to run first, because the lore writer reads the profile fields.
+           Then the profile learned to read the entry, and on an empty card it was asking
+           for something the next step was about to create - so it declined, the entry was
+           written anyway, and Fill had to be run a second time for the profile it had just
+           earned the material for.
+
+           Nothing is lost by the swap: the lore writer still reads whatever profile fields
+           were already there, and the ones this run would have added are exactly the ones
+           it could not have described without the entry. */
+        if (chosen.lore && !(await runLore())) return;
+        if (chosen.profile && !(await runProfile())) return;
 
         if (chosen.data || chosen.belongings) {
             toastr.info('Reading the story for their details...', 'SillyNPC');
