@@ -3455,34 +3455,45 @@ span.sillynpc-review-to {
    already guarantees. */
 .sillynpc-hud-container.sillynpc-hud-dock {
     gap: var(--sillynpc-space-sm);
-    padding: var(--sillynpc-space-xs) var(--sillynpc-space-md) var(--sillynpc-space-xs) 0;
-    border-left: 0;
-    border-radius: 0 2em 2em 0;
+    /* The right-hand form is the base because the default corner is the top right. */
+    flex-direction: row-reverse;
+    padding: var(--sillynpc-space-xs) 0 var(--sillynpc-space-xs) var(--sillynpc-space-md);
+    border-right: 0;
+    border-radius: 2em 0 0 2em;
 }
 .sillynpc-hud-dock .sillynpc-hud-portrait {
-    margin-left: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
+    margin-right: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
     box-shadow: 0 0 0 2px var(--sillynpc-bg-primary);
 }
 .sillynpc-hud-dock .sillynpc-hud-stats { gap: 3px; }
 .sillynpc-hud-dock .sillynpc-hud-bar-wrap {
     height: calc(var(--sillynpc-hud-meter-height, 14px) * 0.7);
-    border-radius: 0 1em 1em 0;
-    border-left: 0;
-}
-/* A HUD docked on the left is mirrored, so the cut side follows it. */
-.sillynpc-hud-container.sillynpc-hud-dock.top-left,
-.sillynpc-hud-container.sillynpc-hud-dock.bottom-left,
-.sillynpc-hud-container.sillynpc-hud-dock.portrait-right {
-    padding: var(--sillynpc-space-xs) 0 var(--sillynpc-space-xs) var(--sillynpc-space-md);
-    border-left: 1px solid var(--sillynpc-border);
+    border-radius: 1em 0 0 1em;
     border-right: 0;
-    border-radius: 2em 0 0 2em;
+}
+
+/* Which way the dock faces is the corner's decision, not the Portrait Side setting's. The
+   portrait hugs the screen edge and the panel is cut on that same side, so a dock whose
+   portrait points inland is just a lozenge. This layout therefore overrides Portrait Side;
+   the setting still applies to the other seven. */
+.sillynpc-hud-container.sillynpc-hud-dock.top-left,
+.sillynpc-hud-container.sillynpc-hud-dock.bottom-left {
+    flex-direction: row;
+    padding: var(--sillynpc-space-xs) var(--sillynpc-space-md) var(--sillynpc-space-xs) 0;
+    border-left: 0;
+    border-right: 1px solid var(--sillynpc-border);
+    border-radius: 0 2em 2em 0;
 }
 .sillynpc-hud-container.sillynpc-hud-dock.top-left .sillynpc-hud-portrait,
-.sillynpc-hud-container.sillynpc-hud-dock.bottom-left .sillynpc-hud-portrait,
-.sillynpc-hud-container.sillynpc-hud-dock.portrait-right .sillynpc-hud-portrait {
-    margin-left: 0;
-    margin-right: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
+.sillynpc-hud-container.sillynpc-hud-dock.bottom-left .sillynpc-hud-portrait {
+    margin-left: calc(var(--sillynpc-hud-portrait-size, 60px) / -2.4);
+    margin-right: 0;
+}
+.sillynpc-hud-container.sillynpc-hud-dock.top-left .sillynpc-hud-bar-wrap,
+.sillynpc-hud-container.sillynpc-hud-dock.bottom-left .sillynpc-hud-bar-wrap {
+    border-radius: 0 1em 1em 0;
+    border-left: 0;
+    border-right: 1px solid var(--sillynpc-border);
 }
 
 /* Icon-and-label buttons. SillyTavern styles .menu_button as a flex container, which turns
