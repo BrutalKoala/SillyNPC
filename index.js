@@ -393,8 +393,18 @@ jQuery(async () => {
         // fires. The new text arrived undecorated and stayed that way until something
         // else redrew the chat.
         eventSource.on(event_types.MESSAGE_SWIPED, onSwipe);
-        // Regenerate is not a swipe, and says so through neither of the events above.
-        eventSource.on(event_types.GENERATION_STARTED, onRegenerateStarted);
+        /* Regenerate is not a swipe, and says so through neither of the events above.
+
+           makeFirst rather than on, and it matters. status-logic listens to the same event
+           to build the scene block it injects, and it registered first, so it ran first:
+           the prompt for the regenerated reply was built from the state the *discarded*
+           reply had left behind, and told the model about threads that were about to be
+           undone. A log of a real regenerate showed exactly that - the story prompt still
+           carrying two threads the extraction a moment later no longer had.
+
+           Ordering is the only lever here, since both listen to the same event, so it is
+           declared out loud instead of resting on which line of this function runs first. */
+        eventSource.makeFirst(event_types.GENERATION_STARTED, onRegenerateStarted);
         eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted);
         eventSource.on(event_types.MORE_MESSAGES_LOADED, () => {
             // The signature describes the settings, not the DOM, and these two change
