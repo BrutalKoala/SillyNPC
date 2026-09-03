@@ -1,4 +1,4 @@
-import { LOG_PREFIX, BUILT_IN_DEFAULT_AVATAR, paletteColorFor } from './constants.js';
+import { LOG_PREFIX, BUILT_IN_DEFAULT_AVATAR, paletteColorFor, debugLog } from './constants.js';
 import { getSettings } from './settings.js';
 import { getContext } from '../../../../st-context.js';
 import { findCharacter, getActiveCharacters, getChatCast } from './characters.js';
@@ -127,6 +127,41 @@ export function charactersMentionedIn(text, characters = null) {
 }
 
 /**
+ * A short key that changes when the picture does.
+ *
+ * This was the string's length, on the reasoning that a portrait can be a 165KB data URI
+ * and hashing one on every menu visit would be waste. The reasoning was right and the
+ * conclusion was wrong: two different pictures of a similar size have the same length, so
+ * swapping one for another was invisible to the signature and the chat kept the old one
+ * until the page was reloaded.
+ *
+ * Reads a bounded slice - the ends, where a data URI's header and payload tail live - plus
+ * the length, so the cost does not grow with the image while the answer still depends on
+ * its contents. A deliberate trade: two images could in principle collide, but they would
+ * have to match in length and in both ends, which no two real portraits do.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function imageKey(url) {
+    const text = String(url || '');
+    if (!text) return '0';
+
+    const EDGE = 256;
+    const sample = text.length <= EDGE * 2
+        ? text
+        : text.slice(0, EDGE) + text.slice(-EDGE);
+
+    // FNV-1a, 32-bit. Small, no dependencies, and spreads a change of one character.
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < sample.length; i++) {
+        hash ^= sample.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return `${text.length}.${(hash >>> 0).toString(36)}`;
+}
+
+/**
  * Everything that changes how the chat is decorated, as one comparable string.
  *
  * Closing the extension menu redrew every rendered message unconditionally - a hundred by
@@ -144,6 +179,7 @@ export function charactersMentionedIn(text, characters = null) {
  *
  * @returns {string}
  */
+
 export function chatRenderSignature() {
     const settings = getSettings();
 
@@ -152,9 +188,7 @@ export function chatRenderSignature() {
         char.color,
         char.category,
         char.imageFit,
-        // Length rather than the value: a portrait can be a 165KB data URI, and this runs
-        // twice per menu visit.
-        String(char.imageUrl || '').length,
+        imageKey(char.imageUrl),
         (char.aliases || []).map(alias => `${alias.pattern}~${alias.isRegex}`).join(','),
     ].join('|')).join(';');
 
@@ -173,6 +207,25 @@ export function chatRenderSignature() {
         (settings.defaultImages || []).map(i => i && i.src).join(','),
     ].join('|');
 
+    /* The tracker box is drawn by a redraw, so what shapes it belongs here too - none of
+       it was, which is why changing a stat's format left the chat showing the old one.
+
+       Listed rather than hashing the whole statusTracker object, and the list is the
+       point: that object also holds every hud* setting, and a HUD slider must not redraw
+       a hundred messages. A stat definition is included whole because its name, format,
+       visibility and colour all reach the box. */
+    const tracker = getSettings().statusTracker || {};
+    const trackerBox = [
+        tracker.enabled,
+        tracker.showOnlyAtBottom,
+        tracker.customCSS,
+        JSON.stringify(tracker.globalStats || []),
+        JSON.stringify(tracker.playerStats || []),
+        JSON.stringify(tracker.npcStats || []),
+        JSON.stringify(tracker.collections || []),
+        settings.trackerFontScale,
+    ].join('|');
+
     // Which characters this chat is scoped to decides who gets decorated at all.
     const cast = getChatCast();
     const scope = [
@@ -181,7 +234,7 @@ export function chatRenderSignature() {
         (cast.exclude || []).join(','),
     ].join('|');
 
-    return `${characters}#${decoration}#${scope}`;
+    return `${characters}#${decoration}#${trackerBox}#${scope}`;
 }
 
 
@@ -771,10 +824,38 @@ let reprocessAllTimer = null;
  * listeners (CHAT_CHANGED, CHARACTER_EDITED, sillynpc-status-updated, ...) land in
  * the same tick.
  */
+/**
+ * The signature the chat was last drawn with, so a redraw can decline.
+ *
+ * Null rather than an empty string: the first redraw of a session has to happen, and an
+ * empty string is a signature a chat could legitimately have.
+ *
+ * @type {string|null}
+ */
+let lastDrawnSignature = null;
+
+/** Forces the next redraw to run, whatever the signature says. */
+export function invalidateChatRender() {
+    lastDrawnSignature = null;
+}
+
 export function reprocessAllMessages() {
     if (reprocessAllTimer) clearTimeout(reprocessAllTimer);
     reprocessAllTimer = setTimeout(() => {
         reprocessAllTimer = null;
+
+        // Six DOM operations per message, over every message in the chat - six hundred of
+        // them on a chat of a hundred. It was worth paying whenever anything at all fired
+        // one of our listeners; it is not worth paying when nothing that reaches the chat
+        // has moved. Everything that genuinely changed still redraws at once, because the
+        // signature says so.
+        const signature = chatRenderSignature();
+        if (signature === lastDrawnSignature) {
+            debugLog('Reprocess skipped: nothing that reaches the chat changed');
+            return;
+        }
+        lastDrawnSignature = signature;
+
         runReprocessAllNow();
     }, 150);
 }

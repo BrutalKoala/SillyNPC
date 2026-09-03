@@ -43,6 +43,23 @@ function disconnectStatusObservers() {
 eventSource.on(event_types.CHAT_CHANGED, disconnectStatusObservers);
 
 /**
+ * Whether a reply is streaming in right now.
+ *
+ * The observers below watch `.mes_text` with `subtree` and `characterData`, which is
+ * exactly what streaming changes - so every token arriving rebuilt that message's tracker
+ * box, and the next token threw the result away. That is most of what made generating feel
+ * like the whole app was stuttering.
+ *
+ * The box is drawn once when the message finishes, by the CHARACTER_MESSAGE_RENDERED
+ * handler that already runs, so nothing is lost by staying quiet until then.
+ */
+let streaming = false;
+eventSource.on(event_types.GENERATION_STARTED, () => { streaming = true; });
+for (const done of [event_types.GENERATION_ENDED, event_types.GENERATION_STOPPED]) {
+    eventSource.on(done, () => { streaming = false; });
+}
+
+/**
  * Whether a mutated node sits inside the extension's own status box.
  *
  * Text nodes have no closest(), so the check climbs to the parent first rather than
@@ -124,6 +141,7 @@ export function processStatusUpdate(mesEl) {
     // Setup MutationObserver to watch for content changes (e.g., during streaming or post-generation DOM updates)
     if (!statusObservers.has(mesId)) {
         textContainer.setAttribute('data-sillynpc-observed', 'true');
+        let queued = false;
         const observer = new MutationObserver((records) => {
             // The tracker box is drawn inside .mes_text, so it is inside what this
             // watches. A change originating in it is never new message content: it is
@@ -133,13 +151,24 @@ export function processStatusUpdate(mesEl) {
             // on every keystroke.
             if (records.every(record => insideTracker(record.target))) return;
 
-            observer.disconnect();
-            try {
-                processStatusUpdate(mesEl);
-                renderStatusTrackerBox(mesEl);
-            } finally {
-                observer.observe(textContainer, { childList: true, subtree: true, characterData: true });
-            }
+            // Not while the reply is still arriving. Every token mutates this subtree, and
+            // rebuilding for one is work the next one discards.
+            if (streaming) return;
+
+            // One rebuild per frame however many mutations land in it. A paste or an edit
+            // arrives as a burst, and this used to rebuild once per batch.
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(() => {
+                queued = false;
+                observer.disconnect();
+                try {
+                    processStatusUpdate(mesEl);
+                    renderStatusTrackerBox(mesEl);
+                } finally {
+                    observer.observe(textContainer, { childList: true, subtree: true, characterData: true });
+                }
+            });
         });
         observer.observe(textContainer, { childList: true, subtree: true, characterData: true });
         statusObservers.set(mesId, observer);

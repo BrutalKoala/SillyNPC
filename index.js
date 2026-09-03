@@ -7,12 +7,14 @@ import { repairDefaultImages } from './src/default-portraits.js';
 import { 
     openManagePopup
 } from './src/ui-manage.js';
-import { 
-    reprocessAllMessages, 
+import {
+    reprocessAllMessages,
     reprocessMessage,
     setReprocessCallback,
-    triggerReprocess
+    triggerReprocess,
+    invalidateChatRender,
 } from './src/chat.js';
+import { redrawStatusBoxes } from './src/status-ui.js';
 import {
     createCharacter, addAlias, addCharacterToChat,
     CAST_KEY, setChatCast, getAllCategories, UNCATEGORISED,
@@ -338,8 +340,17 @@ jQuery(async () => {
         // fires. The new text arrived undecorated and stayed that way until something
         // else redrew the chat.
         eventSource.on(event_types.MESSAGE_SWIPED, onSwipe);
-        eventSource.on(event_types.MORE_MESSAGES_LOADED, reprocessAllMessages);
-        eventSource.on(event_types.CHAT_CHANGED, reprocessAllMessages);
+        eventSource.on(event_types.MORE_MESSAGES_LOADED, () => {
+            // The signature describes the settings, not the DOM, and these two change
+            // which messages exist without changing a setting - so they have to say
+            // so, or a redraw that has learned to decline will decline this one.
+            invalidateChatRender();
+            reprocessAllMessages();
+        });
+        eventSource.on(event_types.CHAT_CHANGED, () => {
+            invalidateChatRender();
+            reprocessAllMessages();
+        });
         eventSource.on(event_types.CHAT_CHANGED, resetExtractionState);
         // Chats that filled up before the caps existed are brought within them here, once,
         // rather than waiting for whatever their next extraction happens to be.
@@ -394,7 +405,12 @@ jQuery(async () => {
         eventSource.on('sillynpc-status-updated', () => {
             try {
                 updateHUD();
-                reprocessAllMessages();
+                // The tracker state moved, which changes the tracker boxes and nothing
+                // else. This called reprocessAllMessages(), so every extracted message -
+                // that is, every message - redrew the speaker decoration, the portraits
+                // and the avatars over the whole chat as well. redrawStatusBoxes exists
+                // for exactly this case and says so in its own comment.
+                redrawStatusBoxes();
             } catch (err) {
                 console.error(LOG_PREFIX, 'sillynpc-status-updated refresh failed', err);
             }
