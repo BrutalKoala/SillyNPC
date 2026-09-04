@@ -1250,7 +1250,7 @@ function summarizeCollection(collectionId, items, includeFull = false) {
  * Formats the state into a compact text block for prompt injection.
  * For prompt injection, we now include the FULL collection list to support Full State Sync.
  */
-export function formatCompactStatus(state, forPrompt = false) {
+export function formatCompactStatus(state, fullDetail = false) {
     let output = "[Current Scene Status]\n";
     
     const globalParts = [];
@@ -1280,17 +1280,17 @@ export function formatCompactStatus(state, forPrompt = false) {
         let playerLine = `Player (${state.player.name || 'You'}): ${playerParts.join(', ')}`;
         
         const colSummaries = [];
-        // When forPrompt is true, we show all relevant collections even if empty
-        if (forPrompt) {
+        // When fullDetail is true, we show all relevant collections even if empty
+        if (fullDetail) {
             const relevantCollections = (settings.collections || []).filter(c => c.target === 'all' || c.target === 'player');
             relevantCollections.forEach(col => {
                 const items = state.player.collections?.[col.id] || [];
-                const summary = summarizeCollection(col.id, items, forPrompt);
+                const summary = summarizeCollection(col.id, items, fullDetail);
                 if (summary) colSummaries.push(summary);
             });
         } else if (state.player.collections) {
             for (const [colId, items] of Object.entries(state.player.collections)) {
-                const summary = summarizeCollection(colId, items, forPrompt);
+                const summary = summarizeCollection(colId, items, fullDetail);
                 if (summary) colSummaries.push(summary);
             }
         }
@@ -1316,16 +1316,16 @@ export function formatCompactStatus(state, forPrompt = false) {
             if (charParts.length === 0) charLine = `${char.name}: Present`;
 
             const colSummaries = [];
-            if (forPrompt) {
+            if (fullDetail) {
                 const relevantCollections = (settings.collections || []).filter(c => c.target === 'all' || c.target === 'npc');
                 relevantCollections.forEach(col => {
                     const items = char.collections?.[col.id] || [];
-                    const summary = summarizeCollection(col.id, items, forPrompt);
+                    const summary = summarizeCollection(col.id, items, fullDetail);
                     if (summary) colSummaries.push(summary);
                 });
             } else if (char.collections) {
                 for (const [colId, items] of Object.entries(char.collections)) {
-                    const summary = summarizeCollection(colId, items, forPrompt);
+                    const summary = summarizeCollection(colId, items, fullDetail);
                     if (summary) colSummaries.push(summary);
                 }
             }
@@ -1409,9 +1409,20 @@ function describeNamedButUnlisted(state) {
             .filter(([, value]) => String(value ?? '').trim() !== '')
             .map(([name, value]) => `${name}=${value}`)
             .join(', ');
+
+        /* Their belongings, at the same detail as anybody on stage. They had none at all
+           until now, which is the fault this block exists to prevent one step removed: the
+           narrator knew Nikolett was somebody without knowing she carries anything, so the
+           moment the story handed her something it was invented. Empty collections are
+           skipped here rather than shown as "(empty)" - that reassurance is worth its space
+           for the people in the room, and not for six who are not. */
+        const carried = Object.entries(card.statusCollections || {})
+            .map(([colId, items]) => summarizeCollection(colId, items, true))
+            .filter(Boolean);
+
         const profile = describeProfileInline(card);
 
-        const parts = [stats, profile].filter(Boolean);
+        const parts = [stats, ...carried, profile].filter(Boolean);
         if (parts.length) lines.push(`${card.name} - ${parts.join(' | ')}`);
     }
 
@@ -1656,11 +1667,28 @@ function onGenerationStarted(type, data, dryRun) {
  * Deliberately contains no schema, no example and no imperative - the narrative model is
  * being told what is true, not asked to maintain it.
  */
-function buildSceneContext() {
+export function buildSceneContext(given = null) {
     try {
-        const state = committedState || loadStateFromMetadata();
+        // The state is a parameter so this function can be tested at all, and that matters
+        // more than it looks: the fault below was never in the renderer, which could always
+        // produce full detail. It was in which argument this passed. A test that called the
+        // renderer directly would have gone on passing throughout - and did, until it was
+        // pointed here instead.
+        const state = given || committedState || loadStateFromMetadata();
         if (!state) return '';
-        const body = formatCompactStatus(state, false);
+        /* Full detail, which this asked for and did not get for a long time.
+
+           The parameter used to be called forPrompt, and both callers build prompts, so the
+           name distinguished nothing and hid which of them was which. Inline mode passed
+           true and was told what every item is; this passed false and got a list of names.
+           So on the default setting the narrator saw "Spells: Snap-Ignite, Fire Aura" - no
+           cost, no element, no description - and invented the rest every time one was cast.
+
+           Nothing to do with the reader's own trimming: that lives in status-extractor.js
+           behind a different function, and the two have never shared a renderer. The reader
+           is sent less because it cannot change an item's description; the narrator needs it
+           precisely because it is writing the scene. */
+        const body = formatCompactStatus(state, true);
         return body ? body.trim() : '';
     } catch (err) {
         debugLog('Could not build the scene context', err);
