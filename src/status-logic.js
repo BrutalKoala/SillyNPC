@@ -18,6 +18,7 @@ import { LOG_PREFIX, debugLog, PROFILE_FIELDS } from './constants.js';
 import { extractJSON, safeJsonParse, splitValue, escapeRegExp, currentMessageIndex } from './utils.js';
 import { getIgnoredSpeakerLabels, normaliseSpeakerLabel } from './speaker-labels.js';
 import { describeThreads } from './threads.js';
+import { charactersFromActivatedLore } from './activated-lore.js';
 
 /**
  * Merges old and new stat values. If the old value had a max format (e.g. "50/100") 
@@ -1276,6 +1277,10 @@ export function formatCompactStatus(state, forPrompt = false) {
     const who = describeCastProfiles(state);
     if (who) output += `${who}\n`;
 
+    // And who the story just named without putting on stage.
+    const named = describeNamedButUnlisted(state);
+    if (named) output += `${named}\n`;
+
     // What is still outstanding, riding the block that is already being sent. Nothing
     // is retrieved to put it here - a thread was caught when it opened, which is the
     // whole difference between this and searching a summary for it later.
@@ -1302,25 +1307,81 @@ export function formatCompactStatus(state, forPrompt = false) {
  * Only the cast the block already lists, so this costs nothing for characters who are not
  * in the scene, and only characters with something written.
  */
-function describeCastProfiles(state) {
-    const said = (card) => PROFILE_FIELDS
+/**
+ * Characters whose lorebook entry fired, who are not in the scene list.
+ *
+ * Their entry reaching the prompt without them means the narrator gets a page of background
+ * about somebody and none of their numbers or their profile - so when the story gives one of
+ * them a line, everything except the entry text is invented.
+ *
+ * The wording is the careful part. Their entry fired because a keyword matched, which says
+ * they were *named* recently and says nothing about where they are. Claiming they are absent
+ * invites the model to write them out of a room they may be standing in; claiming nothing at
+ * all invites it to read a list of names as a cast to use. So this asserts neither, and says
+ * outright that being listed is not a reason to bring anyone in.
+ *
+ * Deliberately unlike the extraction prompt's "KNOWN BUT NOT IN THE SCENE", which does state
+ * absence - correctly, because there it exists to stop the reader re-adding their belongings.
+ */
+function describeNamedButUnlisted(state) {
+    const listed = new Set((state.characters || [])
+        .map(c => String(c?.name ?? '').trim().toLowerCase())
+        .filter(Boolean));
+    const player = String(state.player?.name ?? '').trim().toLowerCase();
+    if (player) listed.add(player);
+
+    const lines = [];
+    const seen = new Set();
+
+    for (const card of charactersFromActivatedLore()) {
+        const key = String(card?.name ?? '').trim().toLowerCase();
+        if (!key || listed.has(key) || seen.has(key)) continue;
+        seen.add(key);
+
+        // What they last walked in carrying, from the card - they are not in state, so
+        // there are no live values to read.
+        const stats = Object.entries(card.statusOverrides || {})
+            .filter(([, value]) => String(value ?? '').trim() !== '')
+            .map(([name, value]) => `${name}=${value}`)
+            .join(', ');
+        const profile = describeProfileInline(card);
+
+        const parts = [stats, profile].filter(Boolean);
+        if (parts.length) lines.push(`${card.name} - ${parts.join(' | ')}`);
+    }
+
+    if (!lines.length) return '';
+    /* No mention of the scene list, deliberately. "Also on file, and not in the scene list
+       above" was the first wording, and "not in the scene list" is one careless reading away
+       from "not in the scene" - which is the exact claim this block must not make. What the
+       block is for is enough; why these names are in a separate paragraph is our business. */
+    return 'Also on file. Who these people are if the story uses them - being listed here is '
+        + 'not a cue to bring them in, and not a claim about where they are:\n'
+        + lines.join('\n');
+}
+
+/** The four profile fields on one line, or '' when none is written. */
+function describeProfileInline(card) {
+    return PROFILE_FIELDS
         .map(field => {
             const value = String(card?.profile?.[field.id] ?? '').trim();
             return value ? `${field.label}: ${value}` : null;
         })
         .filter(Boolean)
         .join(' | ');
+}
 
+function describeCastProfiles(state) {
     const lines = [];
 
     if (state.player?.name) {
         // The player's profile lives on their persona record, not in the scene cast.
-        const line = said(getPlayerCard());
+        const line = describeProfileInline(getPlayerCard());
         if (line) lines.push(`${state.player.name} - ${line}`);
     }
 
     for (const actor of state.characters || []) {
-        const line = said(findCardForName(actor?.name));
+        const line = describeProfileInline(findCardForName(actor?.name));
         if (line) lines.push(`${actor.name} - ${line}`);
     }
 
@@ -1444,8 +1505,24 @@ function getStatusExample() {
     return `The player ate a Health Potion but was still hit by the Goblin. The Goblin was subsequently defeated, and the player took their Rusty Dagger. Updated the inventory for both actors to show the transfer.\n<status_update>${JSON.stringify(example)}</status_update>`;
 }
 
-function onGenerationStarted(type, data, dryRun) {
-    if (dryRun) return;
+/**
+ * Writes whichever prompts this mode uses, from the state as it stands right now.
+ *
+ * Called twice per turn, and the second call is the point. SillyTavern fires
+ * WORLD_INFO_ACTIVATED while it assembles the prompt, and that is where we learn which
+ * characters' lorebook entries fired - which is exactly who the scene block should be
+ * describing, and is not known yet at GENERATION_STARTED.
+ *
+ * That it arrives in time was not obvious and is worth writing down: in Generate,
+ * getWorldInfoPrompt is awaited at script.js:4576 and doChatInject - which reads these
+ * IN_CHAT prompts - is called at 4686. A comment in index.js used to claim the opposite and
+ * was wrong, which is why the narrator spent a long time being handed somebody's lore with
+ * none of their numbers.
+ *
+ * Same key and depth both times, so the second write replaces the first rather than adding
+ * to it.
+ */
+export function applyScenePrompt() {
     const settings = getSettings().statusTracker;
 
     const clear = (key) => setExtensionPrompt(key, '', extension_prompt_types.IN_CHAT, 0, false);
@@ -1498,6 +1575,14 @@ function onGenerationStarted(type, data, dryRun) {
         false,
         extension_prompt_roles.ASSISTANT,
     );
+}
+
+function onGenerationStarted(type, data, dryRun) {
+    if (dryRun) return;
+    // A first pass, before any lorebook entry has fired. The WORLD_INFO_ACTIVATED handler
+    // writes it again once it knows who did, and if nothing fires - SillyTavern does not
+    // emit the event at all then - this is what stands.
+    applyScenePrompt();
 }
 
 /**

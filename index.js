@@ -28,8 +28,8 @@ import { openPlayerModal } from './src/ui-player-modal.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { refreshScanButton } from './src/ui-scan-button.js';
 import { applyPortraitFraming, applySpeechPadding } from './src/ui-shared.js';
-import { applyCheckpointSchedule } from './src/status-logic.js';
-import { noteActivatedLore } from './src/status-extractor.js';
+import { applyCheckpointSchedule, applyScenePrompt } from './src/status-logic.js';
+import { noteActivatedLore } from './src/activated-lore.js';
 import { setDebugLogging } from './src/constants.js';
 import { describeChatConnection } from './src/utils.js';
 import { applyDialogueFormatPrompt } from './src/dialogue-format.js';
@@ -374,11 +374,18 @@ jQuery(async () => {
             }
         });
 
-        // Fires while SillyTavern assembles the story prompt. Too late to change that
-        // prompt, but in good time for the reader, which runs after the reply.
+        /* Fires while SillyTavern assembles the story prompt, and - contrary to what this
+           comment used to say - in time to change it. getWorldInfoPrompt, which emits
+           this, is awaited at script.js:4576; doChatInject, which reads our IN_CHAT
+           blocks, runs at 4686.
+
+           So the scene block is written again here, now that we know whose entries fired.
+           A character whose lore reached the prompt without their stats or their profile
+           is one the narrator has to invent the moment it gives them a line. */
         eventSource.on(event_types.WORLD_INFO_ACTIVATED, (entries) => {
             try {
                 noteActivatedLore(entries);
+                applyScenePrompt();
             } catch (err) {
                 debugLog('Could not record activated lore', err);
             }

@@ -9,6 +9,7 @@ export { SYSTEM_PROMPT };
 import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
 import { mentionsName } from './mentions.js';
+import { charactersFromActivatedLore } from './activated-lore.js';
 import { recordUsage } from './usage.js';
 import {
     loadStateFromMetadata,
@@ -42,30 +43,6 @@ import { applyTimeRules } from './status-rules.js';
 /** Guards against an extraction triggering the events that would start another. */
 let extractionInFlight = false;
 
-/** Lorebook entries SillyTavern activated for the turn being generated. */
-let activatedEntries = [];
-
-/**
- * Records which entries the last generation activated.
- *
- * A character can be linked to a lorebook entry, so an entry firing is a strong signal
- * that the narrator is about to write that character in - which is precisely when the
- * reader needs to know they already have a card.
- *
- * @param {Array<object>} entries
- */
-export function noteActivatedLore(entries) {
-    activatedEntries = Array.isArray(entries) ? entries : [];
-}
-
-/** Characters whose linked entry fired this turn. */
-function charactersFromActivatedLore() {
-    if (!activatedEntries.length) return [];
-    const characters = getSettings().characters || [];
-    return characters.filter(char => char.lorebook && activatedEntries.some(entry =>
-        String(entry?.world ?? entry?.book ?? '') === String(char.lorebook.world)
-        && String(entry?.uid) === String(char.lorebook.uid)));
-}
 /** Message ids already extracted, so a re-render does not re-run the request. */
 const extractedMessages = new Set();
 
