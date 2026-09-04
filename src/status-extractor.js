@@ -1,10 +1,10 @@
 import { getContext } from '../../../../st-context.js';
-import { getSettings } from './settings.js';
+import { getSettings, saveSettings } from './settings.js';
 import {
     THREAD_KINDS, openThreads, coerceThread, addThread, closeThread,
     activeThreads, touchThreads, pruneThreads,
 } from './threads.js';
-import { LOG_PREFIX, debugLog, SYSTEM_PROMPT } from './constants.js';
+import { LOG_PREFIX, debugLog, SYSTEM_PROMPT, PROFILE_FIELDS, aiMayEditProfileField, anyProfileFieldUnlocked } from './constants.js';
 export { SYSTEM_PROMPT };
 import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
@@ -18,6 +18,8 @@ import {
     applyUpdate,
     reconcileScenePresence,
     resolveMaxValue,
+    getPlayerCard,
+    findCardForName,
 } from './status-logic.js';
 import { computeStateDiff, partitionChanges, buildUpdateFromChanges, attachReasons } from './status-diff.js';
 import { setPendingChanges, isItemDecided } from './status-review.js';
@@ -81,6 +83,23 @@ export function forgetExtractionsFrom(index) {
 }
 
 /**
+ * Everyone who has a profile that could be unlocked: the cards, and the player.
+ *
+ * The player's four fields live on their persona record rather than in the character list,
+ * so asking the list alone would miss a player who has opened one. Guarded because
+ * getPlayerCard needs a persona, and the schema is built in places where there may not be
+ * one yet.
+ */
+function profileOwners() {
+    const cards = getSettings().characters || [];
+    try {
+        return [...cards, getPlayerCard()];
+    } catch {
+        return cards;
+    }
+}
+
+/**
  * A JSON schema describing exactly the stats and collections this user has configured.
  *
  * Deliberately restricted to the keywords Google's structured-output subset accepts:
@@ -141,6 +160,20 @@ export function buildExtractionSchema(trackerSettings) {
     const playerCollections = collectionProps('player');
     const npcCollections = collectionProps('npc');
 
+    /* The four profile fields, but only if somebody has actually unlocked one.
+     *
+     * A schema names what may come back, so listing these tells the model to look for
+     * changes to them on every message - work and tokens nobody should pay for a feature
+     * they have not switched on. The lock is per character and per field, so "any of them,
+     * anywhere" is the only question the schema can ask; the apply side does the precise
+     * filtering and drops anything for a field that is still locked. */
+    const profileProps = anyProfileFieldUnlocked(profileOwners()) ? {
+        type: 'object',
+        properties: Object.fromEntries(PROFILE_FIELDS.map(field => [
+            field.id, { type: 'string', description: field.hint },
+        ])),
+    } : null;
+
     return {
         type: 'object',
         // Required at the top level so a model cannot satisfy the schema with "{}",
@@ -153,6 +186,7 @@ export function buildExtractionSchema(trackerSettings) {
                 properties: {
                     stats: stringMap(playerStatDefs),
                     ...(playerCollections ? { collections: playerCollections } : {}),
+                    ...(profileProps ? { profile: profileProps } : {}),
                 },
             },
             characters: {
@@ -164,6 +198,7 @@ export function buildExtractionSchema(trackerSettings) {
                         name: { type: 'string' },
                         stats: stringMap(npcStatDefs),
                         ...(npcCollections ? { collections: npcCollections } : {}),
+                        ...(profileProps ? { profile: profileProps } : {}),
                     },
                 },
             },
@@ -649,6 +684,58 @@ export function coerceToUpdate(raw) {
 }
 
 /**
+ * Writes back any profile field the reader changed and is allowed to change.
+ *
+ * Deliberately outside applyUpdate. That writes the state - chat metadata, which the diff,
+ * the review gate and the timeline all read - while a profile lives on the card, in
+ * settings, shared by every chat. Routing one through the other would put global data on a
+ * per-message path, which is how the player's stats once reached master storage.
+ *
+ * The lock is enforced here as well as in the schema. The schema only knows whether anybody
+ * has unlocked anything; this knows which character and which field, and drops the rest even
+ * when the model returns them anyway.
+ *
+ * Undoing is the swipe base's job: it snapshots every profile before the message runs, and
+ * rebaseToSwipe puts them back. See snapshotProfiles.
+ *
+ * @returns {string[]} What changed, as "Name.Field", for the log.
+ */
+export function applyProfileFromReply(parsed) {
+    if (!anyProfileFieldUnlocked(profileOwners())) return [];
+
+    const changed = [];
+
+    const write = (card, incoming) => {
+        if (!card || !incoming || typeof incoming !== 'object') return;
+        if (!card.profile || typeof card.profile !== 'object') card.profile = {};
+
+        for (const field of PROFILE_FIELDS) {
+            if (!aiMayEditProfileField(card, field.id)) continue;
+            const value = String(incoming[field.id] ?? '').trim();
+            // An omitted field means "unchanged", and a blank one is the model failing to
+            // answer rather than deciding somebody has no personality.
+            if (!value || value === String(card.profile[field.id] ?? '').trim()) continue;
+            card.profile[field.id] = value;
+            changed.push(`${card.name}.${field.label}`);
+        }
+    };
+
+    if (parsed?.player?.profile) {
+        try { write(getPlayerCard(), parsed.player.profile); } catch { /* no persona */ }
+    }
+
+    for (const incoming of Array.isArray(parsed?.characters) ? parsed.characters : []) {
+        if (incoming?.profile) write(findCardForName(incoming.name), incoming.profile);
+    }
+
+    if (changed.length) {
+        saveSettings();
+        debugLog('Profile fields the story changed:', changed);
+    }
+    return changed;
+}
+
+/**
  * Opens and closes threads from what the reader returned.
  *
  * Saved in its own step rather than through applyUpdate, and returns what it did so a
@@ -871,6 +958,10 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // closing a wrong one is a click; holding them would mean a decision per message
         // about something that is only ever context.
         applyThreadsFromReply(parsed, messageId, String(messageText));
+
+        // Profiles, for whichever fields have been unlocked. Outside applyUpdate on
+        // purpose: these live on the card rather than in the state.
+        applyProfileFromReply(parsed);
 
         // Propose, then decide. A dry run says what the update would do, so additions,
         // removals and implausible jumps can be held back for a look rather than

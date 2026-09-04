@@ -456,3 +456,19 @@ export function aiMayEditProfileField(char, fieldId) {
     const open = char?.aiProfileFields;
     return Array.isArray(open) && open.includes(fieldId);
 }
+
+/**
+ * Whether anybody has opened any profile field.
+ *
+ * Asked once, to decide whether the extraction schema mentions profiles at all. A schema
+ * names what may come back, so listing them tells the model to go looking for changes on
+ * every message - which nobody should pay for while every field is still locked, and by
+ * default they all are.
+ *
+ * @param {object[]} characters
+ * @returns {boolean}
+ */
+export function anyProfileFieldUnlocked(characters) {
+    return (characters || []).some(char => Array.isArray(char?.aiProfileFields)
+        && char.aiProfileFields.length > 0);
+}

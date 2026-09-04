@@ -83,9 +83,13 @@ function chipRow(label, chips) {
  * never; the overrides below are numbers that move. Reading down the column goes from what
  * is settled to what is in play.
  *
- * Nothing automatic writes here. The per-message reader is never told these fields exist,
- * and Fill only ever writes into one that is still empty - so anything typed here is safe
- * from being overwritten, which is what makes hand-correcting worth the effort.
+ * Each carries a lock, and it is locked by default. A locked field is still sent to the
+ * narrator - it has to be, or they cannot be played - but the per-message reader is never
+ * allowed to change it, so anything typed here stays as typed. That is what makes
+ * hand-correcting worth the effort. Unlock one and it is kept up to date from the story
+ * like a stat.
+ *
+ * Fill sits outside that either way: it only ever writes a field that is still empty.
  */
 export function renderProfileFields(char, container) {
     if (!container) return;
@@ -95,7 +99,7 @@ export function renderProfileFields(char, container) {
             <label>Profile</label>
             <small class="notes">Who they are, rather than what is happening to them.
                 Sent with the scene so the narrator knows how to play them. The tracker
-                never changes these, and Fill only writes a field you have unlocked.</small>
+                never changes a locked field, and a lock is the default.</small>
         </div>
     `;
 
@@ -114,10 +118,17 @@ export function renderProfileFields(char, container) {
 
         /* Who owns this field.
 
-           These four are the part of a character somebody sits down and decides, so the
-           default is that Fill leaves them alone and a lock says so. Opening one is a
-           deliberate act per field and per character, which is the point: you can hand
-           over Appearance on a walk-on and keep Speech on the character you care about.
+           Locked, the field is still sent - the narrator needs it to play them - but any
+           change the per-message reader proposes is dropped. Unlocked, it is maintained
+           from the story like a stat.
+
+           Locked by default, because these four are the part of a character somebody sits
+           down and decides, and a model quietly rewriting a speech style that took thought
+           is worse than leaving it alone. Per field and per character, so you can let a
+           walk-on drift and hold the one you care about still.
+
+           Fill is not affected either way: it only ever writes a blank, and a blank has
+           nothing to protect.
 
            Only the four profile fields get this. Stats and collections are System
            Builder's, and the tracker maintaining them from the story is the feature. */
@@ -129,8 +140,9 @@ export function renderProfileFields(char, container) {
             lock.classList.toggle('is-open', open);
             lock.innerHTML = `<i class="fa-solid ${open ? 'fa-wand-magic-sparkles' : 'fa-lock'}"></i>`;
             lock.title = open
-                ? `Fill may write ${field.label} when it is empty. Click to keep it yours.`
-                : `${field.label} is yours. Click to let Fill write it when it is empty.`;
+                ? `The story may change ${field.label} as it goes. Click to keep it yours.`
+                : `${field.label} is yours - it is sent to the AI, but never changed by it. `
+                    + `Click to let the story keep it up to date.`;
             lock.setAttribute('aria-pressed', String(open));
             lock.setAttribute('aria-label', lock.title);
         };

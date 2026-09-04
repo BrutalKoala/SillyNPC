@@ -610,9 +610,67 @@ export function rememberSwipeBase(messageId, state) {
     // rebuild from the same starting point, not from what the previous swipe produced.
     if (metadata[SWIPE_BASE_KEY]?.messageId === key) return false;
 
-    metadata[SWIPE_BASE_KEY] = { messageId: key, state: structuredClone(state) };
+    metadata[SWIPE_BASE_KEY] = {
+        messageId: key,
+        state: structuredClone(state),
+        profiles: snapshotProfiles(),
+    };
     debugLog(`Remembered the state before message ${key}, for swipes`);
     return true;
+}
+
+/**
+ * Every profile, by character name, as they stand right now.
+ *
+ * Rides the swipe base because a profile field the reader is allowed to change does not
+ * live in the state - it lives on the card, in settings, shared by every chat. So the
+ * rebase cannot rebuild it the way it rebuilds a stat, and without a snapshot a rewritten
+ * personality would survive the swipe that undid everything else about that reply.
+ *
+ * Four short strings per character. The state clone beside it is far larger.
+ */
+function snapshotProfiles() {
+    const out = {};
+    const record = (card) => {
+        const name = String(card?.name ?? '').trim();
+        if (name) out[name.toLowerCase()] = { ...(card.profile || {}) };
+    };
+    for (const card of getSettings().characters || []) record(card);
+    try { record(getPlayerCard()); } catch { /* no persona yet */ }
+    return out;
+}
+
+/**
+ * Puts every profile back to how the snapshot found it.
+ *
+ * Only the fields that actually differ, so a card nobody touched is not rewritten and
+ * saveSettings is not called for nothing.
+ *
+ * @returns {number} How many fields were put back.
+ */
+export function restoreProfiles(profiles) {
+    if (!profiles || typeof profiles !== 'object') return 0;
+
+    let restored = 0;
+    const put = (card) => {
+        const was = profiles[String(card?.name ?? '').trim().toLowerCase()];
+        if (!was) return;
+        if (!card.profile || typeof card.profile !== 'object') card.profile = {};
+        for (const field of PROFILE_FIELDS) {
+            const before = String(was[field.id] ?? '');
+            if (String(card.profile[field.id] ?? '') === before) continue;
+            card.profile[field.id] = before;
+            restored += 1;
+        }
+    };
+    for (const card of getSettings().characters || []) put(card);
+    try { put(getPlayerCard()); } catch { /* no persona yet */ }
+
+    if (restored) {
+        saveSettings();
+        debugLog(`Put ${restored} profile field(s) back to before that message`);
+    }
+    return restored;
 }
 
 /**
@@ -629,6 +687,13 @@ export function getSwipeBase(messageId) {
     const stored = getMetadata()?.[SWIPE_BASE_KEY];
     if (!stored || stored.messageId !== String(messageId)) return null;
     return structuredClone(stored.state);
+}
+
+/** The profiles as they stood before that message, or null when none were recorded. */
+export function getProfileBase(messageId) {
+    const stored = getMetadata()?.[SWIPE_BASE_KEY];
+    if (!stored || stored.messageId !== String(messageId)) return null;
+    return stored.profiles ? structuredClone(stored.profiles) : null;
 }
 
 
