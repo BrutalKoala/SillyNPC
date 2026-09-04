@@ -350,21 +350,29 @@ function summariseCollections(actor, target, trackerSettings) {
                 const shown = { [primary]: String(name) };
                 for (const field of col.fields || []) {
                     if (field.name === primary) continue;
-                    /* Prose that belongs to the item library, not to this character.
+                    /* Long text that belongs to the item rather than to whoever holds it.
 
-                       A static field is stored once against the item's name and copied onto
-                       every copy of it, and getMergedItem writes it back over whatever the
-                       reader returns - so sending it is not only repeating the same sentence
-                       on everybody holding a cellphone, it is describing something the
-                       reader has no power to change.
+                       Static is the load-bearing half and means something exact: the value
+                       is kept once in the item library and copied onto every copy of that
+                       item, and getMergedItem writes it back over whatever the reader
+                       returns. So sending it repeats the same sentence on everybody carrying
+                       a cellphone, to describe something the reader cannot change anyway.
 
-                       Static alone would be too blunt: under the default rule everything
+                       Static alone would be too blunt. Under the default rule everything
                        that is not a number is static, so a spell's cost and element would go
-                       with it, and the cost is what the reader deducts when a message says
-                       somebody cast something without naming a figure. Multiline as well
-                       narrows it to prose - which the reader can neither change nor compute
-                       with. Both are the user's own checkboxes, on whatever their fields
-                       happen to be called. */
+                       with it - and the cost is what the reader deducts when a message says
+                       somebody cast something without naming a figure. That trades
+                       correctness for a few hundred characters.
+
+                       Multi narrows it, and it is worth being straight about what that flag
+                       actually declares: it means "edit this in a box I can write several
+                       lines in", which is a statement about the editor, not about meaning.
+                       It is used here as a proxy for "long enough to be worth not repeating",
+                       and it is a good one because nobody asks for a textarea to hold a
+                       number or a word. Both ways of being wrong are mild and visible: a long
+                       field with Multi unticked is still sent, costing what it costs, and a
+                       short one with Multi ticked is withheld from a reader that could not
+                       have changed it. Both checkboxes now say this in System Builder. */
                     if (field.isMultiline && isStaticField(field)) continue;
                     const value = item?.[field.name];
                     if (value === undefined || value === null || value === '') continue;

@@ -30,7 +30,7 @@ import {
  * from the item simply failing to come back.
  */
 
-/** Fields the Master Database actually stores, mirroring updateMasterItem's rule. */
+/** Fields the Master Database actually stores. Shares its rule with updateMasterItem. */
 function staticFieldsOf(colDef) {
     return (colDef?.fields || []).filter(isStaticField);
 }

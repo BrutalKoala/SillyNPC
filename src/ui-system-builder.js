@@ -168,11 +168,11 @@ function buildCollectionsEditor(onRefresh) {
                         <input type="checkbox" class="f-primary" ${field.isPrimary ? 'checked' : ''}>
                         <small style="font-size:0.7em; opacity:0.7;">Pri</small>
                     </label>
-                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="Allow multiple lines (for text type)">
+                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="Edit this field in a box you can write several lines in, rather than on one line. Text fields only.&#10;&#10;Ticked together with Static, it also means the field is prose belonging to the item rather than to whoever is holding it - see Static.">
                         <input type="checkbox" class="f-multiline" ${field.isMultiline ? 'checked' : ''} ${field.type !== 'text' ? 'disabled' : ''}>
                         <small style="font-size:0.7em; opacity:0.7;">Multi</small>
                     </label>
-                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="Is this field static (preserved in Master Database)?">
+                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="This field belongs to the item, not to whoever is holding it. Its value is kept once in the Item Library and copied onto every copy of that item, so the same thing reads the same way on everybody - and the per-message reader cannot change it, because the Library's value is written back over whatever it returns.&#10;&#10;Ticked together with Multi, the field is also left out of what the reader is sent each message: it is the same sentence on every holder and nothing the reader says about it survives. Untick this to have the reader keep the field up to date per holder instead.&#10;&#10;Numbers ignore this and are always per-holder, unless the number is the Primary field.">
                         <input type="checkbox" class="f-static" ${field.isStatic !== false ? 'checked' : ''}>
                         <small style="font-size:0.7em; opacity:0.7;">Static</small>
                     </label>
