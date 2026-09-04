@@ -255,7 +255,20 @@ export function describeCollections(trackerSettings) {
             const choices = (f.options || []).length ? ` [one of ${f.options.join(', ')}]` : '';
             return `${f.name}${type}${choices}${f.isPrimary ? ' [identifies the item]' : ''}`;
         }).join(', ');
-        lines.push(`- "${col.id}" for ${col.target || 'all'}: ${fields || 'name'}`);
+
+        /* The label and the note, not just the id. An id is a key - "pictures" tells the
+           model as little as a column name does, and the prompt used to send nothing else,
+           which is why guidance about inventories had to stand in for saying what a
+           collection actually holds. The label is already on every collection and was
+           simply never sent; the note is optional and blank until somebody writes one. */
+        const label = String(col.name ?? '').trim();
+        const title = label && label.toLowerCase() !== String(col.id).toLowerCase()
+            ? `"${col.id}" (${label})` : `"${col.id}"`;
+        const note = String(col.hint ?? '').trim();
+
+        lines.push(`- ${title} for ${col.target || 'all'}`
+            + `${note ? ` - ${note.replace(/\s*$/, '').replace(/\.?$/, '.')}` : ''}`
+            + ` Fields: ${fields || 'name'}`);
     }
     return lines.join('\n');
 }
@@ -504,7 +517,9 @@ function describeAbsentButNamed(state, messageText, trackerSettings) {
     return lines.join(String.fromCharCode(10));
 }
 
-function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
+// Exported for the tests: what reaches the model on every message is worth holding to
+// a shape, and the vocabulary in it is the whole point of this function.
+export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
     // What is already open, so the reader is not asked to find it again every message.
     //
     // The active ones only. This listed every open thread, which made the block grow with
@@ -523,7 +538,19 @@ function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
             + leadUp.join('\n---\n')
         : '';
     return [
-        '### CURRENT STATE',
+        /* What the words in this prompt mean here, before any of them are used.
+         *
+         * The system prompt above may be the shipped one or one somebody wrote themselves,
+         * and either way it has to talk about stats and collections in the abstract. It
+         * cannot know that this setup's collections are "pictures" and "contacts" rather
+         * than an inventory. This can, so it says so - and says the lists are closed, which
+         * is what stops a model reporting a plausible stat nobody configured. */
+        '### WHAT YOU MAY CHANGE',
+        'The stats are exactly the ones named in the current state below. The collections '
+            + 'are exactly the ones listed under their own heading. There are no others: a '
+            + 'name that does not appear below does not exist here, whatever it is called '
+            + 'in other games.',
+        '\n### CURRENT STATE',
         describeCurrentState(state, trackerSettings) || '(empty)',
         limits ? '\n### LIMITS\n' + limits : '',
         // The fields each collection actually has. Without this the model had only the
@@ -540,6 +567,8 @@ function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
         schema ? '\n### COLLECTIONS AND THEIR FIELDS\n' + schema : '',
         example ? '\n### A COLLECTION CHANGE LOOKS LIKE THIS\n' + example
             + '\nOmit any field the message does not state. Do not guess a value.' : '',
+        describeOpenProfileFields(state),
+        buildMinimalExample(state, trackerSettings),
         context,
         '\n### LATEST MESSAGE (apply what this one changes)',
         messageText,
@@ -681,6 +710,84 @@ export function coerceToUpdate(raw) {
     if (!raw) return null;
     if (typeof raw === 'object') return Array.isArray(raw) ? null : raw;
     return safeJsonParse(extractJSON(String(raw)));
+}
+
+/**
+ * The unlocked profile fields, with what they currently say.
+ *
+ * The schema grew a `profile` key and nothing told the model it existed, which left a slot
+ * with no instruction and no current value to compare against - it would have been writing
+ * blind. Here rather than in the system prompt for the reason threads and the reasons
+ * object are here: a user's own extraction prompt replaces the shipped one outright, and an
+ * ask that lives only in the shipped text never reaches them.
+ *
+ * Only the unlocked ones. A locked field is dropped on apply whatever comes back, so
+ * listing it would spend tokens inviting a change that is thrown away.
+ *
+ * @returns {string} Empty when nothing is unlocked, so the caller leaves the section out.
+ */
+function describeOpenProfileFields(state) {
+    const lines = [];
+
+    const describe = (card, label) => {
+        const open = PROFILE_FIELDS.filter(f => aiMayEditProfileField(card, f.id));
+        if (!open.length) return;
+        for (const field of open) {
+            const value = String(card.profile?.[field.id] ?? '').trim();
+            lines.push(`- ${label}.${field.id}: ${value || '(blank)'}`);
+        }
+    };
+
+    if (state?.player?.name) {
+        try { describe(getPlayerCard(), state.player.name); } catch { /* no persona */ }
+    }
+    for (const actor of state?.characters || []) {
+        const card = findCardForName(actor?.name);
+        if (card) describe(card, actor.name);
+    }
+
+    if (!lines.length) return '';
+    return '\n### PROFILE FIELDS YOU MAY UPDATE\n'
+        + 'These describe who somebody IS, not what is happening to them, and they change '
+        + 'rarely - a scar, a haircut, a lasting change of manner. Update one only when the '
+        + 'latest message plainly shows it. Omitting a field means unchanged, which is '
+        + 'almost always the right answer. Return them under "profile" on that character, '
+        + 'beside "stats".\n'
+        + lines.join('\n');
+}
+
+/**
+ * A minimal reply, in the stats this setup actually has.
+ *
+ * Small models copy the shape of an example far more reliably than they follow a
+ * description of it, and an example is only useful if it is about them: a hard-coded
+ * '"Stamina": "12/20"' teaches a model about a stat that may not exist here, and invites it
+ * to report one that does not.
+ *
+ * Placeholders where a value would be, so nothing here can be mistaken for a fact about the
+ * scene - the same reasoning as buildDeltaExample, which does this for collections.
+ */
+function buildMinimalExample(state, trackerSettings) {
+    const firstNamed = (list) => (list || []).map(s => s?.name).filter(Boolean)[0];
+
+    const playerStat = firstNamed(trackerSettings.playerStats);
+    const npcStat = firstNamed(trackerSettings.npcStats);
+    const present = (state?.characters || []).map(c => c?.name).filter(Boolean);
+    if (!playerStat && !npcStat && !present.length) return '';
+
+    const characters = present.length
+        ? present.slice(0, 2).map((name, i) => (i === 0 && npcStat
+            ? `    { "name": ${JSON.stringify(name)}, "stats": { ${JSON.stringify(npcStat)}: "<new value>" } }`
+            : `    { "name": ${JSON.stringify(name)} }`))
+        : [];
+
+    return '\n### A MINIMAL REPLY LOOKS LIKE THIS\n{\n'
+        + '  "global": {},\n'
+        + (playerStat
+            ? `  "player": { "stats": { ${JSON.stringify(playerStat)}: "<new value>" } },\n`
+            : '  "player": {},\n')
+        + `  "characters": [\n${characters.join(',\n')}\n  ]\n}\n`
+        + 'Everyone present is listed; only what changed carries a value.';
 }
 
 /**

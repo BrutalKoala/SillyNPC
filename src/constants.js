@@ -274,14 +274,23 @@ export const SYSTEM_PROMPT = [
     '  scene after this message, even if none of their stats changed. Drop anyone who',
     '  has left; add anyone who has arrived. This is how presence is tracked.',
     '',
-    'Collections (inventory, spells, skills and the like) report CHANGES, never contents:',
-    '  "collections": { "inventory": { "add": [{"name": "Rope"}], "remove": ["Torch"] } }',
+    // No examples of what a collection is. This used to read "(inventory, spells, skills
+    // and the like)" with a worked example about rope and a torch, which is a description
+    // of somebody else's game: a setup whose collections are "pictures" and "contacts" got
+    // guidance that plainly was not about it, and the model had to decide whether the rules
+    // applied. The message itself lists the collections that exist, with their fields and
+    // whatever they are for, and a worked example in those very ids follows it. This says
+    // only what is true of all of them.
+    'Collections report CHANGES, never contents. The message lists which ones exist, what',
+    'they hold and what fields they have; there are no others.',
+    '- Report a change as "add" and "remove" on that collection, in the shape the example',
+    '  in the message shows.',
     '- Omitting a collection means nothing in it changed. That is the normal case.',
-    '- Never restate items the character already has. The current state already lists',
+    '- Never restate entries the character already has. The current state already lists',
     '  them and they are kept automatically.',
-    '- Use "remove" ONLY when the message says the item left them: used up, destroyed,',
-    '  sold, given away, stolen, or a spell forgotten. Not being mentioned is not a',
-    '  reason to remove anything.',
+    '- Use "remove" ONLY when the message says the entry left them: used up, destroyed,',
+    '  sold, given away, stolen, forgotten. Not being mentioned is not a reason to remove',
+    '  anything.',
     '- If you are unsure whether something was lost, leave it out.',
     '',
     'Rules:',

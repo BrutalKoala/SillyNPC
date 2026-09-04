@@ -129,6 +129,13 @@ function buildCollectionsEditor(onRefresh) {
                 <button type="button" class="menu_button move-down-btn" title="Move Down" ${index === collections.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
                 <button type="button" class="menu_button delete-btn" title="Delete Collection" style="color: var(--sillynpc-danger);"><i class="fa-solid fa-trash"></i></button>
             </div>
+            <div style="display:flex; gap:8px; width:100%; align-items:center; margin-bottom:12px;">
+                <small style="opacity:0.6; flex-shrink:0;" title="What this collection holds, in your own words. Sent to the reader with every extraction.">What it holds:</small>
+                <input type="text" class="text_pole col-hint" value="${escapeHtml(col.hint || '')}"
+                       placeholder="e.g. photographs the player has taken"
+                       title="A name is a key, not an explanation - a collection called &quot;pictures&quot; tells the reader as little as a column heading. One short line saying what belongs in it is sent with every extraction. Leave blank if the name speaks for itself."
+                       style="flex:1; min-width:120px;">
+            </div>
             <div class="fields-container" style="margin-left: 20px; border-left: 2px solid var(--sillynpc-border, rgba(128,128,128,0.25)); padding-left: 15px;">
                 <div style="margin-bottom: 8px;"><small style="opacity:0.6; font-weight:bold; text-transform:uppercase; letter-spacing:0.05em;">Fields Configuration</small></div>
                 <div class="fields-list"></div>
@@ -266,6 +273,7 @@ function buildCollectionsEditor(onRefresh) {
         });
 
         colWrap.querySelector('.col-name').addEventListener('input', (e) => { col.name = e.target.value; saveSettings(); });
+        colWrap.querySelector('.col-hint')?.addEventListener('input', (e) => { col.hint = e.target.value; saveSettings(); });
         const colIdInput = colWrap.querySelector('.col-id');
         colIdInput.title = 'Storage key for this collection. Renaming it migrates existing items.';
         colIdInput.addEventListener('change', (e) => {

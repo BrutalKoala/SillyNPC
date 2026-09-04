@@ -77,9 +77,11 @@ export const PROMPTS = [
         label: 'Extraction Instructions',
         home: 'Tracker',
         help: 'What the reader is told before it is shown the current state and the '
-            + 'message. Your collections and their fields are sent separately and are '
-            + 'added whatever you write here, so rewriting this cannot cost the reply '
-            + 'its field list.',
+            + 'message. Everything specific to your setup - the stats, the collections and '
+            + 'what they hold, a worked example in your own field names, and any profile '
+            + 'field you have unlocked - is built separately and sent whatever you write '
+            + 'here. So rewriting this cannot cost the reply its vocabulary, and this text '
+            + 'should stay general: it is the one part that cannot know your system.',
         recommended: () => SYSTEM_PROMPT,
         emptyNote: 'The built-in instructions are sent.',
         available: () => getSettings().statusTracker.extractionMode === 'extract',

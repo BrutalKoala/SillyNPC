@@ -909,6 +909,14 @@ export function normalizeSettings(settings) {
             }
         }
 
+        // The same field a stat has had all along, on a collection. A stat could say how it
+        // should be written and a collection could not say what it holds - so "pictures"
+        // reached the reader as the bare word, and the prompt had nothing to offer but
+        // guidance about inventories. Blank until somebody writes one.
+        for (const col of settings.statusTracker.collections || []) {
+            if (col && typeof col.hint !== 'string') col.hint = '';
+        }
+
         // Migrate stats to have visible property
         if (Array.isArray(settings.statusTracker.globalStats)) {
             for (const stat of settings.statusTracker.globalStats) {
