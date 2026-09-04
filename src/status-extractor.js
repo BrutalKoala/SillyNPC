@@ -10,6 +10,7 @@ import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMess
 import { charactersMentionedIn } from './chat.js';
 import { mentionsName } from './mentions.js';
 import { charactersFromActivatedLore } from './activated-lore.js';
+import { liveFactsFor } from './api.js';
 import { recordUsage } from './usage.js';
 import {
     loadStateFromMetadata,
@@ -311,12 +312,17 @@ export function buildDeltaExample(trackerSettings) {
     return JSON.stringify(shape, null, 2);
 }
 
-function describeCurrentState(state, trackerSettings) {
-    const relevant = (target) => (trackerSettings.collections || [])
-        .filter(c => c.target === 'all' || c.target === target);
-
-    const summarise = (actor, target) => {
-        const cols = relevant(target);
+/**
+ * An actor's collections, as the reader should see them.
+ *
+ * Module scope rather than a closure, because the characters who are named but not on
+ * stage are rendered by the same code now. They used to get a hand-rolled one-line object
+ * with their stats and nothing else, which read as a different kind of thing in a prompt
+ * where everyone else was pretty-printed with their belongings.
+ */
+function summariseCollections(actor, target, trackerSettings) {
+        const cols = (trackerSettings.collections || [])
+            .filter(c => c.target === 'all' || c.target === target);
         if (!cols.length) return undefined;
         const out = {};
         for (const col of cols) {
@@ -343,7 +349,10 @@ function describeCurrentState(state, trackerSettings) {
             }).filter(Boolean);
         }
         return out;
-    };
+}
+
+function describeCurrentState(state, trackerSettings) {
+    const summarise = (actor, target) => summariseCollections(actor, target, trackerSettings);
 
     const playerCollections = summarise(state.player, 'player');
     const shape = {
@@ -351,6 +360,8 @@ function describeCurrentState(state, trackerSettings) {
         player: {
             stats: { ...(state.player?.stats || {}) },
             ...(playerCollections ? { collections: playerCollections } : {}),
+            // The player's four fields live on their persona record, not in the scene cast.
+            ...profileBlock(safePlayerCard()),
         },
         characters: (state.characters || []).map(char => {
             const charCollections = summarise(char, 'npc');
@@ -358,10 +369,36 @@ function describeCurrentState(state, trackerSettings) {
                 name: char.name,
                 stats: { ...(char.stats || {}) },
                 ...(charCollections ? { collections: charCollections } : {}),
+                ...profileBlock(findCardForName(char.name)),
             };
         }),
     };
     return JSON.stringify(shape, null, 2);
+}
+
+/**
+ * A character's four profile fields, ready to spread into their record.
+ *
+ * Every field that has a value, not only the unlocked ones. The state block is meant to be
+ * a complete picture of somebody, and it was the one place in the whole prompt that was
+ * missing a piece: their stats and their belongings were there, and who they are was not.
+ * What the reader may *change* is a separate question, answered by its own section.
+ *
+ * Absent rather than empty when nothing is written, so a card nobody has filled in does not
+ * carry a block of blank strings in every message.
+ */
+function profileBlock(card) {
+    const profile = {};
+    for (const field of PROFILE_FIELDS) {
+        const value = String(card?.profile?.[field.id] ?? '').trim();
+        if (value) profile[field.id] = value;
+    }
+    return Object.keys(profile).length ? { profile } : {};
+}
+
+/** getPlayerCard, which needs a persona and is called where there may not be one. */
+function safePlayerCard() {
+    try { return getPlayerCard(); } catch { return null; }
 }
 
 /**
@@ -496,25 +533,44 @@ function describeAbsentButNamed(state, messageText, trackerSettings) {
     const candidates = [...charactersMentionedIn(messageText), ...charactersFromActivatedLore()];
 
     const seen = new Set();
-    const lines = [];
+    const records = [];
     for (const char of candidates) {
         const key = String(char.name || '').toLowerCase();
         if (!key || present.has(key) || seen.has(key)) continue;
         seen.add(key);
 
-        const stats = char.statusOverrides || {};
-        // Stats only. Their belongings used to be listed here too, and models restated the
-        // list back as additions - which the apply side read as acquiring them a second
-        // time, doubling a quantity on every message. An echoed stat overwrites itself; an
-        // echoed collection accumulates. The belongings are restored from the card the
-        // moment the reply puts them in the scene, so listing them bought nothing and cost
-        // that.
-        if (!Object.keys(stats).length) continue;
+        /* The same shape as everybody else, belongings included.
 
-        lines.push(JSON.stringify({ name: char.name, stats }));
+           These used to be stats on one line and nothing more. The stated reason was that
+           models echoed a listed collection back as additions and the apply side read it as
+           acquiring the items again, doubling a quantity every message - but that was cured
+           where it lived: addItem treats an add whose quantity equals the quantity already
+           held as the model restating the state, and does not sum it (status-logic.js). The
+           prompt-side workaround outlived its bug, and in-scene characters had carried their
+           full collections the whole time, so this was not protected from anything they were
+           not exposed to.
+
+           Their facts come from the card rather than the state, because being absent from
+           the state is what makes them off-scene. liveFactsFor answers exactly that. */
+        const { stats, collections } = liveFactsFor(char);
+        const listed = summariseCollections({ collections }, 'npc', trackerSettings);
+        const profile = profileBlock(char);
+
+        // Nothing at all to say is not worth a line. A card with only a profile still is:
+        // that is who they are, and it is the half the reader most often lacks.
+        const hasStats = Object.keys(stats || {}).length > 0;
+        const hasItems = Object.values(listed || {}).some(items => items.length);
+        if (!hasStats && !hasItems && !profile.profile) continue;
+
+        records.push({
+            name: char.name,
+            ...(hasStats ? { stats } : {}),
+            ...(hasItems ? { collections: listed } : {}),
+            ...profile,
+        });
     }
 
-    return lines.join(String.fromCharCode(10));
+    return records.length ? JSON.stringify(records, null, 2) : '';
 }
 
 // Exported for the tests: what reaches the model on every message is worth holding to
@@ -552,18 +608,21 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
             + 'in other games.',
         '\n### CURRENT STATE',
         describeCurrentState(state, trackerSettings) || '(empty)',
+        /* Beside the state, because it is state. It used to sit after the limits and
+           the field list, among the rules, where it read as an aside about shape rather
+           than as more of what is already known. Same shape as the characters above it
+           too - these are the same kind of thing and were drawn as a different one. */
+        absent ? '\n### KNOWN, BUT NOT IN THE SCENE\n'
+            + 'Named in the message and already tracked, but not on stage. This is what '
+            + 'is on file for them. Do not report them back: if the message puts one of '
+            + 'them into the scene, include them in "characters" and report only what '
+            + 'this message changed about them.\n' + absent : '',
         limits ? '\n### LIMITS\n' + limits : '',
         // The fields each collection actually has. Without this the model had only the
         // prompt's one example to go by, which showed a single field called name - so
         // that is all a new item ever arrived with.
         // Before the field list, so it reads as part of what is already known rather
         // than as an instruction about shape.
-        absent ? '\n### KNOWN BUT NOT IN THE SCENE\n'
-            + 'These characters are named in the message but are not in the scene. They '
-            + 'are already tracked, and what they own is already on file - never list or '
-            + 're-add their belongings. Do not repeat their stats back either; if the '
-            + 'message puts one of them into the scene, include them in \"characters\" and '
-            + 'report only what this message changed.\n' + absent : '',
         schema ? '\n### COLLECTIONS AND THEIR FIELDS\n' + schema : '',
         example ? '\n### A COLLECTION CHANGE LOOKS LIKE THIS\n' + example
             + '\nOmit any field the message does not state. Do not guess a value.' : '',
@@ -729,13 +788,11 @@ export function coerceToUpdate(raw) {
 function describeOpenProfileFields(state) {
     const lines = [];
 
+    // Names only. The values are in the state block above, where every other fact about a
+    // character lives - repeating them here sent an appearance twice in the same message.
     const describe = (card, label) => {
         const open = PROFILE_FIELDS.filter(f => aiMayEditProfileField(card, f.id));
-        if (!open.length) return;
-        for (const field of open) {
-            const value = String(card.profile?.[field.id] ?? '').trim();
-            lines.push(`- ${label}.${field.id}: ${value || '(blank)'}`);
-        }
+        for (const field of open) lines.push(`- ${label}.${field.id}`);
     };
 
     if (state?.player?.name) {
@@ -748,11 +805,12 @@ function describeOpenProfileFields(state) {
 
     if (!lines.length) return '';
     return '\n### PROFILE FIELDS YOU MAY UPDATE\n'
-        + 'These describe who somebody IS, not what is happening to them, and they change '
-        + 'rarely - a scar, a haircut, a lasting change of manner. Update one only when the '
-        + 'latest message plainly shows it. Omitting a field means unchanged, which is '
-        + 'almost always the right answer. Return them under "profile" on that character, '
-        + 'beside "stats".\n'
+        + 'Their current values are in the state above. These describe who somebody IS, not '
+        + 'what is happening to them, and they change rarely - a scar, a haircut, a lasting '
+        + 'change of manner. Update one only when the latest message plainly shows it. '
+        + 'Omitting a field means unchanged, which is almost always the right answer. Any '
+        + 'profile field not listed here must not be changed. Return them under "profile" '
+        + 'on that character, beside "stats".\n'
         + lines.join('\n');
 }
 
