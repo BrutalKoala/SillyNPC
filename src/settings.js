@@ -766,6 +766,9 @@ export function normalizeSettings(settings) {
         for (const field of PROFILE_FIELDS) {
             if (typeof char.profile[field.id] !== 'string') char.profile[field.id] = '';
         }
+        // Which profile fields Fill is allowed to write. Absent means none, which is the
+        // default, so nothing existing needs migrating - only the shape is repaired.
+        if (!Array.isArray(char.aiProfileFields)) char.aiProfileFields = [];
     }
 
     // The register, seeded from whoever is already carrying a category name. An existing

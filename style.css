@@ -3799,6 +3799,44 @@ span.sillynpc-review-to {
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
 
+/* The label and its lock share a line, the lock pushed to the end of it. */
+.sillynpc-profile-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sillynpc-space-sm);
+}
+
+/* Quiet while it is locked, which is the default and so the state you see most: a lock on
+   every one of four fields shouting for attention is noise. Lit only when it is open,
+   because that is the state worth noticing - something else may write here. */
+.sillynpc-profile-lock {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    line-height: 1;
+    opacity: 0.45;
+    color: inherit;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.sillynpc-profile-lock:hover,
+.sillynpc-profile-lock:focus-visible {
+    opacity: 1;
+}
+
+.sillynpc-profile-lock.is-open {
+    opacity: 1;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sillynpc-profile-lock { transition: none; }
+}
+
 .sillynpc-profile-input {
     width: 100%;
     box-sizing: border-box;

@@ -433,3 +433,26 @@ export const PROFILE_FIELDS = [
 export function blankProfile() {
     return Object.fromEntries(PROFILE_FIELDS.map(field => [field.id, '']));
 }
+
+/**
+ * Whether Fill may write one of the profile fields on this character.
+ *
+ * These four are yours by default. They are the part of a character somebody sits down and
+ * decides - how she talks, what she looks like - and having a model quietly overwrite that
+ * is worse than leaving a blank, so the answer is no unless you have said otherwise per
+ * field, per character.
+ *
+ * Stored as the list of fields that ARE open rather than the ones that are shut, so the
+ * default falls out of an absent key and no existing character needs migrating.
+ *
+ * Only these four. Stats and collections come from System Builder and are the tracker's
+ * job to maintain from the story; locking those would stop the feature working.
+ *
+ * @param {object} char
+ * @param {string} fieldId
+ * @returns {boolean}
+ */
+export function aiMayEditProfileField(char, fieldId) {
+    const open = char?.aiProfileFields;
+    return Array.isArray(open) && open.includes(fieldId);
+}

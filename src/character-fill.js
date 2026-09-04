@@ -1,7 +1,7 @@
 import { getContext } from '../../../../st-context.js';
 import { loadWorldInfo } from '../../../../world-info.js';
 import { getSettings, saveSettings } from './settings.js';
-import { debugLog, PROFILE_FIELDS } from './constants.js';
+import { debugLog, PROFILE_FIELDS, aiMayEditProfileField } from './constants.js';
 import { requestExtraction, coerceToUpdate, describeCollections } from './status-extractor.js';
 import { applyUpdate, resolveMaxValue, loadStateFromMetadata } from './status-logic.js';
 import { describeTrackedFacts, describeProfile, buildLoreExcerpt, createLoreEntry, generateLoreContent, saveLoreContent } from './api.js';
@@ -91,8 +91,16 @@ export function carriedItems(char) {
  */
 export function auditCharacter(char) {
     const missingProfile = missingProfileFields(char);
+    // "Nothing to do" has two causes now, and saying the wrong one is how somebody spends
+    // ten minutes wondering why Fill will not write an obviously empty Appearance.
+    const anyOpen = PROFILE_FIELDS.some(f => aiMayEditProfileField(char, f.id));
     const profile = missingProfile.length === 0
-        ? { done: true, summary: 'Age, appearance, personality and speech are all filled in.' }
+        ? {
+            done: true,
+            summary: anyOpen
+                ? 'Every field Fill may write is already filled in.'
+                : 'These are yours to write. Unlock a field on the character page to let Fill fill it.',
+        }
         : {
             done: false,
             missing: missingProfile.map(f => f.id),
@@ -130,10 +138,18 @@ export function auditCharacter(char) {
     };
 }
 
-/** Which profile fields this card has nothing for. A blank string counts as nothing. */
+/**
+ * Which profile fields Fill may write: empty, and unlocked.
+ *
+ * A blank string counts as nothing, so a filled field is never overwritten - and on top of
+ * that each field is yours unless you have opened it, per character. Both callers go
+ * through here, so the plan dialog offers exactly what the run will do rather than
+ * promising a stage that then fills nothing.
+ */
 export function missingProfileFields(char) {
     const profile = char?.profile || {};
-    return PROFILE_FIELDS.filter(field => !String(profile[field.id] ?? '').trim());
+    return PROFILE_FIELDS.filter(field =>
+        !String(profile[field.id] ?? '').trim() && aiMayEditProfileField(char, field.id));
 }
 
 /** What the reader is told when filling in who somebody is. */

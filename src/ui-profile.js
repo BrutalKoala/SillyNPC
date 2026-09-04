@@ -1,4 +1,4 @@
-import { PROFILE_FIELDS } from './constants.js';
+import { PROFILE_FIELDS, aiMayEditProfileField } from './constants.js';
 import { getSettings, saveSettings } from './settings.js';
 import { liveFactsFor } from './api.js';
 import { readLoreEntry } from './character-fill.js';
@@ -95,7 +95,7 @@ export function renderProfileFields(char, container) {
             <label>Profile</label>
             <small class="notes">Who they are, rather than what is happening to them.
                 Sent with the scene so the narrator knows how to play them. The tracker
-                never changes these; Fill writes them once, into blanks.</small>
+                never changes these, and Fill only writes a field you have unlocked.</small>
         </div>
     `;
 
@@ -112,6 +112,41 @@ export function renderProfileFields(char, container) {
         label.className = 'sillynpc-profile-label';
         label.textContent = field.label;
 
+        /* Who owns this field.
+
+           These four are the part of a character somebody sits down and decides, so the
+           default is that Fill leaves them alone and a lock says so. Opening one is a
+           deliberate act per field and per character, which is the point: you can hand
+           over Appearance on a walk-on and keep Speech on the character you care about.
+
+           Only the four profile fields get this. Stats and collections are System
+           Builder's, and the tracker maintaining them from the story is the feature. */
+        const lock = document.createElement('button');
+        lock.type = 'button';
+        lock.className = 'sillynpc-profile-lock';
+        const paint = () => {
+            const open = aiMayEditProfileField(char, field.id);
+            lock.classList.toggle('is-open', open);
+            lock.innerHTML = `<i class="fa-solid ${open ? 'fa-wand-magic-sparkles' : 'fa-lock'}"></i>`;
+            lock.title = open
+                ? `Fill may write ${field.label} when it is empty. Click to keep it yours.`
+                : `${field.label} is yours. Click to let Fill write it when it is empty.`;
+            lock.setAttribute('aria-pressed', String(open));
+            lock.setAttribute('aria-label', lock.title);
+        };
+        lock.addEventListener('click', () => {
+            if (!Array.isArray(char.aiProfileFields)) char.aiProfileFields = [];
+            const at = char.aiProfileFields.indexOf(field.id);
+            if (at >= 0) char.aiProfileFields.splice(at, 1);
+            else char.aiProfileFields.push(field.id);
+            saveSettings();
+            paint();
+        });
+        paint();
+
+        const labelRow = document.createElement('div');
+        labelRow.className = 'sillynpc-profile-label-row';
+        labelRow.append(label, lock);
 
         const input = field.multiline
             ? document.createElement('textarea')
@@ -131,7 +166,7 @@ export function renderProfileFields(char, container) {
         label.setAttribute('for', `sillynpc-profile-${field.id}`);
         input.id = `sillynpc-profile-${field.id}`;
 
-        row.append(label, input);
+        row.append(labelRow, input);
         grid.append(row);
     }
 
