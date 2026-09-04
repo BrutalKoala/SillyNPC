@@ -4,7 +4,10 @@ import {
     THREAD_KINDS, openThreads, coerceThread, addThread, closeThread,
     activeThreads, touchThreads, pruneThreads,
 } from './threads.js';
-import { LOG_PREFIX, debugLog, SYSTEM_PROMPT, PROFILE_FIELDS, aiMayEditProfileField, anyProfileFieldUnlocked } from './constants.js';
+import {
+    LOG_PREFIX, debugLog, SYSTEM_PROMPT, PROFILE_FIELDS,
+    aiMayEditProfileField, anyProfileFieldUnlocked, isStaticField,
+} from './constants.js';
 export { SYSTEM_PROMPT };
 import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
@@ -254,7 +257,14 @@ export function describeCollections(trackerSettings) {
         const fields = (col.fields || []).map((f) => {
             const type = f.type && f.type !== 'text' ? ` (${f.type})` : '';
             const choices = (f.options || []).length ? ` [one of ${f.options.join(', ')}]` : '';
-            return `${f.name}${type}${choices}${f.isPrimary ? ' [identifies the item]' : ''}`;
+            // Said out loud, because the state no longer shows these on anything that is
+            // already held. Without it a model could reasonably conclude they are not
+            // wanted at all and stop supplying one when adding - and the first time an item
+            // is added is the only chance the library gets to learn its description.
+            const library = !f.isPrimary && f.isMultiline && isStaticField(f)
+                ? ' [write it when adding; kept in the library afterwards]' : '';
+            return `${f.name}${type}${choices}`
+                + `${f.isPrimary ? ' [identifies the item]' : ''}${library}`;
         }).join(', ');
 
         /* The label and the note, not just the id. An id is a key - "pictures" tells the
@@ -340,6 +350,22 @@ function summariseCollections(actor, target, trackerSettings) {
                 const shown = { [primary]: String(name) };
                 for (const field of col.fields || []) {
                     if (field.name === primary) continue;
+                    /* Prose that belongs to the item library, not to this character.
+
+                       A static field is stored once against the item's name and copied onto
+                       every copy of it, and getMergedItem writes it back over whatever the
+                       reader returns - so sending it is not only repeating the same sentence
+                       on everybody holding a cellphone, it is describing something the
+                       reader has no power to change.
+
+                       Static alone would be too blunt: under the default rule everything
+                       that is not a number is static, so a spell's cost and element would go
+                       with it, and the cost is what the reader deducts when a message says
+                       somebody cast something without naming a figure. Multiline as well
+                       narrows it to prose - which the reader can neither change nor compute
+                       with. Both are the user's own checkboxes, on whatever their fields
+                       happen to be called. */
+                    if (field.isMultiline && isStaticField(field)) continue;
                     const value = item?.[field.name];
                     if (value === undefined || value === null || value === '') continue;
                     if (field.type === 'number' && Number(value) === 0) continue;
@@ -373,7 +399,11 @@ function describeCurrentState(state, trackerSettings) {
             };
         }),
     };
-    return JSON.stringify(shape, null, 2);
+    // Compact. This block is read, never copied: the reply shape comes from the schema
+    // and from the two worked examples, which keep their indentation for exactly that
+    // reason. Pretty-printing it spent a newline and an indent on every key, which on a
+    // real chat was a third of the largest section of the prompt.
+    return JSON.stringify(shape);
 }
 
 /**
@@ -570,7 +600,7 @@ function describeAbsentButNamed(state, messageText, trackerSettings) {
         });
     }
 
-    return records.length ? JSON.stringify(records, null, 2) : '';
+    return records.length ? JSON.stringify(records) : '';
 }
 
 // Exported for the tests: what reaches the model on every message is worth holding to

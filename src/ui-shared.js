@@ -1,4 +1,5 @@
 import { getSettings, saveSettings, defaultSettings } from './settings.js';
+import { isStaticField } from './constants.js';
 import { updateHUD } from './ui-hud.js';
 import {
     loadStateFromMetadata,
@@ -611,7 +612,7 @@ export function attachCollectionListeners(dom, actor, onRefresh, bulk = null) {
 
         // Master Database Updates
         const isPrimary = primaryField.name === fieldName;
-        const isStatic = fieldDef ? (fieldDef.isStatic !== false && (fieldDef.type !== 'number' || fieldDef.isPrimary)) : false;
+        const isStatic = fieldDef ? isStaticField(fieldDef) : false;
 
         if (isPrimary && oldName !== newName) {
             renameMasterItem(colId, oldName, newName, newItem);

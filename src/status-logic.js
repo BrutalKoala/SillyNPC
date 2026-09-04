@@ -14,7 +14,7 @@ import { getContext } from '../../../../st-context.js';
 import { power_user } from '../../../../power-user.js';
 import { setUserAvatar, getUserAvatar } from '../../../../personas.js';
 import { getSettings, saveSettings, defaultSettings } from './settings.js';
-import { LOG_PREFIX, debugLog, PROFILE_FIELDS } from './constants.js';
+import { LOG_PREFIX, debugLog, PROFILE_FIELDS, isStaticField } from './constants.js';
 import { extractJSON, safeJsonParse, splitValue, escapeRegExp, currentMessageIndex } from './utils.js';
 import { getIgnoredSpeakerLabels, normaliseSpeakerLabel } from './speaker-labels.js';
 import { describeThreads } from './threads.js';
@@ -3134,8 +3134,7 @@ function getMergedItem(collectionId, aiItem) {
         const mergedItem = { ...aiItem };
         colDef.fields.forEach(field => {
             // Static fields come from Master DB if available
-            const isStatic = field.isStatic !== false && (field.type !== 'number' || field.isPrimary);
-            if (isStatic && masterEntry[field.name] !== undefined) {
+            if (isStaticField(field) && masterEntry[field.name] !== undefined) {
                 mergedItem[field.name] = masterEntry[field.name];
             }
         });
@@ -3161,8 +3160,7 @@ export function updateMasterItem(collectionId, itemName, itemData) {
 
     const staticData = {};
     colDef.fields.forEach(field => {
-        const isStatic = field.isStatic !== false && (field.type !== 'number' || field.isPrimary);
-        if (isStatic && itemData[field.name] !== undefined) {
+        if (isStaticField(field) && itemData[field.name] !== undefined) {
             staticData[field.name] = itemData[field.name];
         }
     });

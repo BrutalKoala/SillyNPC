@@ -467,6 +467,29 @@ export function aiMayEditProfileField(char, fieldId) {
 }
 
 /**
+ * Whether a collection field belongs to the kind of thing rather than to one instance.
+ *
+ * A static field is stored once in the item library and copied onto every copy of that item:
+ * every Cellphone has the same description, on whoever is carrying it. getMergedItem writes
+ * these back over whatever the reader returned, so they are not merely shared - nothing the
+ * per-message reader says about one has any effect.
+ *
+ * Numbers are the exception and default the other way, because a quantity or a charge count
+ * is exactly what does differ between two people holding the same thing. A number that
+ * *identifies* the item is back to being static, since that is its name.
+ *
+ * This rule was written out identically in four places - status-logic.js twice, the item
+ * library and the shared item editor - and a fifth copy is how it would start disagreeing
+ * with itself. Here because constants.js is what everything can import.
+ *
+ * @param {{ isStatic?: boolean, type?: string, isPrimary?: boolean }} field
+ * @returns {boolean}
+ */
+export function isStaticField(field) {
+    return field?.isStatic !== false && (field?.type !== 'number' || !!field?.isPrimary);
+}
+
+/**
  * Whether anybody has opened any profile field.
  *
  * Asked once, to decide whether the extraction schema mentions profiles at all. A schema

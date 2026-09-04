@@ -1,4 +1,5 @@
 import { POPUP_TYPE, Popup } from '../../../../popup.js';
+import { isStaticField } from './constants.js';
 import { getSettings, saveSettings } from './settings.js';
 import { escapeHtml } from './utils.js';
 import { updateExtensionTheme, repositionCloseButton } from './ui-shared.js';
@@ -31,7 +32,7 @@ import {
 
 /** Fields the Master Database actually stores, mirroring updateMasterItem's rule. */
 function staticFieldsOf(colDef) {
-    return (colDef?.fields || []).filter(f => f.isStatic !== false && (f.type !== 'number' || f.isPrimary));
+    return (colDef?.fields || []).filter(isStaticField);
 }
 
 function primaryFieldName(colDef) {
