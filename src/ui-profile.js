@@ -94,7 +94,8 @@ export function renderProfileFields(char, container) {
         <div class="sillynpc-aliases-header">
             <label>Profile</label>
             <small class="notes">Who they are, rather than what is happening to them.
-                The tracker never changes these; Fill writes them once, into blanks.</small>
+                Sent with the scene so the narrator knows how to play them. The tracker
+                never changes these; Fill writes them once, into blanks.</small>
         </div>
     `;
 
@@ -110,6 +111,7 @@ export function renderProfileFields(char, container) {
         const label = document.createElement('label');
         label.className = 'sillynpc-profile-label';
         label.textContent = field.label;
+
 
         const input = field.multiline
             ? document.createElement('textarea')

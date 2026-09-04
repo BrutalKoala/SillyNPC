@@ -1272,6 +1272,10 @@ export function formatCompactStatus(state, forPrompt = false) {
     }
     
 
+    // Who these people actually are, for everyone the lines above just listed.
+    const who = describeCastProfiles(state);
+    if (who) output += `${who}\n`;
+
     // What is still outstanding, riding the block that is already being sent. Nothing
     // is retrieved to put it here - a thread was caught when it opened, which is the
     // whole difference between this and searching a summary for it later.
@@ -1279,6 +1283,48 @@ export function formatCompactStatus(state, forPrompt = false) {
     if (threads) output += `${threads}\n`;
 
     return output.trim();
+}
+
+/**
+ * Age, appearance, personality and speech, for the people in the scene.
+ *
+ * These four were collected, filled, displayed and exported, and never once shown to the
+ * narrator. Worse than merely unused: the lore writer is told not to describe them because
+ * "those are fields on the character", which assumed they arrived some other way - so
+ * filling a profile in actually removed that material from the one thing the model does
+ * read, and put it where nothing looked. A character with a filled profile gave the
+ * narrator less to work with than one without.
+ *
+ * Here rather than on the lore entry because this is how somebody is played, and it has to
+ * be in front of the model every time they speak. An entry only fires when its keyword
+ * matches, which is not the same as being on stage.
+ *
+ * Only the cast the block already lists, so this costs nothing for characters who are not
+ * in the scene, and only characters with something written.
+ */
+function describeCastProfiles(state) {
+    const said = (card) => PROFILE_FIELDS
+        .map(field => {
+            const value = String(card?.profile?.[field.id] ?? '').trim();
+            return value ? `${field.label}: ${value}` : null;
+        })
+        .filter(Boolean)
+        .join(' | ');
+
+    const lines = [];
+
+    if (state.player?.name) {
+        // The player's profile lives on their persona record, not in the scene cast.
+        const line = said(getPlayerCard());
+        if (line) lines.push(`${state.player.name} - ${line}`);
+    }
+
+    for (const actor of state.characters || []) {
+        const line = said(findCardForName(actor?.name));
+        if (line) lines.push(`${actor.name} - ${line}`);
+    }
+
+    return lines.length ? `Who they are:\n${lines.join('\n')}` : '';
 }
 
 /**
