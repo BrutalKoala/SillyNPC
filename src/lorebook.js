@@ -67,7 +67,7 @@ export function getChatLorebookName() {
 }
 
 /** Every name this character answers to: their own, plus their aliases. */
-function namesFor(char) {
+export function namesFor(char) {
     const names = [String(char.name ?? '').trim()].filter(Boolean);
     for (const alias of char.aliases || []) {
         // A regex alias is a matching rule, not a name an entry could be titled with.
@@ -75,6 +75,103 @@ function namesFor(char) {
         names.push(String(alias.pattern).trim());
     }
     return names;
+}
+
+/**
+ * Adds generated keywords to the ones an entry already has.
+ *
+ * Replacing them was quietly destructive in two ways. Keywords curated by hand in
+ * SillyTavern were thrown away on every regeneration - and when the model omitted its
+ * "Tags:" line the result was an empty list, which on an entry that is not `constant`
+ * means it is never injected again. The entry still looks right in the editor and simply
+ * stops working.
+ *
+ * Lived in api.js until syncEntryIdentity needed it. api.js imports this file now, so it
+ * had to move rather than be imported back the other way.
+ *
+ * @param {string[]|string|undefined} existing
+ * @param {string} generated Comma-separated.
+ * @returns {string[]}
+ */
+export function mergeKeywords(existing, generated) {
+    const start = Array.isArray(existing) ? existing : (existing ? [existing] : []);
+    const merged = start.map(k => String(k).trim()).filter(Boolean);
+    const seen = new Set(merged.map(k => k.toLowerCase()));
+
+    for (const raw of String(generated ?? '').split(',')) {
+        const keyword = raw.trim();
+        if (!keyword) continue;
+        const key = keyword.toLowerCase();
+        if (seen.has(key)) continue;      // "Knight" and "knight" are one keyword
+        seen.add(key);
+        merged.push(keyword);
+    }
+
+    return merged;
+}
+
+/**
+ * The line that says whose entry this is.
+ *
+ * SillyTavern sends an entry's `content` and nothing else - the title is editor furniture
+ * and the keywords only decide whether it fires - so an entry that does not name its own
+ * subject reaches the model anonymous. Several of them, joined with a bare newline and no
+ * separator, arrive as one run-on wall in which "She actively monitors the player" belongs
+ * to nobody in particular.
+ *
+ * A heading rather than a bare name, because it has to break this entry from the one
+ * before it as well as name it. Aliases in the parenthetical because nothing else in the
+ * prompt carries them: the tracker collapses a nickname to the canonical name before it
+ * records anything, so without this the model has no way to tell that the "Niki" in the
+ * prose is the "Nikolett" in the lore.
+ */
+export function identityHeader(char) {
+    const [name, ...aliases] = namesFor(char);
+    if (!name) return '';
+    return aliases.length ? `### ${name} (also: ${aliases.join(', ')})` : `### ${name}`;
+}
+
+/** Matches a heading on the FIRST line only, so a "###" inside the body survives. */
+const HEADER_LINE = /^###[^\n]*\n?/;
+
+/** The entry body with any heading this has written before removed. */
+export function stripIdentityHeader(content) {
+    return String(content ?? '').replace(HEADER_LINE, '');
+}
+
+/**
+ * Writes a character's identity onto their entry: title, keywords and heading.
+ *
+ * All three drifted independently before this. The heading was never written at all; the
+ * keywords were the name as it stood the day the entry was created, so configured aliases
+ * never became triggers; and renaming a character changed neither, which meant the entry
+ * silently stopped firing because the only name it answered to was the old one.
+ *
+ * Keywords merge rather than replace, so a rename leaves the old name behind as a trigger.
+ * That is deliberate: the chat above still says it.
+ *
+ * Does not save. The caller owns the write, so a pass over many entries costs one.
+ *
+ * @returns {boolean} Whether anything changed - false lets a bulk pass skip the write
+ *   entirely rather than rewriting a lorebook file on every chat switch.
+ */
+export function syncEntryIdentity(char, entry) {
+    const names = namesFor(char);
+    if (!entry || !names.length) return false;
+
+    const before = { comment: entry.comment, key: entry.key, content: entry.content };
+
+    entry.comment = names[0];
+    entry.key = mergeKeywords(entry.key, names.join(','));
+
+    // An empty entry is left empty: a heading with nothing under it is worse than nothing,
+    // and createLoreEntry makes the entry before there is anything to put in it.
+    const body = stripIdentityHeader(entry.content);
+    entry.content = body.trim() ? `${identityHeader(char)}\n${body}` : body;
+
+    return before.comment !== entry.comment
+        || before.content !== entry.content
+        || String(before.key) !== String(entry.key);
 }
 
 /** Does this entry belong to this character? Title first, then its own keywords. */
@@ -214,4 +311,79 @@ export async function syncAllLorebooks() {
 
     if (linked) saveSettings();
     return { linked, checked: candidates.length };
+}
+
+/**
+ * Puts a character's current name onto their entry, if they have one.
+ *
+ * Called when the name field is done being edited. Silent and harmless when the character
+ * has no entry, which is the common case.
+ *
+ * @returns {Promise<boolean>} Whether anything was written.
+ */
+export async function renameLorebookEntry(char) {
+    const world = char?.lorebook?.world;
+    if (!world || !char.name) return false;
+
+    const data = await loadWorldInfo(world);
+    const entry = data?.entries?.[char.lorebook.uid];
+    if (!entry) return false;
+
+    if (!syncEntryIdentity(char, entry)) return false;
+    await saveWorldInfo(world, data);
+    debugLog(`Lorebook entry now filed under "${char.name}"`);
+    return true;
+}
+
+/**
+ * Brings already-linked entries up to date with the characters they belong to.
+ *
+ * Entries written before syncEntryIdentity existed carry no heading, and their keywords are
+ * the name as it stood the day they were created. Regenerating each one by hand to fix that
+ * is work nobody should have to do, so it is done once on load.
+ *
+ * Writes only when something actually differs. syncEntryIdentity says so, and without that
+ * this would rewrite every lorebook file on every chat switch - which is somebody's data,
+ * possibly under version control, and a diff they never asked for.
+ *
+ * One save per world, not per entry.
+ *
+ * @returns {Promise<{ updated: number, checked: number }>}
+ */
+export async function repairEntryIdentities() {
+    const linked = getActiveCharacters().filter(c => c.name && c.lorebook?.world);
+
+    const byWorld = new Map();
+    for (const char of linked) {
+        if (!byWorld.has(char.lorebook.world)) byWorld.set(char.lorebook.world, []);
+        byWorld.get(char.lorebook.world).push(char);
+    }
+
+    let updated = 0;
+    for (const [world, chars] of byWorld) {
+        let worldData;
+        try {
+            worldData = await loadWorldInfo(world);
+        } catch (err) {
+            debugLog(`Could not open "${world}" to check its entries`, err);
+            continue;
+        }
+        if (!worldData?.entries) continue;
+
+        let dirty = false;
+        for (const char of chars) {
+            const entry = worldData.entries[char.lorebook.uid];
+            // A missing entry is left to tryAutoSyncLorebook rather than repaired into
+            // existence: the user may have deleted it on purpose.
+            if (entry && syncEntryIdentity(char, entry)) {
+                dirty = true;
+                updated += 1;
+            }
+        }
+
+        if (dirty) await saveWorldInfo(world, worldData);
+    }
+
+    if (updated) debugLog(`Named ${updated} lorebook entr(ies) after their characters`);
+    return { updated, checked: linked.length };
 }

@@ -9,6 +9,7 @@ import { LOG_PREFIX, debugLog, PORTRAIT_SHAPES, DEFAULT_PORTRAIT_SHAPE, PROFILE_
 import { triggerReprocess } from './reprocess.js';
 import { getSettings, saveSettings, defaultSettings, resolveImagePrompt } from './settings.js';
 import { recordUsage } from './usage.js';
+import { syncEntryIdentity, mergeKeywords } from './lorebook.js';
 import { escapeRegExp, describeConnection, resolveImageFolder } from './utils.js';
 import { loadStateFromMetadata } from './status-logic.js';
 
@@ -38,9 +39,11 @@ export async function createLoreEntry(char, targetWorld, entryName) {
     const entry = createWorldInfoEntry(targetWorld, worldData);
     if (!entry) throw new Error('SillyTavern could not allocate a new entry.');
 
-    entry.comment = entryName;
-    entry.key = [entryName];
     entry.content = '';
+    // Title, keywords and - once there is a body to head - the heading that names whose
+    // entry this is. entryName rather than char.name: a caller may be filing this under a
+    // title of its own.
+    syncEntryIdentity({ ...char, name: entryName }, entry);
 
     await saveWorldInfo(targetWorld, worldData);
 
@@ -476,35 +479,6 @@ export async function generateLoreContent(char, world, uid) {
     return { tags, content, followedFormat, excerpt };
 }
 
-/**
- * Adds generated keywords to the ones an entry already has.
- *
- * Replacing them was quietly destructive in two ways. Keywords curated by hand in
- * SillyTavern were thrown away on every regeneration - and when the model omitted its
- * "Tags:" line the result was an empty list, which on an entry that is not `constant`
- * means it is never injected again. The entry still looks right in the editor and simply
- * stops working.
- *
- * @param {string[]|string|undefined} existing
- * @param {string} generated Comma-separated.
- * @returns {string[]}
- */
-export function mergeKeywords(existing, generated) {
-    const start = Array.isArray(existing) ? existing : (existing ? [existing] : []);
-    const merged = start.map(k => String(k).trim()).filter(Boolean);
-    const seen = new Set(merged.map(k => k.toLowerCase()));
-
-    for (const raw of String(generated ?? '').split(',')) {
-        const keyword = raw.trim();
-        if (!keyword) continue;
-        const key = keyword.toLowerCase();
-        if (seen.has(key)) continue;      // "Knight" and "knight" are one keyword
-        seen.add(key);
-        merged.push(keyword);
-    }
-
-    return merged;
-}
 
 /**
  * Saves tags and content to a lorebook entry.
@@ -529,8 +503,11 @@ export async function saveLoreContent(char, world, uid, tags, content) {
 
     if (!entry) throw new Error(`Entry UID ${uid} not found in Lorebook`);
 
-    entry.key = mergeKeywords(entry.key, tags);
     entry.content = content.trim();
+    // The writer returns Abilities/History/Ties and never a name, so the heading is put
+    // on here rather than asked for. Before the tags merge, which must not be lost.
+    syncEntryIdentity(char, entry);
+    entry.key = mergeKeywords(entry.key, tags);
     
     await saveWorldInfo(world, worldData);
     char.lorebook = { world, uid: Number(uid) };

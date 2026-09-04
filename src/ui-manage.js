@@ -20,7 +20,7 @@ import {
     UNCATEGORISED
 } from './characters.js';
 import { reprocessAllMessages, triggerReprocess, chatRenderSignature } from './chat.js';
-import { syncAllLorebooks } from './lorebook.js';
+import { syncAllLorebooks, renameLorebookEntry } from './lorebook.js';
 import { escapeHtml } from './utils.js';
 import { buildPortraitBlock } from './ui-portrait.js';
 import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section.js';
@@ -1031,6 +1031,21 @@ function renderEditor() {
         char.name = e.target.value;
         title.textContent = char.name || '(unnamed)';
         saveSettings();
+    });
+    /* The lorebook follows the name, but only once you have finished typing it.
+
+       Renaming used to change the settings and nothing else, so the entry kept the title
+       and the keywords it was created with - and since keywords are what SillyTavern
+       matches on to decide whether an entry fires at all, renaming a character quietly
+       switched their lore off. It still answered only to the name they used to have.
+
+       On 'change' rather than 'input': the handler above runs on every keystroke, and
+       rewriting a lorebook file per character typed is not something to do to somebody's
+       data. The old name survives as a keyword either way - mergeKeywords adds - which is
+       right, because the chat above still says it. */
+    nameInput.addEventListener('change', () => {
+        renameLorebookEntry(char).catch(err =>
+            console.error(LOG_PREFIX, 'Could not rename the lorebook entry', err));
     });
     nameField.appendChild(nameInput);
     
