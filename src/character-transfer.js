@@ -1,6 +1,6 @@
 import { getSettings, saveSettings, normalizeSettings } from './settings.js';
 import { createCharacter } from './characters.js';
-import { toDataUrl, adoptImageForCharacter, createLoreEntry, saveLoreContent } from './api.js';
+import { adoptImageForCharacter, createLoreEntry, saveLoreContent } from './api.js';
 import { tryAutoSyncLorebook, getChatLorebookName } from './lorebook.js';
 import { loadWorldInfo } from '../../../../world-info.js';
 import { blankProfile, PROFILE_FIELDS, debugLog } from './constants.js';
@@ -15,11 +15,17 @@ import { blankProfile, PROFILE_FIELDS, debugLog } from './constants.js';
  * The difference that shapes the format is that the file has to survive leaving this
  * machine. Two things a character record holds are meaningless anywhere else:
  *
- *   - portraits are stored as paths into /user/images, so a path names a file the
- *     recipient does not have. They are inlined as data URIs here and written back to
- *     disk on the way in.
  *   - the lorebook link is { world, uid } - an index into a book the recipient has no
  *     copy of. The entry's own words travel instead.
+ *   - portraits are paths into /user/images, naming files the recipient does not have.
+ *     They used to be inlined as data URIs and written back to disk on the way in, which
+ *     worked and was unusable: a character's list is every picture ever generated for
+ *     them, so twenty-eight characters carrying sixty-nine files made a hundred-megabyte
+ *     JSON file before base64 added its third. The file is words now, and the picture is
+ *     the recipient's to supply.
+ *
+ * A file written by an older version still carries its portraits, and still gets them
+ * back. Nothing in the reader assumes they are absent.
  */
 
 export const TRANSFER_FORMAT = 'sillynpc-characters';
@@ -48,26 +54,12 @@ async function readLoreEntry(char) {
 }
 
 /**
- * One character, as something that can be sent.
- *
- * A portrait whose file has gone is dropped rather than exported as a hole: the count
- * comes back so the caller can say how many, instead of the recipient finding out.
+ * One character, as something that can be sent: everything about them except their face.
  *
  * @param {object} char
- * @returns {Promise<{ record: object, lostImages: number }>}
+ * @returns {Promise<object>} The record.
  */
 export async function serialiseCharacter(char) {
-    const images = [];
-    let lostImages = 0;
-    let portrait = -1;
-
-    for (const path of Array.isArray(char.images) ? char.images : []) {
-        const dataUri = await toDataUrl(path);
-        if (!dataUri) { lostImages++; continue; }
-        if (path === char.imageUrl) portrait = images.length;
-        images.push(dataUri);
-    }
-
     const profile = {};
     for (const field of PROFILE_FIELDS) {
         const value = String(char.profile?.[field.id] ?? '').trim();
@@ -75,22 +67,26 @@ export async function serialiseCharacter(char) {
     }
 
     return {
-        lostImages,
-        record: {
-            name: String(char.name || ''),
-            color: String(char.color || ''),
-            category: String(char.category || ''),
-            imageFit: String(char.imageFit || ''),
-            aliases: Array.isArray(char.aliases) ? structuredClone(char.aliases) : [],
-            profile,
-            statusOverrides: char.statusOverrides && typeof char.statusOverrides === 'object'
-                ? structuredClone(char.statusOverrides)
-                : {},
-            images,
-            // Which of them is in use, by position - the paths do not survive the trip.
-            portrait: portrait >= 0 ? portrait : (images.length ? 0 : -1),
-            lore: await readLoreEntry(char),
-        },
+        name: String(char.name || ''),
+        color: String(char.color || ''),
+        category: String(char.category || ''),
+        imageFit: String(char.imageFit || ''),
+        aliases: Array.isArray(char.aliases) ? structuredClone(char.aliases) : [],
+        profile,
+        statusOverrides: char.statusOverrides && typeof char.statusOverrides === 'object'
+            ? structuredClone(char.statusOverrides)
+            : {},
+        // No portraits. They used to be inlined as data URIs, which was the right instinct -
+        // a stored portrait is a path into /user/images and names a file the recipient does
+        // not have - and the wrong size by two orders of magnitude. A character's images list
+        // is every picture ever generated for them, not the one in use, so a collection of
+        // twenty-eight characters carrying sixty-nine files came to a hundred megabytes, and
+        // base64 adds a third on top of that. A JSON file nobody can open or send is not a
+        // transfer format.
+        //
+        // So the file is words, and the picture is the recipient's to supply. Anything
+        // exported before this still imports with its portraits: see restoreImages.
+        lore: await readLoreEntry(char),
     };
 }
 
@@ -98,26 +94,17 @@ export async function serialiseCharacter(char) {
  * The file, for one character or a selection of them.
  *
  * @param {object[]} chars
- * @returns {Promise<{ payload: object, lostImages: number }>}
+ * @returns {Promise<object>} The payload.
  */
 export async function exportCharacters(chars) {
     const records = [];
-    let lostImages = 0;
-
-    for (const char of chars) {
-        const { record, lostImages: lost } = await serialiseCharacter(char);
-        records.push(record);
-        lostImages += lost;
-    }
+    for (const char of chars) records.push(await serialiseCharacter(char));
 
     return {
-        lostImages,
-        payload: {
-            format: TRANSFER_FORMAT,
-            version: TRANSFER_VERSION,
-            exported: new Date().toISOString(),
-            characters: records,
-        },
+        format: TRANSFER_FORMAT,
+        version: TRANSFER_VERSION,
+        exported: new Date().toISOString(),
+        characters: records,
     };
 }
 

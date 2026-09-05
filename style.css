@@ -1339,6 +1339,31 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     z-index: 2;
 }
 
+/* The selection tick, lifted out of the card's flex column.
+ *
+ * It was a plain flex item appended after the portrait, and the portrait is height: 100% of
+ * a card with a fixed aspect ratio - so it took the whole column and pushed the tick past
+ * the bottom edge, where overflow: hidden removed it. Characters with a picture could not be
+ * selected at all; ones without could, because the fallback initial is flex: 1 and shrinks
+ * to share the space. Select-all was the only way to include anybody with a portrait.
+ *
+ * Absolute, like the delete button beside it, which is why that one always worked. Scoped to
+ * the card: the same class is an ordinary list checkbox in System Builder and the stat
+ * editors, where it must stay in the flow.
+ */
+.sillynpc-card > .sillynpc-bulk-check {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    margin: 0;
+    /* A portrait can be any colour under it, so the tick carries its own backing rather
+       than trusting the picture to be dark. */
+    border-radius: 4px;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.55);
+}
+
 .sillynpc-card-delete {
     position: absolute;
     top: 5px;

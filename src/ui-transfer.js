@@ -36,19 +36,12 @@ export async function exportCharacterFile(chars) {
     if (!list.length) return;
 
     try {
-        const { payload, lostImages } = await exportCharacters(list);
+        const payload = await exportCharacters(list);
         const fileName = list.length === 1
             ? `sillynpc-${safeFileName(list[0].name)}.json`
             : `sillynpc-${list.length}-characters.json`;
         offerDownload(payload, fileName);
 
-        // Said here rather than left for the recipient to discover: a portrait whose file
-        // has gone is dropped from the export, and only the sender can do anything about it.
-        if (lostImages) {
-            toastr.warning(
-                `${lostImages} portrait${lostImages === 1 ? '' : 's'} could not be read, and `
-                + 'have been left out of the file.', 'SillyNPC');
-        }
         toastr.success(
             list.length === 1 ? `Exported ${list[0].name || 'the character'}.` : `Exported ${list.length} characters.`,
             'SillyNPC');
