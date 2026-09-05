@@ -46,7 +46,6 @@ import { INJECTION_POSITION } from '../../../../PromptManager.js';
  */
 
 const IN_CHAT = extension_prompt_types.IN_CHAT;
-const IN_PROMPT = extension_prompt_types.IN_PROMPT;
 
 /** What SillyTavern would have called this key, had its own listing worked. */
 function identifierFor(key) {
@@ -203,18 +202,16 @@ export function placeWritingPrompt(key, text, { inList = false, depth = 0, name 
     const at = Number(depth);
     const start = Number.isFinite(at) ? at : 0;
 
-    // An earlier build put the block here, which turned out to inject it straight after the
-    // main prompt rather than list it. Cleared unconditionally, so no session that ran that
-    // version keeps a copy up there.
-    setExtensionPrompt(key, '', IN_PROMPT, 0, false);
-
     const wantsList = inList === true;
     // Only an explicit switch-off deletes the entry. Moving to a backend that has no prompt
     // list must not throw the user's placement away on the way past.
     if (!wantsList) removeListEntry(key);
 
     if (wantsList && promptListAvailable() && writeListEntry(key, body, name, start)) {
-        // The list holds it now. Injecting as well would send it twice.
+        // The list holds it now, so nothing may be injected under this key as well: the
+        // two are separate paths into the prompt and the model would be told twice. An
+        // empty write is how that is said, since extension_prompts is keyed by name and
+        // there is no entry to remove, only one to overwrite.
         setExtensionPrompt(key, '', IN_CHAT, 0, false);
         return;
     }
