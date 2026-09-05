@@ -40,6 +40,7 @@ export function applyDialogueFormatPrompt() {
     placeWritingPrompt(DIALOGUE_FORMAT_KEY, off ? '' : dialogueFormatText(), {
         inList: settings.dialogueFormatInPromptList === true,
         depth: Number(settings.dialogueFormatDepth ?? 0),
+        name: 'SillyNPC - Dialogue Format',
     });
 
     if (off) return;

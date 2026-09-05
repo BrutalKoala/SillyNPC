@@ -1,6 +1,8 @@
 import { getSettings, saveSettings } from './settings.js';
 import { pickAndProcessImages, resolveImageFolder, describeSaveDestination } from './utils.js';
 import { promptListAvailable } from './prompt-slot.js';
+import { applyDialogueFormatPrompt } from './dialogue-format.js';
+import { applyNarratorRulesPrompt } from './narrator-rules.js';
 import { buildSettingSelect, buildSettingToggle, buildSettingTextArea, buildSettingSlider, buildSettingNumber, updateAllExtensionThemes, applyPortraitFraming, applySpeechPadding } from './ui-shared.js';
 import { buildPromptEditor, buildPromptBudget } from './ui-prompts.js';
 import { renderBanList } from './ui-banlist.js';
@@ -204,12 +206,19 @@ export function renderWritingRulesView(view, onReprocessMessages) {
             view.append(buildSettingToggle({
                 key: 'dialogueFormatInPromptList',
                 label: "Manage In SillyTavern's Prompt List",
-                help: "Puts the dialogue format into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged into place, given a depth, or switched off beside everything else. SillyTavern lists an extension prompt only from that position, which is why this is a choice rather than the default. It starts among the system prompts, further from the reply than it sits now - set it to In-Chat at depth 0 in that list to put it back where it is today, and it stays reorderable. Chat Completion only: there is no such list on Text Completion.",
-                onChange: rerender,
+                help: "Puts the dialogue format into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged among the system prompts, given another depth, or switched off beside everything else. It goes in as In-Chat at depth 0, which is where it already sits, so switching this on moves nothing until you move it. The entry is kept in your chat completion preset: it is exported with that preset, and loading a different one drops it until SillyNPC puts it back. The text stays here - the list owns only where it goes and whether it is sent. Chat Completion only: there is no such list on Text Completion.",
+                onChange: () => {
+                    // At once rather than at the next message: the list entry is
+                    // what makes the block appear there at all, and a setting whose
+                    // effect waits for a send reads as a setting that did nothing.
+                    applyDialogueFormatPrompt();
+                    rerender();
+                },
             }));
         }
-        // Hidden rather than disabled when the list owns the block: SillyTavern reads its
-        // own position and depth over ours, so this would be a control that changes nothing.
+        // Hidden rather than disabled when the list owns the block. There is no extension
+        // injection left to give a depth to then - the entry in the list is the injection,
+        // and its own depth field is the one that means anything.
         if (!getSettings().dialogueFormatInPromptList) view.append(buildSettingNumber({
             key: 'dialogueFormatDepth',
             advanced: true,
@@ -257,8 +266,14 @@ export function renderWritingRulesView(view, onReprocessMessages) {
             view.append(buildSettingToggle({
                 key: 'narratorRulesInPromptList',
                 label: "Manage In SillyTavern's Prompt List",
-                help: "Puts the narrator rules into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged into place, given a depth, or switched off beside everything else. SillyTavern lists an extension prompt only from that position, which is why this is a choice rather than the default. It starts among the system prompts, further from the reply than it sits now - set it to In-Chat at depth 0 in that list to put it back where it is today, and it stays reorderable. Chat Completion only: there is no such list on Text Completion.",
-                onChange: rerender,
+                help: "Puts the narrator rules into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged among the system prompts, given another depth, or switched off beside everything else. It goes in as In-Chat at depth 0, which is where it already sits, so switching this on moves nothing until you move it. The entry is kept in your chat completion preset: it is exported with that preset, and loading a different one drops it until SillyNPC puts it back. The text stays here - the list owns only where it goes and whether it is sent. Chat Completion only: there is no such list on Text Completion.",
+                onChange: () => {
+                    // At once rather than at the next message: the list entry is
+                    // what makes the block appear there at all, and a setting whose
+                    // effect waits for a send reads as a setting that did nothing.
+                    applyNarratorRulesPrompt();
+                    rerender();
+                },
             }));
         }
         if (!getSettings().narratorRulesInPromptList) view.append(buildSettingNumber({

@@ -37,7 +37,8 @@ export function applyNarratorRulesPrompt() {
     const inList = settings.narratorRulesInPromptList === true;
     const depth = Number(settings.narratorRulesDepth ?? 0);
 
-    placeWritingPrompt(NARRATOR_RULES_KEY, off ? '' : text, { inList, depth });
+    placeWritingPrompt(NARRATOR_RULES_KEY, off ? '' : text,
+        { inList, depth, name: 'SillyNPC - Narrator Rules' });
 
     if (off || !text) return;
     debugLog(inList

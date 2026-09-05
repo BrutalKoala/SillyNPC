@@ -356,6 +356,19 @@ jQuery(async () => {
         setReprocessCallback(reprocessAllMessages);
         await addSettingsPanel();
         wireAvatarClicks();
+        /* A preset carries its own prompt list, so loading one throws away the entries
+           the two writing prompts are placed by - not the settings that ask for them.
+           Written again here, which puts them back at the foot of the new list.
+           Nothing happens for a block that is not managed there. */
+        eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+            try {
+                applyDialogueFormatPrompt();
+                applyNarratorRulesPrompt();
+            } catch (err) {
+                debugLog('Could not put the writing prompts back after the preset change', err);
+            }
+        });
+
         // Logged beside SillyNPC's own request lines, so "what does the chat use" and
         // "what does the extension use" can be compared at a glance instead of by reading
         // secrets.json. Dry runs are skipped: SillyTavern fires several per message while
