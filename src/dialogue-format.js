@@ -1,4 +1,4 @@
-import { setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../script.js';
+import { placeWritingPrompt } from './prompt-slot.js';
 import { getSettings } from './settings.js';
 import { DIALOGUE_FORMAT_PROMPT, debugLog } from './constants.js';
 
@@ -29,25 +29,21 @@ export function dialogueFormatText() {
  * user's persona.
  *
  * Depth 0 puts it after the newest message, the last thing the model reads before
- * answering, because a layout rule is weakest when it is furthest away.
+ * answering, because a layout rule is weakest when it is furthest away. Handing the block to
+ * SillyTavern's prompt list gives that decision away in exchange for being able to make it
+ * anywhere else; see placeWritingPrompt.
  */
 export function applyDialogueFormatPrompt() {
     const settings = getSettings();
     const off = !settings.enabled || !settings.dialogueFormatEnabled;
 
-    if (off) {
-        setExtensionPrompt(DIALOGUE_FORMAT_KEY, '', extension_prompt_types.IN_CHAT, 0, false);
-        return;
-    }
+    placeWritingPrompt(DIALOGUE_FORMAT_KEY, off ? '' : dialogueFormatText(), {
+        inList: settings.dialogueFormatInPromptList === true,
+        depth: Number(settings.dialogueFormatDepth ?? 0),
+    });
 
-    const depth = Number(settings.dialogueFormatDepth ?? 0);
-    setExtensionPrompt(
-        DIALOGUE_FORMAT_KEY,
-        dialogueFormatText(),
-        extension_prompt_types.IN_CHAT,
-        Number.isFinite(depth) ? depth : 0,
-        false,
-        extension_prompt_roles.SYSTEM,
-    );
-    debugLog(`Dialogue format sent at depth ${depth}`);
+    if (off) return;
+    debugLog(settings.dialogueFormatInPromptList === true
+        ? "Dialogue format handed to SillyTavern's prompt list"
+        : `Dialogue format sent at depth ${Number(settings.dialogueFormatDepth ?? 0)}`);
 }

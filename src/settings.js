@@ -44,6 +44,15 @@ export const defaultSettings = {
     /** 0 puts it after the newest message - the last thing read before answering. */
     dialogueFormatDepth: 0,
     /**
+     * Whether this block appears in SillyTavern's own prompt list, to be ordered there.
+     *
+     * Off by default, and the default is not neutrality for its own sake: IN_CHAT at depth 0
+     * puts the block after the newest message, and handing it to the list moves it up among
+     * the system prompts until somebody sets In-Chat there. Changing where an existing user's
+     * formatting rule sits, without being asked, is not a fix.
+     */
+    dialogueFormatInPromptList: false,
+    /**
      * How the narrator should behave, injected late so a long chat cannot bury it.
      *
      * Off, and empty, by default. Unlike the dialogue format there is no built-in text to
@@ -53,6 +62,8 @@ export const defaultSettings = {
     narratorRulesEnabled: false,
     narratorRulesPrompt: '',
     narratorRulesDepth: 0,
+    /** As above. The rules exist because a card's instructions sit too far from the reply. */
+    narratorRulesInPromptList: false,
     /**
      * Phrases the model leans on, stopped at the sampler where the backend allows it.
      *

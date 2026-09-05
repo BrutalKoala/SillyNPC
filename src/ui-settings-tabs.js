@@ -1,5 +1,6 @@
 import { getSettings, saveSettings } from './settings.js';
 import { pickAndProcessImages, resolveImageFolder, describeSaveDestination } from './utils.js';
+import { promptListAvailable } from './prompt-slot.js';
 import { buildSettingSelect, buildSettingToggle, buildSettingTextArea, buildSettingSlider, buildSettingNumber, updateAllExtensionThemes, applyPortraitFraming, applySpeechPadding } from './ui-shared.js';
 import { buildPromptEditor, buildPromptBudget } from './ui-prompts.js';
 import { renderBanList } from './ui-banlist.js';
@@ -199,7 +200,17 @@ export function renderWritingRulesView(view, onReprocessMessages) {
     }));
     if (getSettings().dialogueFormatEnabled) {
         view.append(buildPromptEditor(promptById('dialogueFormat')));
-        view.append(buildSettingNumber({
+        if (promptListAvailable()) {
+            view.append(buildSettingToggle({
+                key: 'dialogueFormatInPromptList',
+                label: "Manage In SillyTavern's Prompt List",
+                help: "Puts the dialogue format into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged into place, given a depth, or switched off beside everything else. SillyTavern lists an extension prompt only from that position, which is why this is a choice rather than the default. It starts among the system prompts, further from the reply than it sits now - set it to In-Chat at depth 0 in that list to put it back where it is today, and it stays reorderable. Chat Completion only: there is no such list on Text Completion.",
+                onChange: rerender,
+            }));
+        }
+        // Hidden rather than disabled when the list owns the block: SillyTavern reads its
+        // own position and depth over ours, so this would be a control that changes nothing.
+        if (!getSettings().dialogueFormatInPromptList) view.append(buildSettingNumber({
             key: 'dialogueFormatDepth',
             advanced: true,
             label: 'Format Reminder Depth',
@@ -242,7 +253,15 @@ export function renderWritingRulesView(view, onReprocessMessages) {
     }));
     if (getSettings().narratorRulesEnabled) {
         view.append(buildPromptEditor(promptById('narratorRules')));
-        view.append(buildSettingNumber({
+        if (promptListAvailable()) {
+            view.append(buildSettingToggle({
+                key: 'narratorRulesInPromptList',
+                label: "Manage In SillyTavern's Prompt List",
+                help: "Puts the narrator rules into SillyTavern's own prompt list, under AI Response Configuration, where it can be dragged into place, given a depth, or switched off beside everything else. SillyTavern lists an extension prompt only from that position, which is why this is a choice rather than the default. It starts among the system prompts, further from the reply than it sits now - set it to In-Chat at depth 0 in that list to put it back where it is today, and it stays reorderable. Chat Completion only: there is no such list on Text Completion.",
+                onChange: rerender,
+            }));
+        }
+        if (!getSettings().narratorRulesInPromptList) view.append(buildSettingNumber({
             key: 'narratorRulesDepth',
             advanced: true,
             label: 'Narrator Rules Depth',

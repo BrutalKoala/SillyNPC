@@ -1,4 +1,4 @@
-import { setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../script.js';
+import { placeWritingPrompt } from './prompt-slot.js';
 import { getSettings } from './settings.js';
 import { debugLog } from './constants.js';
 
@@ -34,19 +34,13 @@ export function applyNarratorRulesPrompt() {
     // condition that changes nothing observable is decoration rather than a safeguard.
     const off = !settings.enabled || !settings.narratorRulesEnabled;
 
-    if (off) {
-        setExtensionPrompt(NARRATOR_RULES_KEY, '', extension_prompt_types.IN_CHAT, 0, false);
-        return;
-    }
-
+    const inList = settings.narratorRulesInPromptList === true;
     const depth = Number(settings.narratorRulesDepth ?? 0);
-    setExtensionPrompt(
-        NARRATOR_RULES_KEY,
-        text,
-        extension_prompt_types.IN_CHAT,
-        Number.isFinite(depth) ? depth : 0,
-        false,
-        extension_prompt_roles.SYSTEM,
-    );
-    if (text) debugLog(`Narrator rules sent at depth ${depth}`);
+
+    placeWritingPrompt(NARRATOR_RULES_KEY, off ? '' : text, { inList, depth });
+
+    if (off || !text) return;
+    debugLog(inList
+        ? 'Narrator rules handed to SillyTavern\'s prompt list'
+        : `Narrator rules sent at depth ${depth}`);
 }
