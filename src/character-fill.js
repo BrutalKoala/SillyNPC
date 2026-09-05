@@ -1,7 +1,7 @@
 import { getContext } from '../../../../st-context.js';
 import { loadWorldInfo } from '../../../../world-info.js';
 import { getSettings, saveSettings } from './settings.js';
-import { debugLog, PROFILE_FIELDS } from './constants.js';
+import { debugLog, PROFILE_FIELDS, hintFor } from './constants.js';
 import { requestExtraction, coerceToUpdate, describeCollections } from './status-extractor.js';
 import { applyUpdate, resolveMaxValue, loadStateFromMetadata } from './status-logic.js';
 import { describeTrackedFacts, describeProfile, buildLoreExcerpt, createLoreEntry, generateLoreContent, saveLoreContent } from './api.js';
@@ -92,7 +92,9 @@ export function carriedItems(char) {
 export function auditCharacter(char) {
     const missingProfile = missingProfileFields(char);
     const profile = missingProfile.length === 0
-        ? { done: true, summary: 'Age, appearance, personality and speech are all filled in.' }
+        // Built from the list rather than spelled out, so adding a field does not leave a
+        // sentence here naming the four there used to be.
+        ? { done: true, summary: `${PROFILE_FIELDS.map(f => f.label).join(', ')} are all filled in.` }
         : {
             done: false,
             missing: missingProfile.map(f => f.id),
@@ -212,8 +214,12 @@ function buildProfilePrompt(char, wanted, sources) {
     // by some distance, and the subject may be a passing mention.
     const persona = getPersonaData();
     if (persona?.name && persona.name !== char.name) {
+        /* The exception matters as much as the rule. Without it the warmth field, which
+           asks how this character behaves toward the reader, reads as forbidden and comes
+           back blank - two instructions cancelling each other with nothing to show for it. */
         parts.push(`${persona.name} is the reader's own character, not the subject. `
-            + `Nothing about ${persona.name} belongs on ${char.name}'s profile.`);
+            + `Nothing about ${persona.name} belongs on ${char.name}'s profile, except how `
+            + `${char.name} behaves toward them.`);
     }
 
     const known = describeProfile(char);
@@ -228,8 +234,17 @@ function buildProfilePrompt(char, wanted, sources) {
 
        The story is here at all only when they are in it. See fillSources. */
     if (sources.story) {
-        parts.push(`Recent story - the best source, describe them from what they do here:\n`
-            + sources.story);
+        /* It used to call itself the best source and say "describe them from what they do
+           here", which fought the system prompt's "a profile outlives the scene it was
+           written from" - and won, being later and more specific. A character filled in
+           after a bad night kept that night permanently, because Fill never overwrites.
+           The story is still first, which is the point: an entry is written to steer a
+           scene and is often broad where a profile wants the particular. What changed is
+           what to take from it. */
+        parts.push('Recent story, as one source among several. Take what is generally true '
+            + 'of this character from it, not what was true of them in the last few '
+            + 'minutes. Somebody frightened or angry in these messages is not permanently '
+            + `so.\n${sources.story}`);
     }
 
     if (sources.lore) {
@@ -242,7 +257,8 @@ function buildProfilePrompt(char, wanted, sources) {
 
     parts.push(
         'Fill in these fields:\n'
-        + wanted.map(field => `- ${field.id}: ${field.hint}`).join('\n'),
+        + wanted.map(field => `- ${field.id}: ${hintFor(field, getSettings().profileHints)}`)
+            .join('\n'),
     );
 
     return parts.join('\n\n');

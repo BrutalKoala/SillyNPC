@@ -1,5 +1,5 @@
 import { getSettings, defaultSettings, recommendedImagePrompt } from './settings.js';
-import { SYSTEM_PROMPT, DIALOGUE_FORMAT_PROMPT, NARRATOR_RULES_PROMPT } from './constants.js';
+import { SYSTEM_PROMPT, DIALOGUE_FORMAT_PROMPT, NARRATOR_RULES_PROMPT, PROFILE_FIELDS } from './constants.js';
 
 /**
  * Every prompt the user can edit, in one list.
@@ -140,6 +140,30 @@ export const PROMPTS = [
         recommended: () => defaultSettings.imgGenNegativePrompt,
         available: () => getSettings().imageBackend !== 'gemini',
     },
+
+    /* One per profile field, generated rather than written out.
+     *
+     * These are the shortest prompts in the extension and were the last with no text box,
+     * which is backwards: a line like "the flaw that gets them into trouble" wrote a
+     * trouble-generating flaw into nine characters, and correcting it needed a code edit.
+     *
+     * Generated, so a field added to PROFILE_FIELDS gets an entry without anybody
+     * remembering to add one here - the registry cannot fall behind the fields. And one
+     * entry per field rather than a single editable block of all of them, so an override
+     * of one hint does not freeze the set: a field added later still ships with its own
+     * wording, which a block would have made impossible.
+     */
+    ...PROFILE_FIELDS.map(field => ({
+        id: `profileHint-${field.id}`,
+        key: `profileHints.${field.id}`,
+        label: `Profile: ${field.label}`,
+        home: 'Characters',
+        help: `What Fill is told to write in a character's ${field.label} field. Sent as one `
+            + 'line among the fields being filled, so keep it to an instruction rather than '
+            + 'a description. Empty means the built-in wording.',
+        recommended: () => field.hint,
+        emptyNote: 'The built-in wording is sent.',
+    })),
 ];
 
 /**

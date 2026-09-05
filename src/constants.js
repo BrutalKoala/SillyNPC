@@ -424,16 +424,50 @@ export const PROFILE_FIELDS = [
     {
         id: 'personality',
         label: 'Personality',
-        placeholder: 'What they are like, and the flaw that gets them into trouble',
-        hint: 'Two or three traits, shown as behaviour rather than labelled, and the flaw '
-            + 'that gets them into trouble.',
+        placeholder: 'What they are like day to day, and how they treat people close to them',
+        /* This asked for "the flaw that gets them into trouble" - the definite article, not
+           optional, and the trouble specified. Nine of eleven filled-in personalities ended
+           on it, in the same shape every time: "...which leads him to...". That is not
+           characterisation, it is a standing reason per character for the narrator to make
+           something go wrong, injected on every message. A flaw is welcome when the story
+           has shown one; being required to invent one, and to finish on it, is not. */
+        hint: 'Two or three traits, shown as behaviour rather than labelled. What they are '
+            + 'like to be around on an ordinary day, and how they treat the people they are '
+            + 'close to. Mention a flaw only if the story has shown one, describe it as a '
+            + 'limitation rather than as something that causes incidents, and do not end on '
+            + 'it.',
+        multiline: true,
+    },
+    {
+        id: 'warmth',
+        label: 'Warmth & attachment',
+        placeholder: 'How they show they care - what they do, say, bring, or put up with',
+        /* Relationships have a home already: the lore entry's Ties section, which asks how
+           they stand with the player. This is the other half of it and does not move - Ties
+           is where the relationship stands and grows, this is the habit that does not
+           change. Separated on purpose, because two fields describing the same thing is the
+           drift the lore prompt warns about.
+           Behaviour rather than feeling, so it says something the narrator can act on. */
+        hint: 'How they show they like the people close to them. Concrete behaviour: what '
+            + 'they do, say, bring, make time for, or put up with. Include how they behave '
+            + "toward the reader's own character. If the material shows they are fond of "
+            + 'somebody, say so plainly. Leave blank only if it shows no affection at all.',
         multiline: true,
     },
     {
         id: 'speech',
         label: 'Speech & dialogue style',
-        placeholder: 'Cadence, accent, verbal tics, the subjects they dodge',
-        hint: 'How they talk: cadence, accent, verbal tics, and what they steer away from.',
+        placeholder: 'Cadence, accent, verbal tics, a turn of phrase that is theirs',
+        /* "What they steer away from" resolved to emotional avoidance often enough to
+           matter: eight of ten speech fields carried an avoidance clause, and where it
+           landed on feeling rather than on a subject it read as a standing instruction that
+           the character does not show warmth. Naming a subject is the useful half - a
+           character who will not discuss the war - so that half is kept and pointed at
+           subjects. Not phrased as a prohibition on writing about avoiding affection: a rule
+           that names the thing tends to summon it. */
+        hint: 'How they talk: cadence, accent, verbal tics, and a turn of phrase that is '
+            + 'theirs. How they sound when they are relaxed among people they like. If they '
+            + 'dodge something, name a subject - not an emotion.',
         multiline: true,
     },
 ];
@@ -441,6 +475,27 @@ export const PROFILE_FIELDS = [
 /** An empty profile, with every field present so nothing has to check for a missing key. */
 export function blankProfile() {
     return Object.fromEntries(PROFILE_FIELDS.map(field => [field.id, '']));
+}
+
+/**
+ * What Fill is told to write in one field: the user's wording if they have changed it.
+ *
+ * Overrides are stored per field and only where one exists, rather than as one editable
+ * block of all of them. A block would be seeded once and then be the user's copy forever, so
+ * a field added in a later version would never appear for anybody who had edited it - which
+ * is exactly the state the extraction prompt is in, and the reason it had to be worked around
+ * rather than fixed. Sparse overrides mean a new field always ships with its own hint.
+ *
+ * Takes the store rather than reading settings, so constants.js stays a leaf that imports
+ * nothing.
+ *
+ * @param {{ id: string, hint: string }} field
+ * @param {Record<string, string>} [overrides] settings.profileHints
+ * @returns {string}
+ */
+export function hintFor(field, overrides) {
+    const written = String(overrides?.[field?.id] ?? '').trim();
+    return written || String(field?.hint ?? '');
 }
 
 /**

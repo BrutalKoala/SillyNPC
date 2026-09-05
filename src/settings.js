@@ -140,6 +140,17 @@ export const defaultSettings = {
      */
     loreUseDataBank: false,
     /**
+     * Per-field wording for what Fill should write in each profile field.
+     *
+     * Sparse on purpose: only fields somebody has actually rewritten appear here, and
+     * everything else reads the shipped hint. Storing all of them would freeze the set at
+     * whatever shipped that day, so a field added later would never reach anybody who had
+     * edited one - which is the state the extraction prompt is in.
+     *
+     * @type {Record<string, string>}
+     */
+    profileHints: {},
+    /**
      * Which connection writes lore. Empty means your main API.
      *
      * Its own setting rather than the tracker's: a small model chosen for returning JSON
@@ -693,6 +704,13 @@ export function normalizeSettings(settings) {
     // rather than sitting blank until someone presses Restore.
     if (!String(settings.dialogueFormatPrompt || '').trim()) {
         settings.dialogueFormatPrompt = DIALOGUE_FORMAT_PROMPT;
+    }
+
+    // Shape only. An absent entry means "use the shipped hint", which is the default and
+    // needs no seeding - unlike the extraction prompt below, which is copied in once and
+    // then belongs to the user forever.
+    if (!settings.profileHints || typeof settings.profileHints !== 'object') {
+        settings.profileHints = {};
     }
 
     if (!String(settings.statusTracker.extractionPrompt || '').trim()) {
