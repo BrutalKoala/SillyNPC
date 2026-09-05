@@ -1,6 +1,6 @@
 import { renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { POPUP_TYPE, Popup } from '../../../../popup.js';
-import { extensionName, LOG_PREFIX } from './constants.js';
+import { extensionName, LOG_PREFIX, PROFILE_FIELDS } from './constants.js';
 import { getSettings, saveSettings, exportSettingsData, importSettingsData } from './settings.js';
 import { 
     createCharacter, 
@@ -27,6 +27,7 @@ import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section
 import { renderProfileView, renderProfileFields } from './ui-profile.js';
 import { renderThreadsView } from './ui-threads.js';
 import { fillCharacter } from './ui-fill.js';
+import { fillProfile } from './character-fill.js';
 import { renderAppearanceView, renderWritingRulesView, renderAdvancedView, renderGenerationSettingsView } from './ui-settings-tabs.js';
 import { renderPromptsView } from './ui-prompts.js';
 import { renderStatsView } from './ui-stats.js';
@@ -560,6 +561,68 @@ function renderCardGrid() {
  */
 let gridBulk = null;
 
+/**
+ * Writes one profile field again on every chosen character.
+ *
+ * The field is asked for after the count is confirmed, so the question is "which one" rather
+ * than "are you sure" - the being-sure part has already happened.
+ *
+ * One at a time rather than in parallel: each is a request, and firing sixteen at a model
+ * with a rate limit turns a slow job into a failed one. The toast reports what happened
+ * rather than claiming success, because on a run this long some of them usually have nothing
+ * to go on and it matters which.
+ */
+async function rewriteFieldOnMany(chars) {
+    if (!chars.length) return;
+
+    const pick = document.createElement('select');
+    pick.className = 'text_pole';
+    for (const field of PROFILE_FIELDS) {
+        const option = document.createElement('option');
+        option.value = field.id;
+        option.textContent = field.label;
+        pick.append(option);
+    }
+
+    const wrap = document.createElement('div');
+    const question = document.createElement('p');
+    question.textContent = `Which field should be written again on these ${chars.length}?`;
+    wrap.append(question, pick);
+
+    if (!await new Popup(wrap, POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Rewrite', cancelButton: 'Cancel',
+    }).show()) return;
+
+    const field = PROFILE_FIELDS.find(f => f.id === pick.value);
+    if (!field) return;
+
+    toastr.info(`Rewriting ${field.label} on ${chars.length}...`, 'SillyNPC');
+
+    const done = [];
+    const empty = [];
+    const failed = [];
+    for (const char of chars) {
+        try {
+            const result = await fillProfile(char, { fields: [field.id] });
+            if (!result.ok) failed.push(char.name);
+            else if (result.filled.length) done.push(char.name);
+            else empty.push(char.name);
+        } catch (err) {
+            console.error(LOG_PREFIX, 'Rewriting a field failed for', char.name, err);
+            failed.push(char.name);
+        }
+    }
+
+    renderCardGrid();
+
+    const parts = [`${field.label}: rewrote ${done.length}`];
+    if (empty.length) parts.push(`${empty.length} had nothing to go on`);
+    if (failed.length) parts.push(`${failed.length} failed`);
+    const report = parts.join(', ') + '.';
+    if (failed.length) toastr.warning(report, 'SillyNPC');
+    else toastr.success(report, 'SillyNPC');
+}
+
 function ensureGridBulk() {
     if (gridBulk) return gridBulk;
     gridBulk = buildBulkBar({
@@ -570,13 +633,29 @@ function ensureGridBulk() {
             toastr.success(`Deleted ${ids.length} character(s).`, 'SillyNPC');
         },
         onRefresh: () => renderCardGrid(),
-        extra: {
-            label: 'Export selected',
-            icon: 'fa-file-export',
-            title: 'Write the chosen characters to one file you can send to somebody else.',
-            onRun: (ids) => exportCharacterFile(
-                ids.map(id => findCharacter(id)).filter(Boolean)),
-        },
+        extra: [
+            {
+                label: 'Export selected',
+                icon: 'fa-file-export',
+                title: 'Write the chosen characters to one file you can send to somebody else.',
+                onRun: (ids) => exportCharacterFile(
+                    ids.map(id => findCharacter(id)).filter(Boolean)),
+            },
+            {
+                label: 'Rewrite a field',
+                icon: 'fa-rotate',
+                title: 'Write one profile field again, from scratch, on every character '
+                    + 'chosen. Replaces what is there.',
+                // Asked before the field is even chosen, because the count is the part worth
+                // seeing twice: rewriting one field by hand is a click, doing it to nine
+                // characters is not something to discover afterwards.
+                confirm: (ids) => `Write one profile field again on ${ids.length} `
+                    + `character${ids.length === 1 ? '' : 's'}? Whatever those fields say now `
+                    + 'is replaced, and only the last one can be put back.',
+                onRun: (ids) => rewriteFieldOnMany(
+                    ids.map(id => findCharacter(id)).filter(Boolean)),
+            },
+        ],
     });
     return gridBulk;
 }

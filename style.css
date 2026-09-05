@@ -3835,6 +3835,10 @@ span.sillynpc-review-to {
 /* Quiet while it is locked, which is the default and so the state you see most: a lock on
    every one of four fields shouting for attention is noise. Lit only when it is open,
    because that is the state worth noticing - something else may write here. */
+/* The redo button and the lock share a look: quiet until wanted. Redo is the more
+   consequential of the two - it replaces text - so it sits inboard of the lock, away from
+   the edge where a click lands by accident. */
+.sillynpc-profile-redo,
 .sillynpc-profile-lock {
     flex: 0 0 auto;
     background: none;
@@ -3848,6 +3852,8 @@ span.sillynpc-review-to {
     transition: opacity 0.15s ease, color 0.15s ease;
 }
 
+.sillynpc-profile-redo:hover,
+.sillynpc-profile-redo:focus-visible,
 .sillynpc-profile-lock:hover,
 .sillynpc-profile-lock:focus-visible {
     opacity: 1;
@@ -3858,7 +3864,10 @@ span.sillynpc-review-to {
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
 
+.sillynpc-profile-redo:disabled { cursor: default; opacity: 0.3; }
+
 @media (prefers-reduced-motion: reduce) {
+    .sillynpc-profile-redo,
     .sillynpc-profile-lock { transition: none; }
 }
 

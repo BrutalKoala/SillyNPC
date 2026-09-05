@@ -61,14 +61,20 @@ export function buildBulkBar({ noun, plural = `${noun}s`, verb = 'Delete', allId
     cancel.className = 'menu_button sillynpc-bulk-cancel';
     cancel.innerHTML = '<i class="fa-solid fa-xmark"></i> <span>Cancel</span>';
 
-    // One optional second thing a selection can be used for. A list that wants none - and
-    // five of the six do - passes nothing and gets exactly the bar it had.
-    const extraBtn = extra ? document.createElement('button') : null;
-    if (extraBtn) {
-        extraBtn.type = 'button';
-        extraBtn.className = 'menu_button sillynpc-bulk-extra';
-        extraBtn.title = extra.title || '';
-    }
+    /* Other things a selection can be used for. A list that wants none - and five of the six
+       do - passes nothing and gets exactly the bar it had.
+
+       One or several: it took a single entry until a second was needed, and every caller
+       passing one object still works. An entry may carry `confirm`, returning the question
+       to ask; exporting needs none, rewriting a field on everybody selected does. */
+    const extras = (Array.isArray(extra) ? extra : [extra]).filter(Boolean);
+    const extraBtns = extras.map((entry) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'menu_button sillynpc-bulk-extra';
+        btn.title = entry.title || '';
+        return btn;
+    });
 
     /** Shows the count on the button, so the confirm is never the first mention of it. */
     const paint = () => {
@@ -76,11 +82,11 @@ export function buildBulkBar({ noun, plural = `${noun}s`, verb = 'Delete', allId
         for (const btn of [selectAll, remove, cancel]) btn.style.display = active ? '' : 'none';
         remove.innerHTML = `<i class="fa-solid fa-trash"></i> <span>${verb} selected (${chosen.size})</span>`;
         remove.disabled = chosen.size === 0;
-        if (extraBtn) {
-            extraBtn.style.display = active ? '' : 'none';
-            extraBtn.innerHTML = `<i class="fa-solid ${extra.icon}"></i> <span>${extra.label} (${chosen.size})</span>`;
-            extraBtn.disabled = chosen.size === 0;
-        }
+        extraBtns.forEach((btn, i) => {
+            btn.style.display = active ? '' : 'none';
+            btn.innerHTML = `<i class="fa-solid ${extras[i].icon}"></i> <span>${extras[i].label} (${chosen.size})</span>`;
+            btn.disabled = chosen.size === 0;
+        });
     };
 
     const leave = () => {
@@ -127,17 +133,24 @@ export function buildBulkBar({ noun, plural = `${noun}s`, verb = 'Delete', allId
         leave();
     });
 
-    if (extraBtn) {
-        extraBtn.addEventListener('click', async () => {
+    extraBtns.forEach((btn, i) => {
+        btn.addEventListener('click', async () => {
             if (chosen.size === 0) return;
-            // Not destructive, so no confirm - and it leaves the selection standing, since
-            // exporting a group and then deleting it is one sensible thing to do next.
-            await extra.onRun([...chosen]);
+            const ids = [...chosen];
+
+            // Only when the entry says so. Exporting is not destructive and asking would be
+            // noise; rewriting a field on nine characters is, and must not be one click.
+            const question = extras[i].confirm?.(ids);
+            if (question && !await Popup.show.confirm(extras[i].label, question)) return;
+
+            // The selection is left standing either way: exporting a group and then deleting
+            // it is one sensible thing to do next.
+            await extras[i].onRun(ids);
         });
-    }
+    });
 
     // Before the delete, so the destructive button stays the last one on the bar.
-    bar.append(enter, selectAll, ...(extraBtn ? [extraBtn] : []), remove, cancel);
+    bar.append(enter, selectAll, ...extraBtns, remove, cancel);
     paint();
 
     return {

@@ -1,7 +1,7 @@
-import { PROFILE_FIELDS, aiMayEditProfileField } from './constants.js';
+import { PROFILE_FIELDS, aiMayEditProfileField, LOG_PREFIX } from './constants.js';
 import { getSettings, saveSettings } from './settings.js';
 import { liveFactsFor } from './api.js';
-import { readLoreEntry } from './character-fill.js';
+import { readLoreEntry, fillProfile } from './character-fill.js';
 import { openLightbox } from './ui-portrait.js';
 
 /**
@@ -77,7 +77,35 @@ function chipRow(label, chips) {
 }
 
 /**
- * Who this character is: the four built-in fields.
+ * Says what was written and offers the previous text back.
+ *
+ * A clickable toast rather than a dialog: the new text is usually what was wanted, and
+ * stopping to confirm every time would make regenerating tedious. The way back is there for
+ * the times it is not. Long-lived on purpose - long enough to read the new text and decide,
+ * which is the whole point of being offered it.
+ *
+ * Restores into the settings and the box together, so the panel does not go on showing text
+ * that is no longer stored.
+ */
+function offerUndo(field, char, previous) {
+    const undo = () => {
+        char.profile[field.id] = previous;
+        saveSettings();
+        const box = document.getElementById(`sillynpc-profile-${field.id}`);
+        if (box) box.value = previous;
+        toastr.info(`${field.label} put back.`, 'SillyNPC');
+    };
+
+    if (!previous.trim()) {
+        toastr.success(`${field.label} written.`, 'SillyNPC');
+        return;
+    }
+    toastr.success(`${field.label} rewritten. Click here to put the old text back.`,
+        'SillyNPC', { timeOut: 15000, extendedTimeOut: 15000, onclick: undo });
+}
+
+/**
+ * Who this character is: the built-in profile fields.
  *
  * Above the tracker overrides on purpose. These describe the person and change almost
  * never; the overrides below are numbers that move. Reading down the column goes from what
@@ -156,9 +184,51 @@ export function renderProfileFields(char, container) {
         });
         paint();
 
+        /* Write this one field again, whatever it already says.
+         *
+         * Fill on its own only ever writes a blank, and must keep doing so - pressing one
+         * button should not rewrite a personality somebody sat down and wrote. But there was
+         * no deliberate way to redo one either, so the only route was to empty the box by
+         * hand first, per field and per character. This is that route, asked for explicitly
+         * and one field at a time.
+         *
+         * The old text is offered back on the toast rather than lost. There is no undo for
+         * settings, and "regenerate" is worth nothing if the answer is worse and gone.
+         */
+        const redo = document.createElement('button');
+        redo.type = 'button';
+        redo.className = 'sillynpc-profile-redo';
+        redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+        redo.title = `Write ${field.label} again from the story, the lore entry and the `
+            + 'tracker. Replaces what is there; the old text is offered back afterwards.';
+        redo.setAttribute('aria-label', redo.title);
+        redo.addEventListener('click', async () => {
+            if (redo.disabled) return;
+            const previous = String(char.profile[field.id] ?? '');
+            redo.disabled = true;
+            redo.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            try {
+                const result = await fillProfile(char, { fields: [field.id] });
+                if (!result.ok) {
+                    toastr.error(result.reason || 'That did not work.', 'SillyNPC');
+                } else if (!result.filled.length) {
+                    toastr.info(result.reason || 'Nothing came back for that field.', 'SillyNPC');
+                } else {
+                    input.value = String(char.profile[field.id] ?? '');
+                    offerUndo(field, char, previous);
+                }
+            } catch (err) {
+                console.error(LOG_PREFIX, 'Regenerating a profile field failed', err);
+                toastr.error(String(err?.message || err), 'SillyNPC');
+            } finally {
+                redo.disabled = false;
+                redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+            }
+        });
+
         const labelRow = document.createElement('div');
         labelRow.className = 'sillynpc-profile-label-row';
-        labelRow.append(label, lock);
+        labelRow.append(label, redo, lock);
 
         const input = field.multiline
             ? document.createElement('textarea')

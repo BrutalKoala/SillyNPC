@@ -206,7 +206,11 @@ export async function fillSources(char) {
 /**
  * The ask, generated from the field list so a field cannot exist without being asked for.
  */
-function buildProfilePrompt(char, wanted, sources) {
+// Exported for the tests. The exclusion that keeps a field being rewritten out of what
+// the model is shown lives in the wiring here, not in the helpers it calls - so a test that
+// exercises those directly passes whatever this does, which is how two mutations of exactly
+// that wiring went unnoticed.
+export function buildProfilePrompt(char, wanted, sources) {
     const parts = [`Character: ${char.name}`];
 
     // Named so the story cannot be mistaken for a description of them. The reader writes
@@ -222,7 +226,9 @@ function buildProfilePrompt(char, wanted, sources) {
             + `${char.name} behaves toward them.`);
     }
 
-    const known = describeProfile(char);
+    // Everything except what is being rewritten. See describeProfile.
+    const rewriting = new Set(wanted.map(f => f.id));
+    const known = describeProfile(char, rewriting);
     if (known) parts.push(`Already known about them, do not contradict it:\n${known}`);
 
     /* The story first, and said to be the better source.
@@ -252,7 +258,7 @@ function buildProfilePrompt(char, wanted, sources) {
             + `:\n${sources.lore}`);
     }
 
-    const facts = describeTrackedFacts(char);
+    const facts = describeTrackedFacts(char, rewriting);
     if (facts) parts.push(`What the tracker records about them:\n${facts}`);
 
     parts.push(
@@ -277,8 +283,17 @@ function buildProfilePrompt(char, wanted, sources) {
  *
  * @returns {Promise<{ ok: boolean, filled: string[], reason?: string }>}
  */
-export async function fillProfile(char) {
-    const wanted = missingProfileFields(char);
+export async function fillProfile(char, { fields = null } = {}) {
+    /* Named fields are rewritten whether or not they already say something.
+     *
+     * Fill on its own has always been a fill-in-the-blanks button, and it stays one: pressing
+     * it must not silently rewrite a personality somebody sat down and wrote, which is what
+     * the plan dialog promises. But there was no deliberate path either, so redoing one field
+     * meant clearing the box by hand first, per field and per character. Asking for a field by
+     * name is that path, and every caller of it confirms first. */
+    const wanted = Array.isArray(fields) && fields.length
+        ? PROFILE_FIELDS.filter(f => fields.includes(f.id))
+        : missingProfileFields(char);
     if (wanted.length === 0) return { ok: true, filled: [] };
 
     const sources = await fillSources(char);

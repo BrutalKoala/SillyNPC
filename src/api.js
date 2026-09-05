@@ -77,9 +77,14 @@ export async function createLoreEntry(char, targetWorld, entryName) {
  * @param {object} char
  * @returns {string} Empty when nothing is filled in, so a caller can leave it out.
  */
-export function describeProfile(char) {
+export function describeProfile(char, except = null) {
     const profile = char?.profile || {};
+    // A field being rewritten is left out. Showing the model the old personality under
+    // "already known, do not contradict it" and then asking for a new one is asking it to
+    // paraphrase what is already there, which is not what regenerating means.
+    const skip = except instanceof Set ? except : new Set(except || []);
     return PROFILE_FIELDS
+        .filter(field => !skip.has(field.id))
         .map(field => {
             const value = String(profile[field.id] ?? '').trim();
             return value ? `${field.label}: ${value}` : null;
@@ -122,14 +127,16 @@ export function liveFactsFor(char) {
     };
 }
 
-export function describeTrackedFacts(char) {
+export function describeTrackedFacts(char, except = null) {
     if (!char?.name) return '';
 
     const { stats, collections } = liveFactsFor(char);
     const lines = [];
 
-    // Who they are comes before what they are carrying.
-    const profile = describeProfile(char);
+    // Who they are comes before what they are carrying. The exclusion is forwarded because
+    // this is the second place a profile reaches the fill prompt, and leaving it out of only
+    // the first would put the old value straight back in under another heading.
+    const profile = describeProfile(char, except);
     if (profile) lines.push(profile);
 
     const statLine = Object.entries(stats)
