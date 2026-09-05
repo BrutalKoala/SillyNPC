@@ -87,21 +87,48 @@ function chipRow(label, chips) {
  * Restores into the settings and the box together, so the panel does not go on showing text
  * that is no longer stored.
  */
-function offerUndo(field, char, previous) {
-    const undo = () => {
-        char.profile[field.id] = previous;
-        saveSettings();
-        const box = document.getElementById(`sillynpc-profile-${field.id}`);
-        if (box) box.value = previous;
-        toastr.info(`${field.label} put back.`, 'SillyNPC');
-    };
+/**
+ * The button that puts the previous text back, beside the one that replaced it.
+ *
+ * It was a clickable toast, which was wrong twice over: a toast is gone in fifteen seconds
+ * whether or not the new text has been read, and a message floating over the chat is a
+ * strange place to keep the only way back. Here it sits next to the field it belongs to and
+ * waits, and it is plainly a control rather than a notice that happens to be clickable.
+ *
+ * Hidden until there is something to undo, and hidden again once used. It holds the last
+ * replaced value only - a second rewrite offers the text the second one replaced, not the
+ * original - because anything more is a history, and a history wants somewhere better to
+ * live than a button.
+ */
+function buildUndoButton(field, char, input) {
+    const undo = document.createElement('button');
+    undo.type = 'button';
+    undo.className = 'sillynpc-profile-undo';
+    undo.innerHTML = '<i class="fa-solid fa-rotate-left"></i>';
+    undo.hidden = true;
 
-    if (!previous.trim()) {
-        toastr.success(`${field.label} written.`, 'SillyNPC');
-        return;
-    }
-    toastr.success(`${field.label} rewritten. Click here to put the old text back.`,
-        'SillyNPC', { timeOut: 15000, extendedTimeOut: 15000, onclick: undo });
+    let previous = null;
+
+    undo.addEventListener('click', () => {
+        if (previous === null) return;
+        char.profile[field.id] = previous;
+        input.value = previous;
+        saveSettings();
+        previous = null;
+        undo.hidden = true;
+    });
+
+    return {
+        el: undo,
+        /** Offer a way back, unless there was nothing there to lose. */
+        offer(replaced) {
+            if (!String(replaced ?? '').trim()) return;
+            previous = replaced;
+            undo.hidden = false;
+            undo.title = `Put the previous ${field.label} back.`;
+            undo.setAttribute('aria-label', undo.title);
+        },
+    };
 }
 
 /**
@@ -192,44 +219,10 @@ export function renderProfileFields(char, container) {
          * hand first, per field and per character. This is that route, asked for explicitly
          * and one field at a time.
          *
-         * The old text is offered back on the toast rather than lost. There is no undo for
-         * settings, and "regenerate" is worth nothing if the answer is worse and gone.
+         * The way back is the button beside this one, which appears once there is something
+         * to go back to. There is no undo for settings, and a regenerate is worth little if
+         * the answer is worse and gone.
          */
-        const redo = document.createElement('button');
-        redo.type = 'button';
-        redo.className = 'sillynpc-profile-redo';
-        redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
-        redo.title = `Write ${field.label} again from the story, the lore entry and the `
-            + 'tracker. Replaces what is there; the old text is offered back afterwards.';
-        redo.setAttribute('aria-label', redo.title);
-        redo.addEventListener('click', async () => {
-            if (redo.disabled) return;
-            const previous = String(char.profile[field.id] ?? '');
-            redo.disabled = true;
-            redo.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            try {
-                const result = await fillProfile(char, { fields: [field.id] });
-                if (!result.ok) {
-                    toastr.error(result.reason || 'That did not work.', 'SillyNPC');
-                } else if (!result.filled.length) {
-                    toastr.info(result.reason || 'Nothing came back for that field.', 'SillyNPC');
-                } else {
-                    input.value = String(char.profile[field.id] ?? '');
-                    offerUndo(field, char, previous);
-                }
-            } catch (err) {
-                console.error(LOG_PREFIX, 'Regenerating a profile field failed', err);
-                toastr.error(String(err?.message || err), 'SillyNPC');
-            } finally {
-                redo.disabled = false;
-                redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
-            }
-        });
-
-        const labelRow = document.createElement('div');
-        labelRow.className = 'sillynpc-profile-label-row';
-        labelRow.append(label, redo, lock);
-
         const input = field.multiline
             ? document.createElement('textarea')
             : document.createElement('input');
@@ -247,6 +240,51 @@ export function renderProfileFields(char, container) {
 
         label.setAttribute('for', `sillynpc-profile-${field.id}`);
         input.id = `sillynpc-profile-${field.id}`;
+
+        const undo = buildUndoButton(field, char, input);
+
+        const redo = document.createElement('button');
+        redo.type = 'button';
+        redo.className = 'sillynpc-profile-redo';
+        redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+        redo.title = `Write ${field.label} again from the story, the lore entry and the `
+            + 'tracker. Replaces what is there; the button beside this one puts it back.';
+        redo.setAttribute('aria-label', redo.title);
+        redo.addEventListener('click', async () => {
+            if (redo.disabled) return;
+            const previous = String(char.profile[field.id] ?? '');
+            redo.disabled = true;
+            redo.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            try {
+                const result = await fillProfile(char, { fields: [field.id] });
+                if (!result.ok) {
+                    toastr.error(result.reason || 'That did not work.', 'SillyNPC');
+                } else if (!result.filled.length) {
+                    toastr.info(result.reason || 'Nothing came back for that field.', 'SillyNPC');
+                } else {
+                    input.value = String(char.profile[field.id] ?? '');
+                    undo.offer(previous);
+                }
+            } catch (err) {
+                console.error(LOG_PREFIX, 'Regenerating a profile field failed', err);
+                toastr.error(String(err?.message || err), 'SillyNPC');
+            } finally {
+                redo.disabled = false;
+                redo.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+            }
+        });
+
+        const controls = document.createElement('div');
+        controls.className = 'sillynpc-profile-controls';
+        controls.append(undo.el, redo, lock);
+
+        const labelRow = document.createElement('div');
+        labelRow.className = 'sillynpc-profile-label-row';
+        // Two children, so space-between means what it says: the name at one end and the
+        // buttons together at the other. With three it spread them across the row and left
+        // the redo floating in the middle of nothing.
+        labelRow.append(label, controls);
+
 
         row.append(labelRow, input);
         grid.append(row);

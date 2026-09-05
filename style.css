@@ -3832,12 +3832,26 @@ span.sillynpc-review-to {
     gap: var(--sillynpc-space-sm);
 }
 
+/* The controls travel together at the end of the row.
+ *
+ * They were three separate children of the row above, and space-between does what it is
+ * named for: the label went to one edge, the lock to the other, and the redo was left
+ * hovering in the middle of the field's width with nothing to do with either. Grouped, the
+ * row has two children again and the buttons sit in a line where a row of buttons belongs. */
+.sillynpc-profile-controls {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 2px;
+}
+
 /* Quiet while it is locked, which is the default and so the state you see most: a lock on
    every one of four fields shouting for attention is noise. Lit only when it is open,
    because that is the state worth noticing - something else may write here. */
 /* The redo button and the lock share a look: quiet until wanted. Redo is the more
    consequential of the two - it replaces text - so it sits inboard of the lock, away from
    the edge where a click lands by accident. */
+.sillynpc-profile-undo,
 .sillynpc-profile-redo,
 .sillynpc-profile-lock {
     flex: 0 0 auto;
@@ -3852,6 +3866,8 @@ span.sillynpc-review-to {
     transition: opacity 0.15s ease, color 0.15s ease;
 }
 
+.sillynpc-profile-undo:hover,
+.sillynpc-profile-undo:focus-visible,
 .sillynpc-profile-redo:hover,
 .sillynpc-profile-redo:focus-visible,
 .sillynpc-profile-lock:hover,
@@ -3866,7 +3882,15 @@ span.sillynpc-review-to {
 
 .sillynpc-profile-redo:disabled { cursor: default; opacity: 0.3; }
 
+/* Lit rather than quiet: it is only there when something can be undone, and it is the one
+   control on the row whose moment passes. */
+.sillynpc-profile-undo {
+    opacity: 1;
+    color: var(--sillynpc-accent-text, var(--sillynpc-accent));
+}
+
 @media (prefers-reduced-motion: reduce) {
+    .sillynpc-profile-undo,
     .sillynpc-profile-redo,
     .sillynpc-profile-lock { transition: none; }
 }
