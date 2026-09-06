@@ -31,6 +31,20 @@ import { addThread, closeThread } from './threads.js';
 
 /** Where a message's applied changes are recorded. */
 export const APPLIED_KEY = 'sillynpc_applied';
+/**
+ * Which reply those changes describe.
+ *
+ * A message can hold several replies and shows one at a time. SillyTavern keeps the rest in
+ * swipe_info and swaps `extra` when you move between them, so the record travels with its
+ * reply - except in one place. Over-swiping past the last reply runs clearMessageData, which
+ * deletes ten named keys and not this one, and never calls syncSwipeToMes, so the message
+ * carries the outgoing reply's record into a reply that has not been written yet.
+ *
+ * Rebuilding from the base and replaying that record then counts the new reply from the old
+ * one: lose 20, swipe, lose 10, and the tracker says 70 instead of 90. Stamping the record
+ * with the reply it belongs to is what lets a reader tell it is looking at the wrong one.
+ */
+export const APPLIED_SWIPE_KEY = 'sillynpc_applied_swipe';
 /** What a message opened or settled among the threads. See recordThreadChanges. */
 export const THREADS_KEY = 'sillynpc_threads';
 
@@ -112,16 +126,49 @@ export function recordAppliedChanges(messageId, changes) {
     // A reviewed change lands after the automatic part of the same message, so append
     // rather than replace, or the earlier half is forgotten.
     message.extra[APPLIED_KEY] = Array.isArray(existing) ? existing.concat(rows) : rows;
+    // Which reply these describe. The appended half belongs to the same one, so writing it
+    // again is right rather than merely harmless.
+    message.extra[APPLIED_SWIPE_KEY] = currentSwipeOf(message);
 
     invalidateTimeline();
     saveChatSoon();
     return true;
 }
 
+/** The reply a message is showing. Messages without swipes are all reply zero. */
+function currentSwipeOf(message) {
+    return Number(message?.swipe_id ?? 0);
+}
+
 /** The rows recorded for a message, or null when it has no record at all. */
 export function getAppliedChanges(messageId) {
     const applied = messageAt(messageId)?.extra?.[APPLIED_KEY];
     return Array.isArray(applied) ? applied : null;
+}
+
+/**
+ * The rows recorded for the reply a message is showing right now.
+ *
+ * Null where getAppliedChanges would return rows belonging to a different reply - which is
+ * what a message carries for the moment between swiping past the last one and the new one
+ * being read. See APPLIED_SWIPE_KEY.
+ *
+ * A record with no stamp is returned as it stands. Those were written before rows carried
+ * one, and reading them as stale would change how every existing chat rebuilds, under
+ * people who did not ask for that; they are corrected the next time the message is read.
+ *
+ * @param {string|number} messageId
+ * @returns {Array<object>|null}
+ */
+export function appliedChangesForCurrentSwipe(messageId) {
+    const rows = getAppliedChanges(messageId);
+    if (rows === null) return null;
+
+    const message = messageAt(messageId);
+    const recorded = message?.extra?.[APPLIED_SWIPE_KEY];
+    if (typeof recorded !== 'number') return rows;
+
+    return recorded === currentSwipeOf(message) ? rows : null;
 }
 
 /**
@@ -318,7 +365,7 @@ function buildTimeline(chat, current) {
             reason: i === last ? 'latest' : reason,
         });
 
-        const rows = getAppliedChanges(i);
+        const rows = appliedChangesForCurrentSwipe(i);
         if (rows === null) {
             // Older than the record. Everything before this is an approximation, and is
             // reported as one rather than presented as fact.
@@ -481,7 +528,7 @@ export function alignSwipeBaseToNow() {
        Aligning on that guess would fold the reply's own changes into the base and stop the
        swipe undoing anything, which is a far worse bug than the one this fixes. An empty
        array is a real answer: the message changed nothing, so all of this is a correction. */
-    const rows = getAppliedChanges(record.messageId);
+    const rows = appliedChangesForCurrentSwipe(record.messageId);
     if (rows === null) return 0;
 
     // What the message changed, and therefore what the base must go on saying.
@@ -573,7 +620,7 @@ export function rebaseToSwipe(messageId) {
     // view, and writing to settings from there would rewrite every card on a scroll.
     restoreProfiles(getProfileBase(messageId));
 
-    const rows = getAppliedChanges(messageId) || [];
+    const rows = appliedChangesForCurrentSwipe(messageId) || [];
     const state = structuredClone(base);
     applyRows(state, rows);
 
