@@ -11,7 +11,6 @@ import {
     reprocessAllMessages,
     reprocessMessage,
     setReprocessCallback,
-    setSwipeBaseAligner,
     triggerReprocess,
     invalidateChatRender,
 } from './src/chat.js';
@@ -21,7 +20,7 @@ import {
     CAST_KEY, setChatCast, getAllCategories, UNCATEGORISED,
 } from './src/characters.js';
 import { tryAutoSyncLorebook, syncLorebookScope, repairEntryIdentities } from './src/lorebook.js';
-import { initStatusLogic, hasOpenChat } from './src/status-logic.js';
+import { initStatusLogic, hasOpenChat, setSwipeBaseAligner } from './src/status-logic.js';
 import { rebaseToSwipe, revertToBase, alignSwipeBaseToNow } from './src/status-snapshots.js';
 import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad, forgetExtractionsFrom } from './src/status-extractor.js';
 import { initHUD, updateHUD } from './src/ui-hud.js';
