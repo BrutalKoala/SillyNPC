@@ -1194,11 +1194,12 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // row was blocked by a standing decision, applying `parsed` would carry out the
         // very change that was blocked, so the surviving rows are rebuilt instead.
         if (pending.length === 0 && blocked === 0) {
-            applyUpdate(parsed);
+            applyUpdate(parsed, { partOfMessage: true });
         } else if (auto.length > 0) {
             // Apply the uncontroversial part now so the tracker stays current while the
             // rest waits.
-            applyUpdate(buildUpdateFromChanges(auto, currentState, trackerSettings));
+            applyUpdate(buildUpdateFromChanges(auto, currentState, trackerSettings),
+                { partOfMessage: true });
         }
 
         // Now that the message's own update has landed, the clock has moved - so what

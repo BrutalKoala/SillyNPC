@@ -690,6 +690,35 @@ export function getSwipeBase(messageId) {
     return structuredClone(stored.state);
 }
 
+/**
+ * The stored base itself, not a copy.
+ *
+ * Every other reader gets a clone from getSwipeBase, which is what stops a caller
+ * accidentally rewriting history. The aligner is the one caller whose whole job is to
+ * rewrite it, so it needs the real thing.
+ *
+ * @returns {{ messageId: string, state: object, profiles: object }|null}
+ */
+export function swipeBaseRecord() {
+    return getMetadata()?.[SWIPE_BASE_KEY] ?? null;
+}
+
+/**
+ * Keeps the swipe base in step with changes nobody's message made.
+ *
+ * Registered from index.js rather than imported, because the aligner lives in
+ * status-snapshots.js - which already imports this module, and a second edge the other way
+ * would be a cycle. The same shape as setReprocessCallback.
+ *
+ * @type {null|(() => number)}
+ */
+let alignSwipeBase = null;
+
+/** @param {null|(() => number)} fn */
+export function setSwipeBaseAligner(fn) {
+    alignSwipeBase = typeof fn === 'function' ? fn : null;
+}
+
 /** The profiles as they stood before that message, or null when none were recorded. */
 export function getProfileBase(messageId) {
     const stored = getMetadata()?.[SWIPE_BASE_KEY];
@@ -1068,7 +1097,7 @@ export function loadStateFromMetadata() {
  *   immediately re-record what it just reverted).
  */
 export function saveStateToMetadata(state, options = {}) {
-    const { recordHistory = true, label = 'Change' } = options;
+    const { recordHistory = true, label = 'Change', partOfMessage = false } = options;
     const metadata = getMetadata();
     if (!metadata) return;
 
@@ -1114,6 +1143,21 @@ export function saveStateToMetadata(state, options = {}) {
     metadata[STATE_KEY] = state;
     committedState = state;
     committedChatId = currentChatId();
+
+    /* Anything saved here that is not a message being read is a correction: the sheet, the
+       item editor, a thread pinned by hand. The swipe base has to learn about it, or
+       swiping the newest reply quietly rolls it back along with the reply.
+
+       Excluded are the writes that ARE a message - flagged by the caller - and the internal
+       rebuilds, which pass recordHistory: false and are the base being applied rather than
+       corrected. */
+    if (recordHistory && !partOfMessage) {
+        try {
+            alignSwipeBase?.();
+        } catch (err) {
+            debugLog('Could not keep the swipe base in step', err);
+        }
+    }
 
     getContext()?.saveMetadataDebounced?.();
 }
@@ -2097,7 +2141,8 @@ export function applyUpdate(update, options = {}) {
     // allowReplace is off unless the caller asks: a per-message reply is a delta, and a
     // list in it is a mistake rather than an instruction to empty anything. The history
     // scan, which reads the whole story to produce a corrected list, passes it.
-    const { dryRun = false, label = 'AI update', admitCharacters = false, allowReplace = false } = options;
+    const { dryRun = false, label = 'AI update', admitCharacters = false, allowReplace = false,
+        partOfMessage = false } = options;
     // Findings for characters with nowhere to keep them, reported rather than dropped.
     const offstageSkipped = [];
     const state = structuredClone(committedState || loadStateFromMetadata());
@@ -2360,7 +2405,7 @@ export function applyUpdate(update, options = {}) {
 
     if (dryRun) return state;
 
-    saveStateToMetadata(state, { label });
+    saveStateToMetadata(state, { label, partOfMessage });
     syncPlayerToMaster(state, { authoritative: statedPlayerCollections });
     eventSource.emit('sillynpc-status-updated', state);
     return state;

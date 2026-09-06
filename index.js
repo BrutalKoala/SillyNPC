@@ -11,6 +11,7 @@ import {
     reprocessAllMessages,
     reprocessMessage,
     setReprocessCallback,
+    setSwipeBaseAligner,
     triggerReprocess,
     invalidateChatRender,
 } from './src/chat.js';
@@ -21,7 +22,7 @@ import {
 } from './src/characters.js';
 import { tryAutoSyncLorebook, syncLorebookScope, repairEntryIdentities } from './src/lorebook.js';
 import { initStatusLogic, hasOpenChat } from './src/status-logic.js';
-import { rebaseToSwipe, revertToBase } from './src/status-snapshots.js';
+import { rebaseToSwipe, revertToBase, alignSwipeBaseToNow } from './src/status-snapshots.js';
 import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad, forgetExtractionsFrom } from './src/status-extractor.js';
 import { initHUD, updateHUD } from './src/ui-hud.js';
 import { openPlayerModal } from './src/ui-player-modal.js';
@@ -354,6 +355,10 @@ jQuery(async () => {
             console.error(LOG_PREFIX, 'initHUD failed', hudErr);
         }
         setReprocessCallback(reprocessAllMessages);
+        /* A correction made by hand has to survive a swipe. Registered rather than
+           imported: the aligner lives in status-snapshots, which already imports
+           status-logic, and an edge back the other way would be a cycle. */
+        setSwipeBaseAligner(alignSwipeBaseToNow);
         await addSettingsPanel();
         wireAvatarClicks();
         /* A preset carries its own prompt list, so loading one throws away the entries

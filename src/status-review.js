@@ -236,7 +236,7 @@ export function resolvePendingChanges(messageId, accepted, dismissed = []) {
         // These rows have been looked at and accepted, so a character named in one is
         // wanted whether or not they are on stage - a scan proposes mostly about people
         // who are not. Without this, approving an NPC's spells silently did nothing.
-        applyUpdate(update, { label: 'Reviewed change', admitCharacters: true });
+        applyUpdate(update, { label: 'Reviewed change', admitCharacters: true, partOfMessage: true });
         // Appended to whatever the automatic half of this message already recorded, so
         // the history knows the full effect of the message, however late it was decided.
         recordAppliedChanges(messageId, rows);

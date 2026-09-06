@@ -227,7 +227,8 @@ export function applyTimeRules(messageId) {
     const { rows, minutes, capped, anchor } = evaluateTimeRules(state, messageId);
 
     if (rows.length) {
-        applyUpdate(buildUpdateFromChanges(rows, state, trackerSettings), { label: 'Time' });
+        applyUpdate(buildUpdateFromChanges(rows, state, trackerSettings),
+            { label: 'Time', partOfMessage: true });
     }
 
     if (anchor) {
