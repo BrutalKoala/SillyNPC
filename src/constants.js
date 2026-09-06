@@ -256,67 +256,55 @@ export const SPEAKER_PALETTE = Object.freeze([
  */
 export const SYSTEM_PROMPT = [
     'You maintain the state of a roleplaying session.',
-    'You are given the current state as JSON and the latest story message.',
-    // Not "the same shape": the state is shown with collections as full lists, and a
-    // small model told to mirror it will echo those lists back rather than report the
-    // change - which is the whole failure this format exists to stop.
-    'Reply with a JSON object using the keys below. No prose, no markdown, no code fences.',
+    'Given the CURRENT STATE (JSON) and the LATEST MESSAGE, calculate the updated state.',
+    'Output ONLY raw JSON. Do not include markdown formatting, code fences (```), explanations, or notes.',
     '',
-    'The object has three top-level keys and no others:',
-    '  "global"     - an object of world stats',
-    '  "player"     - { "stats": {...}, "collections": {...} }',
-    '  "characters" - an array of { "name": ..., "stats": {...}, "collections": {...} }',
-    'Never use a character name as a top-level key. Characters belong in the array.',
+    '### JSON SCHEMA',
+    'Return an object with EXACTLY these three top-level keys and no others:',
+    '{',
+    '  "global": {},',
+    '  "player": {},',
+    '  "characters": []',
+    '}',
+    'Never use a character name as a top-level key. Characters belong strictly inside the "characters" array.',
     '',
-    'Keep the reply SHORT:',
-    '- Include only stats whose value CHANGED. Omit everything else.',
-    '- ALWAYS include the complete "characters" array listing everyone present in the',
-    '  scene after this message, even if none of their stats changed. Drop anyone who',
-    '  has left; add anyone who has arrived. This is how presence is tracked.',
+    '### PRESENCE & DIFF RULES',
+    '1. Keep the output minimal: Include ONLY stats or collections that CHANGED. Omit everything else.',
+    '2. Character Presence: ALWAYS include the complete "characters" array listing everyone physically present in the scene after this message, even if none of their stats changed. Drop anyone who left; add anyone who arrived.',
+    '3. Collections:',
+    '   - Report changes ONLY using "add" and/or "remove". Never restate existing entries.',
+    '   - Omitting a collection means nothing changed (the normal case).',
+    '   - Use "remove" ONLY when explicitly used up, destroyed, dropped, sold, or stolen. Not being mentioned is NOT a reason to remove. If unsure, leave it out.',
     '',
-    // No examples of what a collection is. This used to read "(inventory, spells, skills
-    // and the like)" with a worked example about rope and a torch, which is a description
-    // of somebody else's game: a setup whose collections are "pictures" and "contacts" got
-    // guidance that plainly was not about it, and the model had to decide whether the rules
-    // applied. The message itself lists the collections that exist, with their fields and
-    // whatever they are for, and a worked example in those very ids follows it. This says
-    // only what is true of all of them.
-    'Collections report CHANGES, never contents. The message lists which ones exist, what',
-    'they hold and what fields they have; there are no others.',
-    '- Report a change as "add" and "remove" on that collection, in the shape the example',
-    '  in the message shows.',
-    '- Omitting a collection means nothing in it changed. That is the normal case.',
-    '- Never restate entries the character already has. The current state already lists',
-    '  them and they are kept automatically.',
-    '- Use "remove" ONLY when the message says the entry left them: used up, destroyed,',
-    '  sold, given away, stolen, forgotten. Not being mentioned is not a reason to remove',
-    '  anything.',
-    '- If you are unsure whether something was lost, leave it out.',
-    '',
-    'Rules:',
+    '### VALUE & TEXT RULES',
     '- Report values AFTER the events of the message.',
-    '- Use exactly the stat names shown in the current state. Never invent a name, and',
-    '  never append _current or _max to one.',
-    '- Write a value that has a maximum as "current/maximum", for example "77/80".',
-    // There were rules for numbers, for collections and for presence, and none for plain
-    // text. Shown a long previous value, the model did the natural thing and continued
-    // it, so a Quest field became an objective with a running commentary stuck to it.
-    '- A text value REPLACES the old one; it is never added to. Write the value as it',
-    '  stands now, not the previous value with an update appended. If an objective is',
-    '  met, the new value is what is true now - not the old one annotated with how it',
-    '  went.',
-    '- Do not invent events. If nothing in the messages says something changed, leave it out.',
-    '- A cost announced earlier is paid only when the action actually happens. Apply it',
-    '  when the latest message shows the action RESOLVING - the spell lands, the blow',
-    '  connects, the roll is taken and its outcome described - even when that message',
-    '  states no figure itself.',
-    '- Do NOT apply an announced cost when the latest message is anything other than the',
-    '  action resolving: a question, an aside, a change of plan, hesitation, a request',
-    '  for a roll that has not been made yet, or a description of what would happen.',
-    '  An announced cost is not owed until it is spent, and the announcement stays in',
-    '  view for several messages.',
-    '- Never apply the same cost twice. The current state already includes everything the',
-    '  earlier messages did; only the latest message is new.',
+    '- Exact Naming: Use exact stat names from current state. Never invent names; never append _current or _max.',
+    '- Bounded values: Write values with a maximum as "current/maximum" (e.g., "77/80").',
+    '- Replacement: A text value REPLACES the old one; it is never appended to or annotated. Write what is true right now.',
+    '- Do not invent events: If the text does not state a change, leave it out.',
+    '',
+    '### STANDING',
+    '- Where a character has a stat for how they regard the player, or the world has one',
+    "  for the player's public standing, keep it current.",
+    '- RAISE THEM ONLY when {{user}} helps someone, wins publicly, keeps a promise, is generous, or is simply good company.',
+    '- LOWER THEM ONLY when {{user}} does something that would actually damage a real friendship, do evil deeds publicly.',
+    '',
+    '### CONDITION DECAY',
+    '- "Condition" describes RIGHT NOW, not history. It must return to a calm baseline as soon as the immediate cause has passed.',
+    '- If a character was frightened, hurt or angry in an EARLIER scene but the current message shows them acting normally, set their Condition back to a calm baseline.',
+    '- Physical injury is the exception: it persists until treated or rested.',
+    '- Emotional states do not persist across scenes.',
+    '- Never leave a character in a negative Condition by default. If the message gives you no signal, write a calm baseline.',
+    '',
+    '### TIMING & ACTION COSTS',
+    '- A cost announced earlier is paid ONLY when the ACTION RESOLVES (eg.: the roll outcome is described, character get hurt, etc.), even if the latest message does not restate the number.',
+    '- Do NOT apply an announced cost if the message is a roll request.',
+    '',
+    '### OPEN THREADS',
+    '- Drop a thread as soon as it is resolved, defused, or made irrelevant by a scene change.',
+    '- NEVER keep more than one, time-limited thread at once. Two contradictory countdowns is a bug — keep the most recent and delete the rest.',
+    '- A thread must be something a character SAID or PROMISED. Never record an inferred obligation, a prediction, or a required action. Never phrase a thread as something the {{user}} "must" do.',
+    '- Threads may be: a plan to meet up, a favor owed to {{user}}, an invitation, a threat, a vilian plan, etc. Record those with equal priority.',
 ].join('\n');
 
 /**
@@ -369,20 +357,35 @@ export function paletteColorFor(name) {
  */
 export const NARRATOR_RULES_PROMPT = [
     '### NARRATOR',
-    '- Write the scene. Do not summarise it, and do not recap what was just written.',
-    '- Never decide what the player character does, says, thinks or feels.',
-    '- Do not resolve the scene. Leave the pressure where it is.',
-    '- End on something the player can act on, not on a closing line.',
+    '[Formatting & Meta]',
+    '- Narrate in the second person ("You").',
+    '- End a turn however the scene wants to end. A hook is optional and should be rare - see the Scene Contract. "What do you do?" with nothing attached is a complete ending.',
+    '- Keep Out-Of-Character communication strictly contained within ((double brackets)).',
+    '',
+    '[Pacing & Narrative Modes]',
+    '1. DIALOGUE & SOCIAL MODE:',
+    '- Let conversations unfold natural.',
+    "- LIVING WORLD: the town exists when nobody is looking. This means schedules, weather, gossip and other people's ordinary days - not that something must happen every reply.",
+    '  A still, quiet scene is correct and requires no ambient event',
+    '2. ACTION & HAZARD MODE:',
+    '- Concise, punchy paragraphs (1-4 paragraphs).',
+    '- Respect roll outcomes.',
+    '3. TRAVEL & TRANSITION MODE:',
+    '- Summarize uneventful transitions or routine time-skips in 1-2 atmospheric paragraphs, placing {{user}} directly at the new scene.',
+    '',
+    '[MANDATORY ROLL GATE - DO NOT RESOLVE ACTIONS EARLY]',
+    'Whenever {{user}} declares an attack, spell, dodge, or risky action:',
+    '1. Immediately FREEZE the narrative at the exact moment of the attempt.',
+    '2. State the required Attribute/Skill Check + any modifier, target DC, and any cost.',
+    "3. HARD STOP: Strictly forbidden from narrating success, failure, or damage in this turn. Stop and wait for {{user}}'s roll result.",
 ].join('\n');
 
 export const DIALOGUE_FORMAT_PROMPT = [
     '### DIALOGUE FORMAT',
-    '- Start a new paragraph for each character who speaks.',
-    "- Begin it with the character's name in bold, a colon, then their words in quotes:",
-    '  **Name**: "Spoken words."',
-    '- Put actions and expressions in italics, in their own paragraph.',
-    "- Never put two characters' speech in one paragraph.",
-    '- Do not add colour or font tags. The interface colours dialogue itself.',
+    '- Spoken Dialogue: Start a new paragraph for each speaker using:',
+    '  **Character Name**: "Dialogue goes here."',
+    '- Actions & Expressions: Describe physical actions, body language, and environmental details in separate paragraphs using *italics*.',
+    "- Never mix two characters' dialogue or actions in the same paragraph.",
 ].join('\n');
 
 /**
@@ -417,8 +420,7 @@ export const PROFILE_FIELDS = [
         id: 'appearance',
         label: 'Appearance',
         placeholder: 'Build, hair, eyes, distinguishing marks, how they carry themselves',
-        hint: 'Two or three sentences somebody could picture: build, face, hair, marks, '
-            + 'bearing. Plain description, no metaphor.',
+        hint: 'Two or three sentences somebody could picture: build, face, hair, marks, bearing. Plain description, no metaphor.',
         multiline: true,
     },
     {
@@ -431,11 +433,7 @@ export const PROFILE_FIELDS = [
            characterisation, it is a standing reason per character for the narrator to make
            something go wrong, injected on every message. A flaw is welcome when the story
            has shown one; being required to invent one, and to finish on it, is not. */
-        hint: 'Two or three traits, shown as behaviour rather than labelled. What they are '
-            + 'like to be around on an ordinary day, and how they treat the people they are '
-            + 'close to. Mention a flaw only if the story has shown one, describe it as a '
-            + 'limitation rather than as something that causes incidents, and do not end on '
-            + 'it.',
+        hint: 'Two or three traits, shown as behaviour. What they are like to be around on an ordinary day, and how they treat the people they are close to. Mention a flaw only if the story has shown one, describe it as a limitation rather than as something that causes incidents, and do not end on it.',
         multiline: true,
     },
     {
@@ -448,10 +446,7 @@ export const PROFILE_FIELDS = [
            change. Separated on purpose, because two fields describing the same thing is the
            drift the lore prompt warns about.
            Behaviour rather than feeling, so it says something the narrator can act on. */
-        hint: 'How they show they like the people close to them. Concrete behaviour: what '
-            + 'they do, say, bring, make time for, or put up with. Include how they behave '
-            + "toward the reader's own character. If the material shows they are fond of "
-            + 'somebody, say so plainly. Leave blank only if it shows no affection at all.',
+        hint: 'How they show they like the people close to them. Concrete behavior: what they do, say, bring, make time for, or put up with. Include how they behave toward {{user}}. If the material shows they are fond of somebody, say so plainly. Leave blank only if it shows no affection at all.',
         multiline: true,
     },
     {
@@ -465,9 +460,7 @@ export const PROFILE_FIELDS = [
            character who will not discuss the war - so that half is kept and pointed at
            subjects. Not phrased as a prohibition on writing about avoiding affection: a rule
            that names the thing tends to summon it. */
-        hint: 'How they talk: cadence, accent, verbal tics, and a turn of phrase that is '
-            + 'theirs. How they sound when they are relaxed among people they like. If they '
-            + 'dodge something, name a subject - not an emotion.',
+        hint: 'How they talk: cadence, accent, verbal tics, and a phrase or habit that is characteristically theirs. Describe how they sound when they are relaxed and among people they like. If they hold something back, name a topic they dodge - never write that they avoid warmth, affection, sincerity or vulnerability.',
         multiline: true,
     },
 ];

@@ -203,37 +203,60 @@ export const defaultSettings = {
      * generator reads. The old version asked for six sections of detail and got a wall of
      * prose that buried the visual description in the middle of it.
      *
-     * Placeholders: [NAME], [FACTS], [LORE], [CONTEXT], [WORLD].
+     * Macros: {{name}}, {{facts}}, {{lore}}, {{context}}, {{world}}.
      */
     // What each generator has cost so far. Kept out of a System on purpose: a system is
     // a world and its rules, and rolling one back should not rewrite what you spent.
     usage: {},
-    generationPrompt: 'Write a Lorebook entry for "[NAME]".\n\n' +
-        'Established facts - treat these as true and do not contradict them:\n[FACTS]\n\n' +
-        'Setting reference:\n[WORLD]\n\n' +
-        'Existing entry:\n[LORE]\n\n' +
-        'Recent story:\n[CONTEXT]\n\n' +
-        'Cover, in this order:\n' +
-        '- Abilities: how they fight or work, in general terms - their style, what they are ' +
-        'known for. Nothing the story has not shown or stated.\n' +
-        '- History: where they came from, who they answer to, and the events that put them ' +
-        'where they are. Two or three sentences; this is the part of the entry that grows.\n' +
-        '- Ties: one sentence on how they stand with the player, and one on anyone else ' +
-        'who matters to them.\n\n' +
-        'Rules:\n' +
-        '- Revise the existing entry rather than starting over. Keep what still holds, drop what the story has overtaken.\n' +
-        '- Do NOT describe their age, their appearance, their personality or how they ' +
-        'speak. Those are fields on the character and are listed above as established ' +
-        'facts; repeating them here means two copies that drift apart, and the entry is ' +
-        'the one that goes stale.\n' +
-        '- Do NOT list their spells, items, skills or numbers. The tracker holds those and ' +
-        'sends them fresh with every message; an entry that names them goes stale and then ' +
-        'contradicts the sheet beside it. Describe the character, not their inventory.\n' +
-        '- Invent nothing. If neither the facts nor the story supports a detail, leave it out.\n' +
-        '- Third person. No preamble and no closing remark.\n\n' +
-        'Reply in exactly this format:\n' +
-        'Tags: comma separated keywords\n' +
+    generationPrompt: [
+        'Write a Lorebook entry for "{{name}}".',
+        '',
+        'Established facts - treat these as true and do not contradict them:',
+        '{{facts}}',
+        '',
+        'Setting reference:',
+        '{{world}}',
+        '',
+        'Existing entry:',
+        '{{lore}}',
+        '',
+        'Recent story:',
+        '{{context}}',
+        '',
+        'Cover these sections, in this order. Keep each one short.',
+        '',
+        '- Role: one plain sentence. Who this person is in ordinary terms. Not a title and not an epithet.',
+        '- Wants: one sentence. Something concrete they are trying to get, keep or avoid.',
+        '- Method: one or two sentences on how this person solve things.',
+        '- Limits: one or two sentences. What this person cannot do, does not know, has no authority over, or would refuse to do. Required. Do not leave it vague.',
+        '- Standing with the {{user}}: one or two sentences on how they actually treat {{user}} day to day, where they stand to it.',
+        '- Ties: one sentence on anyone else who matters to them.',
+        '- History: two or three sentences. Where they came from and what has happened to them recently.',
+        '',
+        'Rules:',
+        '- Revise the existing entry rather than starting over. Keep what still holds, drop what the story has overtaken.',
+        '- Weigh the whole history, not the most recent scene. A character who was frightened, angry or hurt in the last few messages is not permanently that way. ',
+        '- Write what is generally true of them, not what was true five minutes ago.',
+        '- Do NOT invent affiliations, factions, agendas, hidden links, secret knowledge or people they answer to.',
+        '- Do NOT describe their age, their appearance, their personality or how they speak.',
+        '- Do NOT list their spells, items, skills or numbers.',
+        '- Invent nothing. If neither the facts nor the story supports a detail, leave it out.',
+        '- An entry that is short because little has happened is correct.',
+        '- Third person. No preamble and no closing remark.',
+        '',
+        'TAGS - read this carefully, it matters more than the rest:',
+        '- Tags are not topic labels. They are lorebook ACTIVATION KEYS for SillyTavern. Any tag that is an ordinary word will load this entry into unrelated scenes.',
+        "- Use ONLY: the character's given name, surname, full name, and nicknames actually used for them in the story.",
+        '- NEVER use job titles.',
+        '- NEVER use roles or types.',
+        '- NEVER use place names.',
+        '- NEVER use adjectives or states.',
+        '- Do not wrap tags in square brackets.',
+        '',
+        'Reply in exactly this format:',
+        'Tags: comma separated keywords',
         'Content: the entry',
+    ].join('\n'),
     imgGenContextMessages: 10,
     /** Folder name under user/images/ for generated portraits. */
     imageSaveRoute: 'sillynpc',
@@ -267,23 +290,28 @@ export const defaultSettings = {
      * prose labels like "Visual Profile (from Lore):" alongside tag conventions like
      * "masterpiece" and "8k resolution" - and suited neither.
      *
-     * [CONTEXT] is the last few messages, as many as Image Context Length asks for. On
+     * {{context}} is the last few messages, as many as Image Context Length asks for. On
      * Lore Only it is empty, and an empty one takes its label with it rather than leaving
      * the model an apology to read - see fillImagePrompt.
      *
-     * Placeholders: [NAME], [LORE], [ITEMS], [CONTEXT].
+     * Macros: {{name}}, {{lore}}, {{items}}, {{context}}.
      */
     imgGenPromptByBackend: {
-        gemini: 'A portrait of [NAME].\n\n' +
-            'Appearance: [LORE]\n' +
-            'Carrying or wearing: [ITEMS]\n\n' +
-            'Recent scene: [CONTEXT]\n\n' +
-            'One character only, alone in the frame, head and upper body, facing the viewer. ' +
-            'Detailed, cinematic lighting, sharp focus, expressive face. ' +
-            'No text, no watermark, no borders or panels.',
-        sd: 'masterpiece, best quality, highly detailed, portrait of [NAME], ' +
-            '[LORE], [ITEMS], solo, upper body, looking at viewer, ' +
-            'detailed face, cinematic lighting, sharp focus, [CONTEXT]',
+        gemini: [
+            'A character portrait of {{name}}.',
+            '',
+            'Medium & Style: Modern anime art style, high-quality manhwa character illustration, clean sharp line art, cel-shaded digital anime aesthetic, natural anime colors, sharp focus, atmospheric background.',
+            '',
+            'Visual Description: {{lore}}',
+            'Attire & Physical Gear: {{items}} {{context}}',
+            '',
+            'Composition & Pose: Solo character portrait, upper body and head, centered, facing the viewer. Calm, relaxed neutral pose, idle resting state. Clear, natural atmospheric lighting.',
+            '',
+            'Negative Constraints: No magical auras, no glowing energy swirls, no magic circles, no spell effects, no floating runes, no elemental fire/wind/lightning, no particle ribbons, no text, no letters, no logos, no watermarks, no photorealism, no 3D render.',
+        ].join('\n'),
+        sd: 'masterpiece, best quality, highly detailed, portrait of {{name}}, ' +
+            '{{lore}}, {{items}}, solo, upper body, looking at viewer, ' +
+            'detailed face, cinematic lighting, sharp focus, {{context}}',
     },
     /** The template actually in use. Seeded from the backend default above. */
     imgGenPrompt: '',
@@ -298,12 +326,14 @@ export const defaultSettings = {
      * So the reference has to come with a job. Editable because the wording that stops a
      * model answering conversationally is model-specific and worth tuning.
      */
-    imgGenReferencePreamble:
-        'Generate a new portrait image now, following the description below. The attached '
-        + "image or images are a visual reference for this character's face, hair, build "
-        + 'and clothing - keep their appearance consistent with them. Do not describe the '
-        + 'image, do not ask what to '
-        + 'change, and do not reply with text: return an image.',
+    imgGenReferencePreamble: [
+        '[Reference Image Directive]',
+        'Use the attached image(s) strictly as a visual anchor for character identity. Maintain precise consistency with their facial anatomy, eye shape and color, hair color and style, skin tone, and permanent bodily features. ',
+        '',
+        'Apply the attire, pose, and lighting specified in the main description above. Do not copy any background elements, text, or visual artifacts from the reference image. ',
+        '',
+        'Generate the image now. Do not output text, descriptions, explanations, or commentary: return only the generated image.',
+    ].join('\n'),
     imgGenNegativePrompt: 'speech bubbles, text, logo, watermark, username, signature, frames, panels, comic, multiple characters, crowd, busy background, character sheet, grid, reference sheet',
     /**
      * @type {{
