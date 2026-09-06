@@ -32,7 +32,9 @@ export const PROMPTS = [
             + 'Avatars, speech blocks and character colours all read a speaker line - a '
             + 'name in bold followed by a colon - so this is what makes them work. It asks '
             + 'for no colour tags on purpose: the extension colours dialogue itself, and a '
-            + 'colour written into the reply would override the one you chose.',
+            + 'colour written into the reply would override the one you chose. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. ',
         recommended: () => DIALOGUE_FORMAT_PROMPT,
         emptyNote: 'The built-in format is sent.',
         available: () => getSettings().dialogueFormatEnabled,
@@ -47,7 +49,9 @@ export const PROMPTS = [
             + 'the scene up, summarising instead of writing it. In a character card those '
             + 'sit at the top of the prompt with the whole chat between them and the moment '
             + 'they apply; rewording one does not help, moving it does. Empty means nothing '
-            + 'is sent.',
+            + 'is sent. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. ',
         recommended: () => NARRATOR_RULES_PROMPT,
         emptyNote: 'Nothing is sent.',
         available: () => getSettings().narratorRulesEnabled,
@@ -57,9 +61,14 @@ export const PROMPTS = [
         key: 'generationPrompt',
         label: 'Lore Prompt Template',
         home: 'Generation',
-        help: 'Placeholders: [NAME], [LORE] for the existing entry, [FACTS] for what the '
-            + 'tracker already records about them, [CONTEXT] for recent chat, [WORLD] for '
-            + 'what the Data Bank search found.',
+        help: 'Macros: {{name}}, {{lore}} for the existing entry, {{facts}} for what the '
+            + 'tracker already records about them, {{context}} for recent chat, {{world}} '
+            + 'for what the Data Bank search found. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. '
+            + '{{char}} is whoever the chat is with, which need not be the character being '
+            + 'written about - {{name}} is the subject. '
+            + 'The old [NAME] spelling still works and means the same thing.',
         recommended: () => defaultSettings.generationPrompt,
         budget: {
             key: 'loreMaxTokens',
@@ -81,7 +90,11 @@ export const PROMPTS = [
             + 'what they hold, a worked example in your own field names, and any profile '
             + 'field you have unlocked - is built separately and sent whatever you write '
             + 'here. So rewriting this cannot cost the reply its vocabulary, and this text '
-            + 'should stay general: it is the one part that cannot know your system.',
+            + 'should stay general: it is the one part that cannot know your system. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. '
+            + 'There is no {{name}} here: this prompt describes a whole scene rather than '
+            + 'one character, so there is nobody for it to mean.',
         recommended: () => SYSTEM_PROMPT,
         emptyNote: 'The built-in instructions are sent.',
         available: () => getSettings().statusTracker.extractionMode === 'extract',
@@ -100,7 +113,9 @@ export const PROMPTS = [
         home: 'Tracker',
         help: 'Added to the story prompt, telling the narrator how your system works. '
             + 'Only used by the inline mode - the separate pass reads events rather '
-            + 'than being told rules.',
+            + 'than being told rules. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. ',
         recommended: () => defaultSettings.statusTracker.systemRules,
         available: () => getSettings().statusTracker.extractionMode !== 'extract',
     },
@@ -109,9 +124,13 @@ export const PROMPTS = [
         key: 'imgGenPrompt',
         label: 'Image Prompt Template',
         home: 'Generation',
-        help: 'Placeholders: [NAME], [LORE] for the entry text, [ITEMS] for what they '
-            + 'carry, [CONTEXT] for recent chat. Leave empty to use the template that '
-            + 'suits your backend - description for Gemini, tags for Stable Diffusion.',
+        help: 'Macros: {{name}}, {{lore}} for the entry text, {{items}} for what they '
+            + 'carry, {{context}} for recent chat. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. '
+            + 'The old [NAME] spelling still works. '
+            + 'Leave empty to use the template that suits your backend - description for '
+            + 'Gemini, tags for Stable Diffusion.',
         recommended: () => recommendedImagePrompt(),
         emptyNote: "Your backend's own template is sent.",
     },
@@ -160,7 +179,11 @@ export const PROMPTS = [
         home: 'Characters',
         help: `What Fill is told to write in a character's ${field.label} field. Sent as one `
             + 'line among the fields being filled, so keep it to an instruction rather than '
-            + 'a description. Empty means the built-in wording.',
+            + 'a description. Empty means the built-in wording. '
+            + '{{name}} is the character being filled in - not {{char}}, which is whoever '
+            + 'the chat is with. '
+            + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
+            + '{{time}}, {{roll:d20}} and the rest. ',
         recommended: () => field.hint,
         emptyNote: 'The built-in wording is sent.',
     })),

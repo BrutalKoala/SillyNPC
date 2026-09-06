@@ -1,5 +1,6 @@
 import { getContext } from '../../../../st-context.js';
 import { loadWorldInfo } from '../../../../world-info.js';
+import { fillTemplate } from './macros.js';
 import { getSettings, saveSettings } from './settings.js';
 import { debugLog, PROFILE_FIELDS, hintFor } from './constants.js';
 import { requestExtraction, coerceToUpdate, describeCollections } from './status-extractor.js';
@@ -263,7 +264,8 @@ export function buildProfilePrompt(char, wanted, sources) {
 
     parts.push(
         'Fill in these fields:\n'
-        + wanted.map(field => `- ${field.id}: ${hintFor(field, getSettings().profileHints)}`)
+        + wanted.map(field => `- ${field.id}: `
+            + fillTemplate(hintFor(field, getSettings().profileHints), { name: char.name }))
             .join('\n'),
     );
 

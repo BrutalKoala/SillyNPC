@@ -10,6 +10,7 @@ import {
     eventSource, 
     event_types, 
 } from '../../../../events.js';
+import { applyMacros } from './macros.js';
 import { getContext } from '../../../../st-context.js';
 import { power_user } from '../../../../power-user.js';
 import { setUserAvatar, getUserAvatar } from '../../../../personas.js';
@@ -1477,7 +1478,7 @@ function getStatusInstructions() {
     
     prompt += `IMPORTANT: The "Current Status" block is the authoritative source of truth. If an item or character is missing from it, they are no longer present or in possession. Do NOT re-add items that were recently removed unless the current message explicitly describes acquiring them again.\n\n`;
 
-    prompt += `Rules: ${settings.systemRules}\n`;
+    prompt += `Rules: ${applyMacros(settings.systemRules)}\n`;
     
     prompt += `\n### CRITICAL RULE: AVOID DOUBLE-DEDUCTING COSTS\n`;
     prompt += `- Action/Spell Costs: If a resource, attribute, or item cost (e.g., Energy, Mana, HP, Ammo, Gold) was already deducted or used in a previous turn (for example, in the message prompting a roll or when the action was initiated), do NOT deduct it again when describing the outcome or resolution of that action.\n`;

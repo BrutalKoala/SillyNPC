@@ -7,6 +7,7 @@ import { LOG_PREFIX, debugLog, PORTRAIT_SHAPES, DEFAULT_PORTRAIT_SHAPE, PROFILE_
 // The chat draws this picture beside every line the character speaks, so changing it
 // leaves the chat stale. reprocess.js holds the handle so any module can ask.
 import { triggerReprocess } from './reprocess.js';
+import { applyMacros, fillTemplate, modernisePlaceholders } from './macros.js';
 import { getSettings, saveSettings, defaultSettings, resolveImagePrompt } from './settings.js';
 import { recordUsage } from './usage.js';
 import { syncEntryIdentity, mergeKeywords } from './lorebook.js';
@@ -181,23 +182,29 @@ export function describeTrackedFacts(char, except = null) {
  * @returns {string}
  */
 export function fillImagePrompt(template, { name, lore, items, context } = {}) {
-    let out = String(template ?? '');
+    const own = { name, lore, items, context };
+    // Both spellings become one before anything is cut or substituted, so the cleanup
+    // below has a single thing to look for.
+    let out = modernisePlaceholders(template, Object.keys(own));
 
-    if (context) {
-        out = out.replace(/\[CONTEXT\]/g, context);
-    } else {
+    if (!context) {
         // The caption introducing it, if there is one on the same line.
-        out = out.replace(/(?:[^\n:]*:[^\S\n]*)?\[CONTEXT\]/g, '');
+        out = out.replace(/(?:[^\n:]*:[^\S\n]*)?{{context}}/gi, '');
         // The comma holding it in a list, but only the one that now leads nowhere.
         out = out.replace(/,[^\S\n]*(?=,|[^\S\n]*(?:\r?\n|$))/g, '');
         // And the hole a whole removed line leaves in between two others.
         out = out.replace(/\n{3,}/g, '\n\n');
     }
 
-    return out
-        .replace(/\[NAME\]/g, name || 'a character')
-        .replace(/\[LORE\]/g, lore || 'a mysterious person')
-        .replace(/\[ITEMS\]/g, items || 'nothing notable');
+    /* The stand-ins are the point of this function: a portrait prompt with a hole in it
+       produces a picture of nothing in particular, so an absent value is replaced by
+       something a model can draw rather than left blank. */
+    return applyMacros(out, {
+        name: name || 'a character',
+        lore: lore || 'a mysterious person',
+        items: items || 'nothing notable',
+        context: context || '',
+    });
 }
 
 /**
@@ -435,18 +442,23 @@ export async function generateLoreContent(char, world, uid) {
     const worldFacts = await retrieveWorldFacts(char.name);
 
     const template = getSettings().generationPrompt;
-    let prompt = template
-        .replace(/\[NAME\]/g, char.name)
-        .replace(/\[LORE\]/g, existingLore || '(No existing lore yet)')
-        .replace(/\[CONTEXT\]/g, recentMessages)
-        .replace(/\[WORLD\]/g, worldFacts || '(Nothing found in the Data Bank)')
-        .replace(/\[FACTS\]/g, describeTrackedFacts(char) || '(Nothing tracked yet)');
+    /* Both spellings and SillyTavern's own macros, in one pass. The old [TAG] form is
+       rewritten to {{tag}} first rather than replaced separately, so a [NAME] that happens
+       to be inside the chat excerpt or the existing entry is left alone - it is somebody's
+       text, not a placeholder. */
+    let prompt = fillTemplate(template, {
+        name: char.name,
+        lore: existingLore || '(No existing lore yet)',
+        context: recentMessages,
+        world: worldFacts || '(Nothing found in the Data Bank)',
+        facts: describeTrackedFacts(char) || '(Nothing tracked yet)',
+    });
 
     // A template written before [WORLD] existed - which is most of them, including any you
     // have customised - would otherwise leave the setting doing nothing at all. Appended
     // only when there is something to append, so an unindexed character gains no empty
     // heading.
-    if (worldFacts && !template.includes('[WORLD]')) {
+    if (worldFacts && !/\[WORLD\]|{{\s*world\s*}}/i.test(template)) {
         prompt += `\n\nFrom the setting's reference material:\n${worldFacts}`;
     }
 
@@ -826,7 +838,7 @@ async function generateViaGeminiImage(fullPrompt, referenceImages = []) {
     // A reference with no instruction is what made the model reply "what would you like to
     // modify?" instead of drawing: the template is a description, and a description next
     // to a picture reads as conversation rather than a brief.
-    const preamble = settings.imgGenReferencePreamble ?? defaultSettings.imgGenReferencePreamble;
+    const preamble = applyMacros(settings.imgGenReferencePreamble ?? defaultSettings.imgGenReferencePreamble);
     const withReference = preamble ? `${preamble}
 
 ${fullPrompt}` : fullPrompt;
@@ -982,7 +994,7 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
 
     debugLog('Attempting image generation via slash command /sd');
     
-    const negativePrompt = getSettings().imgGenNegativePrompt || defaultSettings.imgGenNegativePrompt;
+    const negativePrompt = applyMacros(getSettings().imgGenNegativePrompt || defaultSettings.imgGenNegativePrompt);
     
     // Some SD extensions handle multi-line prompts via safe replacement.
     // For the slash command, we must ensure it stays on one line to avoid being split by the parser.

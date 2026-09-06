@@ -1,4 +1,5 @@
 import { getContext } from '../../../../st-context.js';
+import { applyMacros } from './macros.js';
 import { getSettings, saveSettings } from './settings.js';
 import {
     THREAD_KINDS, openThreads, coerceThread, addThread, closeThread,
@@ -753,7 +754,8 @@ function describeAnswer(answer) {
 export async function requestExtraction(userPrompt, schema, trackerSettings, systemPrompt = null, { usageKind = 'extraction' } = {}) {
     // A caller may pass its own - the history scan does. Otherwise the user's, if they
     // have written one, and the built-in if not.
-    systemPrompt = systemPrompt || trackerSettings.extractionPrompt?.trim() || SYSTEM_PROMPT;
+    systemPrompt = applyMacros(
+        systemPrompt || trackerSettings.extractionPrompt?.trim() || SYSTEM_PROMPT);
     const context = getContext();
     const profileId = trackerSettings.extractionProfileId;
     const maxTokens = Number(trackerSettings.extractionMaxTokens) || 1200;
