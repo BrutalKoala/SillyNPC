@@ -121,6 +121,12 @@ export function openPlayerModal() {
 
     const popup = new Popup(container, POPUP_TYPE.DISPLAY, '', {
         large: true,
+        // Before the dialog goes, while its fields are still in the document and still
+        // hold what was typed into them. Every way out of this sheet arrives here.
+        onClosing: (p) => {
+            commitOpenEdits(p.dlg);
+            return true;
+        },
         onOpen: (p) => {
             const dlg = p.dlg;
             if (dlg) {
@@ -297,6 +303,56 @@ function collectionSection(col, state, settings, options) {
     `;
 }
 
+/**
+ * Writes one hand-edited stat back, if it was edited.
+ *
+ * Blur alone was losing them. A field still holding the caret when the sheet closes is
+ * removed from the document rather than blurred, and a removed element fires no blur
+ * event - so the last thing anybody typed before pressing the X was the one thing that
+ * never got saved. See commitOpenEdits, which is the other half.
+ *
+ * Idempotent by way of the flag: the popup can run its closing handler more than once,
+ * and a second write would put a second line in the timeline saying nothing new.
+ *
+ * @param {HTMLElement} el A .sillynpc-inline-edit span.
+ * @param {Function} [write] The writer, injectable because this cannot be watched
+ *   otherwise: applyUpdate reaches chat metadata, which does not exist outside a chat, so
+ *   a test of the real one can only observe it refusing.
+ * @returns {boolean} Whether anything was written.
+ */
+export function commitInlineEdit(el, write = applyUpdate) {
+    if (!el?.dataset?.dirty) return false;
+    delete el.dataset.dirty;
+    write(
+        { player: { stats: { [el.dataset.stat]: String(el.innerText ?? '').trim() } } },
+        // Not the default label. These are somebody's own corrections, and a timeline
+        // that files them under "AI update" is a timeline that cannot be read.
+        { label: 'Edited on the sheet' },
+    );
+    return true;
+}
+
+/**
+ * Saves whatever is still being typed, before the sheet goes away.
+ *
+ * Called from the popup's onClosing, which runs on every route out - the X, the settings
+ * button, Escape, the backdrop - and while the fields are still in the document. Nothing
+ * is written for a field that was not touched.
+ *
+ * @param {HTMLElement} dlg The popup's dialog.
+ * @param {Function} [write] See commitInlineEdit.
+ * @returns {number} How many were saved.
+ */
+export function commitOpenEdits(dlg, write = applyUpdate) {
+    if (!dlg) return 0;
+    let saved = 0;
+    for (const el of dlg.querySelectorAll('.sillynpc-inline-edit')) {
+        if (commitInlineEdit(el, write)) saved += 1;
+    }
+    if (saved) debugLog(`Saved ${saved} stat${saved === 1 ? '' : 's'} still being edited`);
+    return saved;
+}
+
 function renderTabContent(tabId, state) {
     const settings = getSettings().statusTracker;
 
@@ -366,11 +422,11 @@ function attachModalListeners(dom) {
     // Inline Editing
     dom.querySelectorAll('.sillynpc-inline-edit').forEach(el => {
         if (el.dataset.listenerAttached) return;
-        el.addEventListener('blur', () => {
-            const statName = el.dataset.stat;
-            const newValue = el.innerText.trim();
-            applyUpdate({ player: { stats: { [statName]: newValue } } });
-        });
+        // Marked on the way in rather than compared on the way out, so closing the sheet
+        // writes back the fields somebody actually typed in and leaves the rest alone -
+        // otherwise every close would rewrite all ten and put ten lines in the timeline.
+        el.addEventListener('input', () => { el.dataset.dirty = 'true'; });
+        el.addEventListener('blur', () => commitInlineEdit(el));
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
         });
