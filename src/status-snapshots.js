@@ -522,14 +522,21 @@ export function alignSwipeBaseToNow() {
     const now = loadStateFromMetadata();
     if (!now) return 0;
 
-    /* No record at all is not the same as a record of nothing. An absent one means the
-       message predates this feature, or Record What Each Message Changed is off - and then
-       there is no way to tell what the reply did from what somebody corrected afterwards.
-       Aligning on that guess would fold the reply's own changes into the base and stop the
-       swipe undoing anything, which is a far worse bug than the one this fixes. An empty
-       array is a real answer: the message changed nothing, so all of this is a correction. */
-    const rows = appliedChangesForCurrentSwipe(record.messageId);
-    if (rows === null) return 0;
+    /* Two questions, and they have different answers.
+
+       Is there a record at all? An absent one means the message predates this feature, or
+       Record What Each Message Changed is off - and then there is no way to tell what the
+       reply did from what somebody corrected afterwards. Aligning on that guess would fold
+       the reply's own changes into the base and stop the swipe undoing anything, which is a
+       far worse bug than the one this fixes. So: refuse.
+
+       And what did the reply now on screen do? A record stamped for another reply answers
+       that with nothing, and nothing is the truth: a rebase has just put the state back to
+       the base, so the on-screen reply has changed nothing yet and everything that differs
+       from the base is a correction. An empty array is the same answer for a message that
+       genuinely changed nothing. */
+    if (getAppliedChanges(record.messageId) === null) return 0;
+    const rows = appliedChangesForCurrentSwipe(record.messageId) ?? [];
 
     // What the message changed, and therefore what the base must go on saying.
     const touched = new Set();
