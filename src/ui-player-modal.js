@@ -311,8 +311,13 @@ function collectionSection(col, state, settings, options) {
  * event - so the last thing anybody typed before pressing the X was the one thing that
  * never got saved. See commitOpenEdits, which is the other half.
  *
- * Idempotent by way of the flag: the popup can run its closing handler more than once,
- * and a second write would put a second line in the timeline saying nothing new.
+ * What counts as edited is what the field says now against what was rendered into it,
+ * carried on the element as data-initial. Not an `input` listener setting a flag, which
+ * was the first attempt: that makes saving depend on an event firing, and the failure
+ * when it does not is silent and total - nothing is ever marked, so nothing is ever
+ * saved. Comparing the text needs nothing to have happened. It also gets the case of a
+ * value typed and then typed back right, which is not a change and should not be a line
+ * in the timeline.
  *
  * @param {HTMLElement} el A .sillynpc-inline-edit span.
  * @param {Function} [write] The writer, injectable because this cannot be watched
@@ -321,10 +326,18 @@ function collectionSection(col, state, settings, options) {
  * @returns {boolean} Whether anything was written.
  */
 export function commitInlineEdit(el, write = applyUpdate) {
-    if (!el?.dataset?.dirty) return false;
-    delete el.dataset.dirty;
+    if (!el?.dataset?.stat) return false;
+
+    const value = String(el.innerText ?? '').trim();
+    if (value === String(el.dataset.initial ?? '')) return false;
+
+    // Before the write, so this is idempotent: the closing handler can run twice - popup.js
+    // says so about the cancel event - and the second run must not add a second line to the
+    // timeline saying what the first one said.
+    el.dataset.initial = value;
+
     write(
-        { player: { stats: { [el.dataset.stat]: String(el.innerText ?? '').trim() } } },
+        { player: { stats: { [el.dataset.stat]: value } } },
         // Not the default label. These are somebody's own corrections, and a timeline
         // that files them under "AI update" is a timeline that cannot be read.
         { label: 'Edited on the sheet' },
@@ -368,7 +381,10 @@ function renderTabContent(tabId, state) {
                     const control = isChoiceField(statDef)
                         ? `<select class="attr-value sillynpc-inline-choice text_pole" data-stat="${escapeHtml(actualKey)}">`
                             + `${choiceOptionsHtml(statDef.options, value)}</select>`
-                        : `<span class="attr-value sillynpc-inline-edit" data-stat="${escapeHtml(actualKey)}" contenteditable="true">${escapeHtml(value)}</span>`;
+                        : `<span class="attr-value sillynpc-inline-edit" data-stat="${escapeHtml(actualKey)}"`
+                            // What was rendered, so the committer can tell an edit from a field
+                            // nobody touched without an event having to fire.
+                            + ` data-initial="${escapeHtml(value)}" contenteditable="true">${escapeHtml(value)}</span>`;
                     return `
                         <div class="sillynpc-attribute-item">
                             <span class="attr-name">${escapeHtml(statDef.name)}</span>
@@ -422,10 +438,6 @@ function attachModalListeners(dom) {
     // Inline Editing
     dom.querySelectorAll('.sillynpc-inline-edit').forEach(el => {
         if (el.dataset.listenerAttached) return;
-        // Marked on the way in rather than compared on the way out, so closing the sheet
-        // writes back the fields somebody actually typed in and leaves the rest alone -
-        // otherwise every close would rewrite all ten and put ten lines in the timeline.
-        el.addEventListener('input', () => { el.dataset.dirty = 'true'; });
         el.addEventListener('blur', () => commitInlineEdit(el));
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
@@ -546,6 +558,14 @@ async function openRestorePicker() {
 }
 
 function refreshModal(dom) {
+    /* Anything still being typed is written before the markup holding it is thrown away.
+       This is the other way an edit was being lost, and the one that needs no closing at
+       all: switching tabs replaces the sheet's contents, and a field replaced mid-edit
+       takes its value with it. Relying on blur to have fired first is relying on the
+       browser having moved focus before the click handler ran, which is a race this does
+       not need to enter. */
+    commitOpenEdits(dom);
+
     const state = loadStateFromMetadata();
 
     // We do NOT want to refresh the entire modal if an input is focused, as it breaks typing!
