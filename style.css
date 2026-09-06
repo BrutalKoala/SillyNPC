@@ -2434,9 +2434,16 @@ span.sillynpc-review-to {
     padding-right: 5px;
 }
 
+/* Flex rather than a grid of equal columns.
+
+   auto-fill columns gave every stat the same width, which is the wrong shape for this
+   content: "Tier" holds one digit and "Perception / Investigation" is twenty-six
+   characters, so a width that suits one wraps the other onto a second line while the
+   first sits half empty. Here each cell starts from its own content and grows to share
+   what is left of the row. */
 .sillynpc-attributes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 15px;
 }
 
@@ -2448,6 +2455,24 @@ span.sillynpc-review-to {
     display: flex;
     flex-direction: column;
     gap: 5px;
+    /* Grow into the rest of the row, shrink when the window does, and start from the
+       cell's own content rather than a number chosen for all of them. */
+    flex: 1 1 auto;
+    /* What keeps a label on one line, without a width anyone had to choose: a flex item
+       with an auto basis starts at its max-content size, and max-content is the label as if
+       it never wrapped. So a cell asks for exactly the room its own name needs.
+
+       min-content would have been the obvious rule and is a trap - it beats max-width, so a
+       label longer than the sheet pushes the sheet sideways instead of giving in. Zero lets
+       the cell shrink in that one case and the name wrap, which is the right way to lose. */
+    min-width: 0;
+    /* A cell may ask for more than the row has - a stat holding a sentence asks for the
+       whole sentence - and this is where that request stops. It takes a row to itself and
+       wraps inside it, which is what makes a long value readable instead of a tall column
+       six lines deep. */
+    max-width: 100%;
+    text-align: center;
+    align-items: center;
 }
 
 .sillynpc-attribute-item .attr-name {
