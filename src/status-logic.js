@@ -1148,9 +1148,12 @@ export function saveStateToMetadata(state, options = {}) {
        item editor, a thread pinned by hand. The swipe base has to learn about it, or
        swiping the newest reply quietly rolls it back along with the reply.
 
-       Excluded are the writes that ARE a message - flagged by the caller - and the internal
-       rebuilds, which pass recordHistory: false and are the base being applied rather than
-       corrected. */
+       partOfMessage is the load-bearing half - a reply folded into its own base is a swipe
+       that undoes nothing. recordHistory is not: the internal rebuilds pass false, and
+       aligning after one of them would change nothing, because a rebuild leaves the state
+       equal to the base everywhere the message did not touch. It is here as a guard on
+       re-entrancy - the aligner reads through loadStateFromMetadata, which can itself save
+       while repairing - and no test distinguishes it, which is why this says so. */
     if (recordHistory && !partOfMessage) {
         try {
             alignSwipeBase?.();
