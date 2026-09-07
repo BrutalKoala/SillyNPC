@@ -124,7 +124,7 @@ function buildCollectionsEditor(onRefresh) {
                     <option value="player" ${col.target === 'player' ? 'selected' : ''}>Player Only</option>
                     <option value="npc" ${col.target === 'npc' ? 'selected' : ''}>NPCs Only</option>
                 </select>
-                <label style="display:flex; align-items:center; gap:4px; margin-right:10px; cursor:pointer;" title="Visible in Tracker">
+                <label class="sillynpc-check-group" style="margin-right:10px; cursor:pointer;" title="Visible in Tracker">
                     <input type="checkbox" class="col-visible" ${col.visible !== false ? 'checked' : ''}>
                     <small>Visible</small>
                 </label>
@@ -133,16 +133,16 @@ function buildCollectionsEditor(onRefresh) {
                 <button type="button" class="menu_button delete-btn" title="Delete Collection" style="color: var(--sillynpc-danger);"><i class="fa-solid fa-trash"></i></button>
             </div>
             <div style="display:flex; gap:8px; width:100%; align-items:center; margin-bottom:12px;">
-                <small style="opacity:0.6; flex-shrink:0;" title="What this collection holds, in your own words. Sent to the reader with every extraction.">What it holds:</small>
+                <small class="sillynpc-field-note" title="What this collection holds, in your own words. Sent to the reader with every extraction.">What it holds:</small>
                 <input type="text" class="text_pole col-hint" value="${escapeHtml(col.hint || '')}"
                        placeholder="e.g. photographs the player has taken"
                        title="A name is a key, not an explanation - a collection called &quot;pictures&quot; tells the reader as little as a column heading. One short line saying what belongs in it is sent with every extraction. Leave blank if the name speaks for itself."
                        style="flex:1; min-width:120px;">
             </div>
             <div class="fields-container" style="margin-left: 20px; border-left: 2px solid var(--sillynpc-border, rgba(128,128,128,0.25)); padding-left: 15px;">
-                <div style="margin-bottom: 8px;"><small style="opacity:0.6; font-weight:bold; text-transform:uppercase; letter-spacing:0.05em;">Fields Configuration</small></div>
+                <div style="margin-bottom: 8px;"><small class="sillynpc-fields-heading">Fields Configuration</small></div>
                 <div class="fields-list"></div>
-                <button type="button" class="menu_button add-field-btn" style="font-size:0.85em; padding:2px 10px; margin-top:8px;">
+                <button type="button" class="menu_button add-field-btn" style="font-size:var(--sillynpc-text-md); padding:2px 10px; margin-top:8px;">
                     <i class="fa-solid fa-plus"></i> Add Field
                 </button>
             </div>
@@ -159,31 +159,31 @@ function buildCollectionsEditor(onRefresh) {
                 fRow.style.alignItems = 'center';
                 
                 fRow.innerHTML = `
-                    <input type="text" class="text_pole f-name" value="${escapeHtml(field.name)}" placeholder="Key" style="width:60px; font-size:0.8em;" title="Field key (e.g. weight)">
-                    <input type="text" class="text_pole f-label" value="${escapeHtml(field.label || '')}" placeholder="Label" style="flex:1; font-size:0.8em;" title="Display Label">
-                    <input type="text" class="text_pole f-default" value="${escapeHtml(field.defaultValue !== undefined ? field.defaultValue : '')}" placeholder="Def" style="width:40px; font-size:0.8em;" title="Default Value">
-                    <select class="text_pole f-type" style="width:65px; font-size:0.8em;">
+                    <input type="text" class="text_pole f-name" value="${escapeHtml(field.name)}" placeholder="Key" style="width:60px; font-size:var(--sillynpc-text-sm);" title="Field key (e.g. weight)">
+                    <input type="text" class="text_pole f-label" value="${escapeHtml(field.label || '')}" placeholder="Label" style="flex:1; font-size:var(--sillynpc-text-sm);" title="Display Label">
+                    <input type="text" class="text_pole f-default" value="${escapeHtml(field.defaultValue !== undefined ? field.defaultValue : '')}" placeholder="Def" style="width:40px; font-size:var(--sillynpc-text-sm);" title="Default Value">
+                    <select class="text_pole f-type" style="width:65px; font-size:var(--sillynpc-text-sm);">
                         <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
                         <option value="number" ${field.type === 'number' ? 'selected' : ''}>Num</option>
                         <option value="boolean" ${field.type === 'boolean' ? 'selected' : ''}>Bool</option>
                     </select>
-                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="Primary identifier">
+                    <label class="sillynpc-check-group-tight" title="Primary identifier">
                         <input type="checkbox" class="f-primary" ${field.isPrimary ? 'checked' : ''}>
-                        <small style="font-size:0.7em; opacity:0.7;">Pri</small>
+                        <small class="sillynpc-row-hint">Pri</small>
                     </label>
-                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="Edit this field in a box you can write several lines in, rather than on one line. Text fields only.&#10;&#10;Ticked together with Static, it also means the field is prose belonging to the item rather than to whoever is holding it - see Static.">
+                    <label class="sillynpc-check-group-tight" title="Edit this field in a box you can write several lines in, rather than on one line. Text fields only.&#10;&#10;Ticked together with Static, it also means the field is prose belonging to the item rather than to whoever is holding it - see Static.">
                         <input type="checkbox" class="f-multiline" ${field.isMultiline ? 'checked' : ''} ${field.type !== 'text' ? 'disabled' : ''}>
-                        <small style="font-size:0.7em; opacity:0.7;">Multi</small>
+                        <small class="sillynpc-row-hint">Multi</small>
                     </label>
-                    <label style="display:flex; align-items:center; gap:2px; cursor:pointer;" title="This field belongs to the item, not to whoever is holding it. Its value is kept once in the Item Library and copied onto every copy of that item, so the same thing reads the same way on everybody - and the per-message reader cannot change it, because the Library's value is written back over whatever it returns.&#10;&#10;Ticked together with Multi, the field is also left out of what the reader is sent each message: it is the same sentence on every holder and nothing the reader says about it survives. Untick this to have the reader keep the field up to date per holder instead.&#10;&#10;Numbers ignore this and are always per-holder, unless the number is the Primary field.">
+                    <label class="sillynpc-check-group-tight" title="This field belongs to the item, not to whoever is holding it. Its value is kept once in the Item Library and copied onto every copy of that item, so the same thing reads the same way on everybody - and the per-message reader cannot change it, because the Library's value is written back over whatever it returns.&#10;&#10;Ticked together with Multi, the field is also left out of what the reader is sent each message: it is the same sentence on every holder and nothing the reader says about it survives. Untick this to have the reader keep the field up to date per holder instead.&#10;&#10;Numbers ignore this and are always per-holder, unless the number is the Primary field.">
                         <input type="checkbox" class="f-static" ${field.isStatic !== false ? 'checked' : ''}>
-                        <small style="font-size:0.7em; opacity:0.7;">Static</small>
+                        <small class="sillynpc-row-hint">Static</small>
                     </label>
                     <input type="text" class="text_pole f-options"
                            value="${escapeHtml((field.options || []).join(', '))}"
                            placeholder="Any value"
                            title="Allowed values, separated by commas. Leave empty to allow anything."
-                           style="width:110px; font-size:0.8em;">
+                           style="width:110px; font-size:var(--sillynpc-text-sm);">
                     <button type="button" class="menu_button move-field-up" title="Move up" style="padding:0 5px;" ${fIdx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
                     <button type="button" class="menu_button move-field-down" title="Move down" style="padding:0 5px;" ${fIdx === col.fields.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
                     <button type="button" class="menu_button delete-field-btn" style="padding:0 5px; color:var(--red);"><i class="fa-solid fa-xmark"></i></button>
@@ -426,47 +426,47 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                 <button type="button" class="menu_button delete-btn"><i class="fa-solid fa-trash"></i></button>
             </div>
             <div style="display:flex; gap:8px; width:100%; align-items:center;">
-                <small style="opacity:0.6; flex-shrink:0;">Format:</small>
-                <input type="text" class="text_pole stat-format" value="${escapeHtml(stat.format || '{{value}}')}" placeholder="e.g. HP: {{value}}" style="flex:1; font-size:0.9em; height:24px;">
+                <small class="sillynpc-field-note">Format:</small>
+                <input type="text" class="text_pole stat-format" value="${escapeHtml(stat.format || '{{value}}')}" placeholder="e.g. HP: {{value}}" style="flex:1; font-size:var(--sillynpc-text-md); height:24px;">
                 ${stat.type === 'bar' ? `
-                <small style="opacity:0.6; flex-shrink:0;">Min:</small>
-                <input type="text" class="text_pole stat-min" value="${escapeHtml(stat.min ?? '')}" placeholder="0" title="Lower bound for a Meter. Use a negative number for ranges like -100..100." style="width:45px; font-size:0.9em; height:24px;">
-                <small style="opacity:0.6; flex-shrink:0;" title="The maximum this stat starts at. Once play moves the ceiling - a level-up, a new rank - the live value wins and this is no longer consulted.">Starts max:</small>
-                <input type="text" class="text_pole stat-max" value="${escapeHtml(stat.maxStatValue || '')}" placeholder="Max" title="Starting maximum only. The ceiling actually in play is read from the stat's own value, so a character who has grown past this is not clamped back." style="width:50px; font-size:0.9em; height:24px;">
+                <small class="sillynpc-field-note">Min:</small>
+                <input type="text" class="text_pole stat-min" value="${escapeHtml(stat.min ?? '')}" placeholder="0" title="Lower bound for a Meter. Use a negative number for ranges like -100..100." style="width:45px; font-size:var(--sillynpc-text-md); height:24px;">
+                <small class="sillynpc-field-note" title="The maximum this stat starts at. Once play moves the ceiling - a level-up, a new rank - the live value wins and this is no longer consulted.">Starts max:</small>
+                <input type="text" class="text_pole stat-max" value="${escapeHtml(stat.maxStatValue || '')}" placeholder="Max" title="Starting maximum only. The ceiling actually in play is read from the stat's own value, so a character who has grown past this is not clamped back." style="width:50px; font-size:var(--sillynpc-text-md); height:24px;">
                 ` : `
-                <small style="opacity:0.6; flex-shrink:0;">Write it:</small>
+                <small class="sillynpc-field-note">Write it:</small>
                 <input type="text" class="text_pole stat-hint" value="${escapeHtml(stat.hint || '')}"
                        placeholder="e.g. the current objective only, one line"
                        title="Told to the reader when it fills this field in. Say the shape you want - a date as DD.MM.YY, a single sentence, a place name - and it is sent with every extraction."
-                       style="flex:1; min-width:120px; font-size:0.9em; height:24px;">
-                <small style="opacity:0.6; flex-shrink:0;" title="A hard limit the extension applies itself, so a field cannot grow into a log however the reader answers. Blank means no limit.">Max chars:</small>
+                       style="flex:1; min-width:120px; font-size:var(--sillynpc-text-md); height:24px;">
+                <small class="sillynpc-field-note" title="A hard limit the extension applies itself, so a field cannot grow into a log however the reader answers. Blank means no limit.">Max chars:</small>
                 <input type="text" class="text_pole stat-length" value="${escapeHtml(stat.maxLength ?? '')}"
                        placeholder="—" title="Blank for no limit. Anything longer is cut back to a word boundary and marked."
-                       style="width:50px; font-size:0.9em; height:24px;">
+                       style="width:50px; font-size:var(--sillynpc-text-md); height:24px;">
                 `}
-                <select class="text_pole stat-type" title="How this stat is displayed" style="width:80px; font-size:0.85em; height:24px;">
+                <select class="text_pole stat-type" title="How this stat is displayed" style="width:80px; font-size:var(--sillynpc-text-md); height:24px;">
                     <option value="text" ${stat.type !== 'bar' ? 'selected' : ''}>Text</option>
                     <option value="bar" ${stat.type === 'bar' ? 'selected' : ''}>Meter</option>
                 </select>
                 ${settingsKey === 'playerStats' ? `
-                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;"
+                <label class="sillynpc-check-group" style="margin-left:10px;"
                        title="Draw this on the floating HUD, as a meter with its name and value.">
                     <input type="checkbox" class="stat-primary" ${stat.isPrimary ? 'checked' : ''}>
                     <small>HUD</small>
                 </label>
-                <label style="display:flex; align-items:center; gap:4px; margin-left:6px;"
+                <label class="sillynpc-check-group" style="margin-left:6px;"
                        title="Show this in the tracker box in the chat, with your other fields and before your collections.">
                     <input type="checkbox" class="stat-visible" ${stat.visible !== false ? 'checked' : ''}>
                     <small>Tracker</small>
                 </label>
                 ` : `
-                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;"
+                <label class="sillynpc-check-group" style="margin-left:10px;"
                        title="Show this in the tracker box in the chat.">
                     <input type="checkbox" class="stat-visible" ${stat.visible !== false ? 'checked' : ''}>
                     <small>Visible</small>
                 </label>
                 `}
-                <label style="display:flex; align-items:center; gap:4px; margin-left:6px;"
+                <label class="sillynpc-check-group" style="margin-left:6px;"
                        title="${formatIsToggleable(stat.format)
                             ? 'Show the field name in front of the value on the tracker.'
                             : 'This field\'s Format already sets its own label.'}">
@@ -479,9 +479,9 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                        value="${escapeHtml((stat.options || []).join(', '))}"
                        placeholder="Any value"
                        title="Allowed values, separated by commas. Leave empty to allow anything."
-                       style="flex:1.2; min-width:120px; font-size:0.85em; height:24px; margin-left:10px;">
+                       style="flex:1.2; min-width:120px; font-size:var(--sillynpc-text-md); height:24px; margin-left:10px;">
                 ${settingsKey === 'playerStats' ? `
-                <label style="display:flex; align-items:center; gap:4px; margin-left:6px;" title="Colour of this stat's meter on the floating HUD">
+                <label class="sillynpc-check-group" style="margin-left:6px;" title="Colour of this stat's meter on the floating HUD">
                     <input type="color" class="stat-color" value="${stat.color || '#7aa2f7'}" style="width:26px; height:20px; padding:0; border:0; background:none; cursor:pointer;">
                     <small>Meter</small>
                 </label>

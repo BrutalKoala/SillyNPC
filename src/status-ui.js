@@ -632,7 +632,7 @@ function showAddCharacterDropdown(btn, mesEl) {
 
     const dropdown = document.createElement('div');
     dropdown.className = 'sillynpc-add-char-dropdown list-group';
-    dropdown.style.cssText = 'position: absolute; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px; min-width: 150px;';
+    dropdown.style.cssText = 'position: absolute; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: var(--sillynpc-text-base); min-width: 150px;';
 
     available.forEach(char => {
         const item = document.createElement('div');
@@ -1086,7 +1086,7 @@ export function buildStatusHtml(state, settings) {
             state.characters.forEach((char, index) => {
                 try {
                     let charRow = charTemplate;
-                    const removeBtnHtml = `<i class="sillynpc-char-remove fa-solid fa-minus" data-name="${escapeHtml(char.name)}" title="Remove ${escapeHtml(char.name)} from scene" style="cursor: pointer; opacity: 0.5; margin-right: 4px; font-size: 0.8em; z-index: 2; position: relative;"></i>`;
+                    const removeBtnHtml = `<i class="sillynpc-char-remove fa-solid fa-minus" data-name="${escapeHtml(char.name)}" title="Remove ${escapeHtml(char.name)} from scene" style="cursor: pointer; opacity: 0.5; margin-right: 4px; font-size:var(--sillynpc-text-sm); z-index: 2; position: relative;"></i>`;
                     
                     if (/(<[^>]+>)/.test(charRow)) {
                         charRow = charRow.replace(/(<[^>]+>)/, `$1${removeBtnHtml}`);

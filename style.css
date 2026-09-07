@@ -1604,6 +1604,53 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
 
+/* ─── Dense editor rows ────────────────────────────────────────────────── */
+
+/* The System Builder writes a lot of rows: a stat, its format, its bounds, four
+   checkboxes. Those rows carried their layout as inline style attributes, the same four
+   or five declarations copied down the file, which is why relabelling two checkboxes
+   meant editing HTML rather than a class.
+
+   Only what repeats moves here. A per-field width stays inline, because it is genuinely
+   about that one field and naming a class per width would be worse than the attribute. */
+
+/* The small caption in front of an input on a shared row: Format:, Min:, Write it:. */
+.sillynpc-field-note {
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+/* A checkbox and the word next to it, kept on one line together. The margin that
+   separates one group from the next stays inline: it differs per row on purpose. */
+.sillynpc-check-group {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-xs);
+}
+
+/* The same, tighter, for the three-letter flags on a collection field. */
+.sillynpc-check-group-tight {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+}
+
+/* The abbreviated label under one of those - Pri, Multi, Static. */
+.sillynpc-row-hint {
+    font-size: var(--sillynpc-text-xs);
+    opacity: 0.7;
+}
+
+/* The heading over a nested list, such as a collection's fields. */
+.sillynpc-fields-heading {
+    opacity: 0.6;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+
 /* ─── Color Controls ───────────────────────────────────────────────────── */
 
 .sillynpc-color-row {
