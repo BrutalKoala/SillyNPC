@@ -6,7 +6,7 @@ import {
     allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR,
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
-import { computeStatBar, splitValue, applyStatFormat } from './utils.js';
+import { computeStatBar, splitValue, applyStatFormat, portraitRendition } from './utils.js';
 import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
@@ -287,7 +287,11 @@ export function updateHUD(updatedState = null) {
     // Compared before assigning: updateHUD runs on every status change, and re-setting an
     // identical src makes the picture flicker while the browser re-fetches it.
     const face = portrait.querySelector('.sillynpc-hud-portrait-img');
-    if (face && face.getAttribute('src') !== src) face.src = src;
+    if (face && face.dataset.source !== src) {
+        face.dataset.source = src;
+        face.src = src;
+    }
+    if (face) showPortraitAtSize(face, src);
 
     // Update Stats
     const statsContainer = hudContainer.querySelector('.sillynpc-hud-stats');
@@ -379,6 +383,44 @@ export function portraitSizeFor(meterCount, style) {
     // of the HUD at every stat count - so it is deliberately a little taller than the
     // column now, and it starts larger with one stat rather than shrinking to a token.
     return Math.max(MIN, Math.min(MAX, rows * ROW + 26));
+}
+
+/**
+ * Put a portrait on screen at about the resolution it is actually drawn at.
+ *
+ * An 864x1184 file in a hundred-pixel circle came out coarse here while the same file in
+ * the chat and on the character cards did not, and enlarging it in place showed it was
+ * crisp all along - so what went wrong was the reduction, not the picture. This hands the
+ * browser one that is already close to the right size.
+ *
+ * The size is measured, not calculated. getBoundingClientRect reports the box after the
+ * HUD's own transform, so a portrait 72 CSS pixels wide at hudScale 1.7 measures about 122
+ * - the scale is already in the number and must not be multiplied in again. Only
+ * devicePixelRatio is left to apply, and it is the one a display running at 125% or 150%
+ * quietly makes matter.
+ *
+ * Under-sizing the rendition would be worse than not doing this at all, so renditionStep
+ * rounds up and the measurement is taken from the element rather than from the settings.
+ *
+ * The full picture is shown first and swapped when the rendition is ready, so nothing waits
+ * on a canvas; after the first time the cache answers immediately. The guard against a
+ * stale swap is the element's own source - by the time this resolves the persona may have
+ * changed, and writing the old face over the new one would be a worse bug than the one
+ * being fixed.
+ *
+ * @param {HTMLImageElement} face
+ * @param {string} src
+ */
+function showPortraitAtSize(face, src) {
+    const width = face.parentElement?.getBoundingClientRect().width || 0;
+    const wanted = Math.ceil(width * (window.devicePixelRatio || 1));
+    if (!wanted) return;
+
+    portraitRendition(src, wanted).then(ready => {
+        if (ready && ready !== face.getAttribute('src') && face.dataset.source === src) {
+            face.src = ready;
+        }
+    }).catch(() => { /* the full picture is already on screen */ });
 }
 
 /**

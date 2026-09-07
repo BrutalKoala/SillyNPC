@@ -91,6 +91,76 @@ function loadImageFromFile(file) {
 }
 
 /**
+ * The rendition sizes a portrait is kept at, so a few pixels of difference do not mint a
+ * new copy of the same picture.
+ *
+ * Rounded up rather than to nearest: a rendition smaller than the box it fills is the one
+ * failure this whole mechanism exists to avoid, and the next step up costs memory rather
+ * than quality. Above the largest step the original is used as it is - by then it is being
+ * drawn near its own size and there is nothing to gain.
+ *
+ * @param {number} wanted Pixels needed on the longer side, devicePixelRatio included.
+ * @returns {number} The step to render at, or 0 to mean "use the original".
+ */
+export function renditionStep(wanted) {
+    const STEPS = [64, 96, 128, 192, 256, 384, 512, 768];
+    const needed = Number(wanted);
+    if (!Number.isFinite(needed) || needed <= 0) return 0;
+    return STEPS.find(step => step >= needed) ?? 0;
+}
+
+/** One rendition per source and size. Portraits are redrawn constantly; the work is not. */
+const renditions = new Map();
+
+/**
+ * The same picture, already reduced to about the size it will be drawn at.
+ *
+ * The floating HUD draws an 864x1184 portrait in a circle a hundred pixels across and it
+ * came out visibly coarse, while the same file in the chat and on the character cards did
+ * not. Enlarged in place it was crisp, so the file was never the problem - only what the
+ * browser made of it on the way down to that size. Handing it a picture that is already
+ * near the right size takes that step out of the browser's hands.
+ *
+ * Failure returns the original URL rather than throwing. A portrait that is merely coarse
+ * is worth far more than an empty frame, and a picture served from somewhere that taints a
+ * canvas would otherwise take the HUD out entirely.
+ *
+ * @param {string} url
+ * @param {number} pixels Pixels wanted on the longer side, devicePixelRatio included.
+ * @returns {Promise<string>} A data URI, or `url` unchanged.
+ */
+export async function portraitRendition(url, pixels) {
+    const source = String(url ?? '');
+    const step = renditionStep(pixels);
+    if (!source || !step || source.startsWith('data:')) return source;
+
+    const key = `${source}@${step}`;
+    if (renditions.has(key)) return renditions.get(key);
+
+    const made = (async () => {
+        try {
+            const img = await new Promise((resolve, reject) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => reject(new Error('could not load'));
+                el.src = source;
+            });
+            // Already smaller than the step: reducing it further would only lose detail.
+            if (Math.max(img.naturalWidth, img.naturalHeight) <= step) return source;
+            // PNG: a portrait may have a transparent background, and re-encoding one as
+            // JPEG puts a black rectangle behind the character.
+            return downscaleImage(img, true, step);
+        } catch (err) {
+            debugLog('Could not size the portrait down; using it as it is', source, err);
+            return source;
+        }
+    })();
+
+    renditions.set(key, made);
+    return made;
+}
+
+/**
  * Downscale an image to fit within IMAGE_MAX_DIMENSION on its longer side.
  * Uses PNG for files that might have transparency, otherwise JPEG for size.
  * @param {HTMLImageElement} img
