@@ -157,6 +157,21 @@ export function initHUD() {
     // Drag handle / Mini-portrait
     const portrait = document.createElement('div');
     portrait.className = 'sillynpc-hud-portrait';
+
+    /* The face is an <img> inside the frame rather than the frame's background-image.
+       Every other portrait in the extension - the chat avatars, the character cards, the
+       tracker rows - is an <img>, and those are the ones that looked right; this was the
+       only background-image and the only one that came out coarse at any HUD scale.
+
+       Inside rather than instead of: the div carries the drag handle, the click that opens
+       the sheet, the keyboard activation, and the plate layout's corner marks, which are
+       positioned outside its edges. Clipping the picture with overflow on the frame would
+       cut those off, so the picture rounds itself with border-radius: inherit and the
+       frame keeps its overflow. */
+    const face = document.createElement('img');
+    face.className = 'sillynpc-hud-portrait-img';
+    face.alt = '';
+    portrait.appendChild(face);
     portrait.addEventListener('mousedown', startDrag);
     makeActivatable(portrait, { label: 'Open your character sheet' });
     portrait.addEventListener('click', (e) => {
@@ -261,15 +276,18 @@ export function updateHUD(updatedState = null) {
     
     const portrait = hudContainer.querySelector('.sillynpc-hud-portrait');
     
-    // The thumbnail is the right choice at 60px; the full file is megabytes.
-    // The full avatar rather than SillyTavern's 96x144 thumbnail: the portrait scales
-    // with the meter count now and can be square, so the thumbnail was being upscaled
-    // and looked soft. It is one image on screen, not a gallery.
-    // The player's own portrait first, so the HUD and the sheet show one face. The
-    // persona picture is what is left when they have not made one.
-    const face = getPlayerImageUrl() || persona.avatarUrl || persona.avatarThumbUrl
+    /* The full avatar rather than SillyTavern's 96x144 thumbnail: the portrait scales with
+       the meter count and can be square, so the thumbnail was being upscaled and looked
+       soft. It is one image on screen, not a gallery.
+
+       The player's own portrait first, so the HUD and the sheet show one face. The persona
+       picture is what is left when they have not made one. */
+    const src = getPlayerImageUrl() || persona.avatarUrl || persona.avatarThumbUrl
         || BUILT_IN_DEFAULT_AVATAR;
-    portrait.style.backgroundImage = `url('${face}')`;
+    // Compared before assigning: updateHUD runs on every status change, and re-setting an
+    // identical src makes the picture flicker while the browser re-fetches it.
+    const face = portrait.querySelector('.sillynpc-hud-portrait-img');
+    if (face && face.getAttribute('src') !== src) face.src = src;
 
     // Update Stats
     const statsContainer = hudContainer.querySelector('.sillynpc-hud-stats');

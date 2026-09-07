@@ -2324,10 +2324,35 @@ span.sillynpc-review-to {
  *
  * `top` is the fallback rather than the JavaScript default, so the right framing holds
  * before any of it runs. Portrait Framing overrides it by setting the variable. */
+/* The picture inside the frame.
+ *
+ * It used to be the frame's own background-image. Every other portrait in the extension is
+ * an <img> - the chat avatars, the character cards, the tracker rows - and those were the
+ * ones that looked right; this was the only background-image and the only one that came out
+ * coarse, at every HUD scale.
+ *
+ * It rounds itself rather than being clipped by the frame: the plate layout draws corner
+ * marks just outside the portrait's edges, and overflow: hidden on the frame would cut them
+ * off. border-radius: inherit follows the frame, including when portrait-square sets it
+ * to 0.
+ *
+ * pointer-events: none so the frame keeps the drag, the click that opens the sheet, and
+ * the keyboard activation - the picture must not become a second target for any of them. */
+.sillynpc-hud-portrait-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center var(--sillynpc-portrait-focus, top);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
 .sillynpc-hud-portrait {
     width: 60px;
     height: 60px;
     border-radius: 50%;
+    /* Kept for the empty frame: the tint below still shows while no picture has loaded. */
     background-size: cover;
     background-position: center var(--sillynpc-portrait-focus, top);
     /* 1px, not 2. At 2 the accent read as a frame around the picture rather than an edge
