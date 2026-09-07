@@ -697,6 +697,46 @@ export function initSettings() {
 }
 
 /**
+ * Is version a older than version b? Dotted numbers, missing parts count as zero.
+ *
+ * Anything unparsable answers false - "not older" - so a settings file with a version this
+ * cannot read is left alone rather than migrated on a guess.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function versionBelow(a, b) {
+    const parse = (v) => String(v ?? '').split('.').map(n => Number.parseInt(n, 10));
+    const left = parse(a);
+    const right = parse(b);
+    if (left.some(Number.isNaN) || right.some(Number.isNaN)) return false;
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+        const l = left[i] ?? 0;
+        const r = right[i] ?? 0;
+        if (l !== r) return l < r;
+    }
+    return false;
+}
+
+/**
+ * Were these settings last written before HUD and Tracker became two separate flags?
+ *
+ * 0.5.2 is where the split shipped, and it shipped the migration unguarded - so anyone who
+ * has opened the extension since has already been through it. Running it again on them
+ * would clear a HUD box they have ticked in the meantime, which is the bug this answers.
+ *
+ * settings.version still holds the version this file was last written under: normalizeSettings
+ * stamps the current one at the end of its pass, well after this is read.
+ *
+ * @param {object} settings
+ * @returns {boolean}
+ */
+function settingsPredateHudFlagSplit(settings) {
+    return versionBelow(settings.version, '0.5.2');
+}
+
+/**
  * Fills in missing keys and runs every schema migration.
  *
  * This used to live inside initSettings() behind an "already on the current
@@ -1004,17 +1044,33 @@ export function normalizeSettings(settings) {
             for (const stat of settings.statusTracker.playerStats) {
                 if (stat.format === undefined) stat.format = '{{value}}';
                 if (stat.maxStatValue === undefined) stat.maxStatValue = '';
+            }
 
-                /* The two flags used to be one decision: the HUD drew a stat only when it
-                   was Primary AND visible, and visible did nothing at all on a stat that
-                   was not Primary. They are separate places now - HUD and Tracker - and the
-                   HUD no longer consults visible.
+            /* The two flags used to be one decision: the HUD drew a stat only when it was
+               Primary AND visible, and visible did nothing at all on a stat that was not
+               Primary. They are separate places now - HUD and Tracker - and the HUD no
+               longer consults visible.
 
-                   So a stat that was Primary with visible off, which appeared nowhere,
-                   would start appearing on the HUD. Clearing Primary keeps it where it was.
-                   Nothing else is touched: visible carries its value over and becomes the
-                   Tracker flag, which is the point of the change. */
-                if (stat.isPrimary && stat.visible === false) stat.isPrimary = false;
+               So a stat that was Primary with visible off, which appeared nowhere, would
+               start appearing on the HUD. Clearing Primary keeps it where it was.
+
+               Once, and only for settings that predate the split. Everything else in this
+               pass is idempotent by shape - it turns a string into an object, or fills a
+               key that is absent - so running it on every load costs nothing. This one is
+               not: Primary with Tracker off is a perfectly ordinary choice afterwards, and
+               re-running turned it into a checkbox that would not stay ticked. Ticking HUD
+               on a stat whose Tracker was off survived until the next reload, then cleared
+               itself, which shipped in 0.5.2.
+
+               The version stamp at the end of this pass is what makes it once: after any
+               normalisation the stored version is the current one, so this never matches
+               again. A separate "already done" marker was tried alongside it and removed -
+               it could not fire in any case the version gate did not already cover, and a
+               guard that cannot fail is a guard nothing tests. */
+            if (settingsPredateHudFlagSplit(settings)) {
+                for (const stat of settings.statusTracker.playerStats) {
+                    if (stat.isPrimary && stat.visible === false) stat.isPrimary = false;
+                }
             }
         }
         if (!settings.statusTracker.collections) {
