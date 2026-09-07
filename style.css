@@ -2675,6 +2675,23 @@ span.sillynpc-review-to {
 
 /* ─── Responsive ───────────────────────────────────────────────────────── */
 
+/* Narrow windows.
+ *
+ * Three widths, each owning one surface, and they are not interchangeable:
+ *
+ *   768px  the manage popup - its tab bar turns from a sidebar into a wrapping row
+ *   700px  the sheet, the character view and the editor - two columns become one
+ *   500px  a setting row - its label and control stop sharing a line
+ *
+ * Deliberately not one number. The popup runs out of room first because its sidebar is
+ * fixed width; a setting row survives much further because it is only a label and a
+ * control. Forcing them together would move two layouts that work.
+ *
+ * One element is governed twice on purpose: .sillynpc-editor-main tightens its gap at 768
+ * and stacks at 700. That arrived by accident - the sheet work swept it into the stacking
+ * group without noticing it already had a rule - but a gap that closes before the columns
+ * give up is the right order, so it stays and is written down here instead. Anything else
+ * appearing in two of these blocks is the accident this note exists to catch. */
 @media (max-width: 768px) {
     /* The flex container is .sillynpc-manage-layout, NOT .sillynpc-manage.
        This used to target the wrapper, so the layout stayed flex-direction: row
