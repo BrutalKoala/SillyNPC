@@ -1786,7 +1786,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     box-sizing: border-box !important;
 }
 
-.sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands):not(.sillynpc-status-buttons-container):not(.sillynpc-status-add-btn):not(.sillynpc-status-settings-btn):not(.sillynpc-status-undo-btn):not(.sillynpc-status-meter):not(.sillynpc-status-meter-fill):not(.sillynpc-status-meter-text):not(.sillynpc-status-portrait) {
+.sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands):not(.sillynpc-status-buttons-container):not(.sillynpc-status-add-btn):not(.sillynpc-status-settings-btn):not(.sillynpc-status-undo-btn):not(.sillynpc-status-meter):not(.sillynpc-status-meter-fill):not(.sillynpc-status-meter-text):not(.sillynpc-status-portrait):not(.sillynpc-status-divider) {
     all: revert !important;
     box-sizing: border-box !important;
     font-family: inherit !important;
@@ -2159,6 +2159,19 @@ span.sillynpc-review-to {
    around however many there are; a fixed reservation here - 50px, about two buttons - is
    what let a row of four overlap it. Giving this a block formatting context (overflow,
    display:flow-root) would stop the wrap and bring the overlap back in another form. */
+/* The rule between the world line and everything below it.
+
+   It had one rule, scoped to .sillynpc-theme-default, and it never drew - under any theme.
+   The box resets every descendant with `all: revert !important` at a specificity of 0,11,0,
+   which a border-top on a single class loses to, so the divider was an empty div with no
+   border and no width. Excluded from that reset above, the same way the meters and the
+   portraits already are, and given a rule here that is not tied to one theme. */
+.sillynpc-status-divider {
+    display: block;
+    border-top: 1px solid var(--sillynpc-border, rgba(128, 128, 128, 0.35));
+    margin: 6px 0;
+}
+
 .sillynpc-status-char {
     margin-bottom: 3px;
     display: block;

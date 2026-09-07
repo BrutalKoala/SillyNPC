@@ -959,12 +959,17 @@ export function buildStatusHtml(state, settings) {
                 html = html.replace(/{{player}}/g, playerStatsHtml);
             } else {
                 const block = `<div class="sillynpc-status-player">${playerStatsHtml}</div>`;
-                // Before the character rows, wherever the template keeps them.
-                if (html.includes('{{#characters}}')) {
-                    html = html.replace(/(\s*{{#characters}})/, `\n    ${block}$1`);
-                } else if (html.includes('sillynpc-status-characters')) {
+                /* Before the character section, and the wrapper is tried first on purpose.
+                   Templates put a heading inside it - "PRESENT CHARACTERS:" and a rule -
+                   and anchoring on {{#characters}} lands between that heading and the rows,
+                   so the player's fields read as the first character present. Going in
+                   ahead of the wrapper puts the heading where it belongs: over the
+                   characters it introduces. */
+                if (html.includes('sillynpc-status-characters')) {
                     html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-characters[^"]*"[^>]*>)/s,
                         `${block}\n    $1`);
+                } else if (html.includes('{{#characters}}')) {
+                    html = html.replace(/(\s*{{#characters}})/, `\n    ${block}$1`);
                 } else if (html.includes('sillynpc-status-box')) {
                     html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-box[^"]*"[^>]*>)/s,
                         `$1\n    ${block}`);
