@@ -12,6 +12,7 @@
  */
 
 import { splitValue } from './utils.js';
+import { debugLog } from './constants.js';
 
 export { splitValue };
 
@@ -307,12 +308,21 @@ export function buildUpdateFromChanges(changes, currentState, trackerSettings, c
             .find(c => String(c.name).toLowerCase() === String(change.actor).toLowerCase());
         if (inScene) return inScene;
 
-        // Off stage. Their card is where their belongings live, and rebuilding a
-        // collection without it would replace everything they own with the single row
-        // being accepted.
+        /* Off stage. Their card is where their belongings live, and rebuilding a collection
+           without it would replace everything they own with the single row being accepted.
+
+           Both halves, which this used to take only one of. A card holds stats in
+           statusOverrides and items in statusCollections, and api.js and character-fill.js
+           both read the pair; taking only the collections left `stats` undefined, so
+           accepting a maximum change for somebody who had left the scene joined the new
+           ceiling to an empty current value and wrote "/120". */
         const card = (cards || [])
             .find(c => String(c.name || '').toLowerCase() === String(change.actor).toLowerCase());
-        return card ? { name: card.name, collections: card.statusCollections || {} } : null;
+        return card ? {
+            name: card.name,
+            stats: card.statusOverrides || {},
+            collections: card.statusCollections || {},
+        } : null;
     };
 
     for (const change of changes) {
@@ -322,6 +332,19 @@ export function buildUpdateFromChanges(changes, currentState, trackerSettings, c
                 ? currentState?.global?.[change.label]
                 : actorOf(change)?.stats?.[change.label];
             const parts = splitValue(live);
+
+            /* A ceiling needs something to be the ceiling of. With no current value there
+               is nothing to join it to, and joining anyway produced "/120" - which
+               splitValue reads as a blank value with a maximum, so the number was simply
+               gone. Supplying the card's stats fixed the common case; this closes the rest,
+               where the actor genuinely has no reading for this stat yet. Skipped rather
+               than invented: "120/120" would be the tracker deciding they are at full. */
+            if (change.kind === 'stat-max' && !String(parts.current ?? '').trim()) {
+                debugLog(`Skipped a maximum for ${change.actor || change.scope}.${change.label}: `
+                    + 'there is no current value to apply it to.');
+                continue;
+            }
+
             const value = change.kind === 'stat'
                 ? (parts.max ? `${change.after}/${parts.max}` : String(change.after))
                 : (change.after && change.after !== '(none)' ? `${parts.current}/${change.after}` : parts.current);
