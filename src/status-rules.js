@@ -154,18 +154,26 @@ function evaluateTimeRules(state, messageId) {
 
         for (const target of targetsFor(rule, state)) {
             const carryKey = `${rule.id}|${target.name || rule.scope}`;
+
+            /* Before the time is banked, not after it is spent. Time spent outside the
+               condition is spent, not banked - otherwise a character who rests for a
+               minute is paid for the hour they spent fighting.
+
+               This used to sit below the tick calculation, where it could only be reached
+               once a whole interval had accumulated. Messages are almost always shorter
+               than an interval, so the usual path banked the elapsed time and moved on
+               without ever asking - and fifty minutes of fighting paid out on the first
+               ten minutes of rest. */
+            if (!conditionHolds(rule, target.actor, state)) {
+                carry[carryKey] = 0;
+                continue;
+            }
+
             const available = minutes + (Number(carry[carryKey]) || 0);
             const ticks = Math.floor(available / interval);
 
             if (ticks <= 0) { carry[carryKey] = available; continue; }
             carry[carryKey] = available - ticks * interval;
-
-            if (!conditionHolds(rule, target.actor, state)) {
-                // Time spent outside the condition is spent, not banked - otherwise a
-                // character who rests for a minute is paid for the hour they spent fighting.
-                carry[carryKey] = 0;
-                continue;
-            }
 
             const live = readStat(rule, target, state);
             const parts = splitValue(live);
