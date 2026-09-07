@@ -34,6 +34,9 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-border: var(--SmartThemeBorderColor, #444);
     --sillynpc-success: #00c851;
     --sillynpc-danger: #ff4444;
+    /* Amber on a dark ground. Every light theme overrides all three below, because a
+       colour that reads as a warning on black is unreadable on parchment. */
+    --sillynpc-warning: #ffb020;
 
     /* Typography */
     --sillynpc-font-family: inherit;
@@ -713,6 +716,11 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-bg-secondary: #f8f8f8;
     --sillynpc-fg-primary: #222222;
     --sillynpc-fg-secondary: #3f3f3f;
+    /* Light ground: the shared success and danger score under 2.5 here. These clear
+       4.5 against both this theme's surfaces. */
+    --sillynpc-success: #1b5e20;
+    --sillynpc-danger: #b3261e;
+    --sillynpc-warning: #8a5300;
     --sillynpc-accent: #000000;
     --sillynpc-border: #000000;
     --sillynpc-success: #1a7a3c;
@@ -910,6 +918,11 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-bg-secondary: rgba(93, 64, 55, 0.07);
     --sillynpc-fg-primary: #2b1f14;
     --sillynpc-fg-secondary: #5a4632;
+    /* Light ground: the shared success and danger score under 2.5 here. These clear
+       4.5 against both this theme's surfaces. */
+    --sillynpc-success: #1b5e20;
+    --sillynpc-danger: #8f2c22;
+    --sillynpc-warning: #6b3f00;
     --sillynpc-accent: #7a3b1f;
     --sillynpc-border: #8a6a45;
     /* A bookish old-style face, so it is not the same Georgia Rosewater uses. */
@@ -1102,6 +1115,11 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-bg-secondary: #f8dfe3;
     --sillynpc-fg-primary: #4a2c33;
     --sillynpc-fg-secondary: #7b5560;
+    /* Light ground: the shared success and danger score under 2.5 here. These clear
+       4.5 against both this theme's surfaces. */
+    --sillynpc-success: #2c5e3f;
+    --sillynpc-danger: #a1281f;
+    --sillynpc-warning: #7a5210;
     --sillynpc-accent: #f4d1d1;
     /* --sillynpc-accent is a pale pink chosen as a FILL (the active-tab pill).
        As text on the cream background it scores 1.30 contrast, which left field
@@ -2747,7 +2765,7 @@ span.sillynpc-review-to {
 .sillynpc-lore-warning {
     padding: 8px 10px;
     border-radius: 6px;
-    border-left: 3px solid var(--SmartThemeQuoteColor, #c9a96e);
+    border-left: 3px solid var(--sillynpc-warning);
     background: color-mix(in srgb, currentColor 8%, transparent);
     font-size: var(--sillynpc-text-md);
     line-height: 1.4;
