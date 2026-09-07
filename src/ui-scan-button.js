@@ -1,6 +1,7 @@
 import { getSettings } from './settings.js';
 import { LOG_PREFIX } from './constants.js';
 import { scanHistoryForCollections, estimateScan } from './history-scan.js';
+import { makeActivatable } from './utils.js';
 
 /**
  * The scan button, beside SillyTavern's own options button on the send bar.
@@ -22,6 +23,7 @@ function mountScanButton() {
     button.className = 'fa-solid fa-clipboard-list interactable sillynpc-scan-button';
     button.tabIndex = 0;
     button.title = 'Read the chat history and bring inventories, spells and skills up to date.';
+    makeActivatable(button);
     button.addEventListener('click', onScanClicked);
     host.appendChild(button);
 }

@@ -6,6 +6,7 @@ import { saveSettings } from './settings.js';
 import { pickAndProcessImage } from './utils.js';
 import { adoptImageForCharacter, removeCharacterImage } from './api.js';
 import { generateCharacterImage } from './ui-api.js';
+import { makeActivatable } from './utils.js';
 
 /**
  * The picture, full size, over the page.
@@ -82,13 +83,15 @@ export function buildPortraitBlock(char, { onChange }) {
         prev.className = 'sillynpc-img-nav sillynpc-img-nav-prev';
         prev.title = 'Previous image';
         prev.innerHTML = '<i class="fa-regular fa-circle-left"></i>';
-        prev.addEventListener('click', (e) => { e.stopPropagation(); step(-1); });
+        makeActivatable(prev);
+    prev.addEventListener('click', (e) => { e.stopPropagation(); step(-1); });
 
         const next = document.createElement('div');
         next.className = 'sillynpc-img-nav sillynpc-img-nav-next';
         next.title = 'Next image';
         next.innerHTML = '<i class="fa-regular fa-circle-right"></i>';
-        next.addEventListener('click', (e) => { e.stopPropagation(); step(1); });
+        makeActivatable(next);
+    next.addEventListener('click', (e) => { e.stopPropagation(); step(1); });
 
         const counter = document.createElement('div');
         counter.className = 'sillynpc-img-nav-count';
@@ -107,7 +110,8 @@ export function buildPortraitBlock(char, { onChange }) {
         del.className = 'sillynpc-img-delete';
         del.title = 'Remove this image';
         del.innerHTML = '<i class="fa-solid fa-trash"></i>';
-        del.addEventListener('click', async (e) => {
+        makeActivatable(del);
+    del.addEventListener('click', async (e) => {
             e.stopPropagation();
 
             const body = document.createElement('div');
@@ -161,6 +165,7 @@ export function buildPortraitBlock(char, { onChange }) {
     genIcon.className = 'sillynpc-img-gen-icon';
     genIcon.title = 'Generate image';
     genIcon.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+    makeActivatable(genIcon);
     genIcon.addEventListener('click', (e) => {
         e.stopPropagation();
         generateCharacterImage(char, { onSave: () => onChange() });

@@ -2,7 +2,7 @@ import { getSettings } from './settings.js';
 import { getContext } from '../../../../st-context.js';
 import { eventSource, event_types } from '../../../../events.js';
 import { loadStateFromMetadata, applyUpdate, parseMessageForUpdates, registerActiveCharacter, removeActiveCharacter, undoLastChange, getHistoryEntries, resolveMaxValue } from './status-logic.js';
-import { escapeRegExp, escapeHtml, extractJSON, safeJsonParse, computeStatBar, applyStatFormat } from './utils.js';
+import { escapeRegExp, escapeHtml, extractJSON, safeJsonParse, computeStatBar, applyStatFormat, makeActivatable } from './utils.js';
 import { findTemplateLabels, applyLabelFixes } from './template-labels.js';
 import { LOG_PREFIX, debugLog, BUILT_IN_DEFAULT_AVATAR } from './constants.js';
 import { stripAndPersist } from './status-history.js';
@@ -543,7 +543,8 @@ export function renderStatusTrackerBox(mesEl) {
         undoBtn.className = 'sillynpc-status-undo-btn fa-solid fa-arrow-left';
         const nextLabel = getHistoryEntries().at(-1)?.label || 'change';
         undoBtn.title = `Undo last change (${nextLabel}) - ${historyDepth} step${historyDepth === 1 ? '' : 's'} available`;
-        undoBtn.addEventListener('click', (e) => {
+        makeActivatable(undoBtn);
+    undoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const entry = undoLastChange();
             if (entry) {
@@ -559,6 +560,7 @@ export function renderStatusTrackerBox(mesEl) {
     const castBtn = document.createElement('div');
     castBtn.className = 'sillynpc-status-cast-btn fa-solid fa-user-check';
     castBtn.title = 'Say who is not a character - the narrator\'s asides, or you';
+    makeActivatable(castBtn);
     castBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         openCastPanel(() => renderStatusTrackerBox(mesEl));
@@ -568,6 +570,7 @@ export function renderStatusTrackerBox(mesEl) {
     const addCharBtn = document.createElement('div');
     addCharBtn.className = 'sillynpc-status-add-btn fa-solid fa-plus';
     addCharBtn.title = 'Add Character to Scene';
+    makeActivatable(addCharBtn);
     addCharBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         showAddCharacterDropdown(addCharBtn, mesEl);
@@ -576,6 +579,7 @@ export function renderStatusTrackerBox(mesEl) {
     const settingsBtn = document.createElement('div');
     settingsBtn.className = 'sillynpc-status-settings-btn fa-solid fa-gear';
     settingsBtn.title = 'Open Status Tracker Settings';
+    makeActivatable(settingsBtn);
     settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         eventSource.emit('sillynpc-open-manage', { tab: 'status' });
@@ -635,6 +639,7 @@ function showAddCharacterDropdown(btn, mesEl) {
         item.className = 'list-group-item';
         item.style.cssText = 'cursor: pointer; padding: 5px 10px; border-bottom: 1px solid var(--sillynpc-border);';
         item.textContent = char.name;
+        makeActivatable(item, { label: `Add ${char.name} to the scene` });
         item.addEventListener('click', (e) => {
             e.stopPropagation();
             if (registerActiveCharacter(char.name)) {

@@ -8,6 +8,7 @@ import { world_names } from '../../../../world-info.js';
 import { getChatLorebookName } from './lorebook.js';
 import { getSettings, saveSettings } from './settings.js';
 import { LOG_PREFIX } from './constants.js';
+import { makeActivatable } from './utils.js';
 import { 
     createLoreEntry, 
     generateLoreContent, 
@@ -372,6 +373,7 @@ async function askGenerationMode(char) {
                 const img = document.createElement('img');
                 img.src = src;
                 cell.append(img);
+                makeActivatable(cell, { label: 'Use this reference image' });
                 cell.addEventListener('click', () => {
                     const at = chosen.indexOf(src);
                     if (at >= 0) chosen.splice(at, 1);

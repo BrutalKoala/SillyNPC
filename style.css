@@ -2954,6 +2954,20 @@ span.sillynpc-review-to {
 }
 
 .sillynpc-settings-search-hit:hover,
+/* The focus ring for anything makeActivatable has promoted into a control.
+
+   Styled once, on the class that helper adds, rather than per component - there are ten
+   or so of these and they are icons, cards and cells with nothing else in common. Only
+   :focus-visible, so a mouse click does not leave a ring behind it.
+
+   outline rather than border or box-shadow: it does not take part in layout, so a ring
+   cannot move the thing it is drawn around. */
+.sillynpc-activatable:focus-visible {
+    outline: 2px solid var(--sillynpc-accent-text, var(--sillynpc-accent));
+    outline-offset: 2px;
+    border-radius: var(--sillynpc-radius-sm);
+}
+
 .sillynpc-settings-search-hit:focus-visible {
     background: color-mix(in srgb, currentColor 10%, transparent);
 }

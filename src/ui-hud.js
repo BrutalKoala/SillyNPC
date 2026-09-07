@@ -7,6 +7,7 @@ import {
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
 import { computeStatBar, splitValue, applyStatFormat } from './utils.js';
+import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
 let isDragging = false;
@@ -157,6 +158,7 @@ export function initHUD() {
     const portrait = document.createElement('div');
     portrait.className = 'sillynpc-hud-portrait';
     portrait.addEventListener('mousedown', startDrag);
+    makeActivatable(portrait, { label: 'Open your character sheet' });
     portrait.addEventListener('click', (e) => {
         if (!isDragging) openPlayerModal();
     });

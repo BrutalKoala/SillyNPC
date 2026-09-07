@@ -4,6 +4,7 @@ import { updateHUD } from './ui-hud.js';
 import { escapeHtml, moveInList } from './utils.js';
 import { buildBulkBar, buildBulkCheckbox, spliceIndexes } from './ui-bulk-select.js';
 import { renameCollectionId, renameCollectionField, renameStat } from './status-logic.js';
+import { makeActivatable } from './utils.js';
 
 /**
  * System Builder: the stats, collections and fields a System is made of.
@@ -25,6 +26,7 @@ export function buildSystemBuilder(onRefresh) {
     tabs.style.display = 'flex';
     tabs.style.background = 'var(--sillynpc-bg-secondary)';
     tabs.style.borderBottom = '1px solid var(--sillynpc-border)';
+    tabs.setAttribute('role', 'tablist');
 
     const content = document.createElement('div');
     content.style.padding = '15px';
@@ -52,6 +54,7 @@ export function buildSystemBuilder(onRefresh) {
                 btn.style.background = 'color-mix(in srgb, currentColor 12%, transparent)';
                 btn.style.fontWeight = 'bold';
             }
+            makeActivatable(btn, { role: 'tab' });
             btn.addEventListener('click', () => {
                 systemBuilderActiveTab = tab.id;
                 renderTabs();

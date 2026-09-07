@@ -42,6 +42,7 @@ import { buildChoiceSelect, isChoiceField } from './ui-shared.js';
 import { exportCharacterFile, importCharacterFile } from './ui-transfer.js';
 import { buildGridFilterRow } from './ui-grid-filter.js';
 import { buildSettingsSearch, buildSettingsIndex } from './ui-settings-search.js';
+import { makeActivatable } from './utils.js';
 
 /** @type {Popup|null} */
 let managePopup = null;
@@ -782,8 +783,9 @@ function buildCard(char) {
     if (!inChat) card.classList.add('sillynpc-card-out-of-chat');
     card.title = (char.name || '(unnamed)')
         + (inChat ? '' : ' — not in this chat');
-    card.setAttribute('role', 'button');
-    card.setAttribute('tabindex', '0');
+    // Was role + tabindex and no key handler: it took focus, announced itself as a
+    // button and did nothing when pressed. This adds the half that was missing.
+    makeActivatable(card, { label: card.title });
     card.setAttribute('draggable', 'true');
 
     if (char.imageUrl) {

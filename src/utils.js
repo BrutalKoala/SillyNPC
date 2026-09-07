@@ -556,3 +556,54 @@ export function currentMessageIndex() {
     const chat = getContext()?.chat;
     return Array.isArray(chat) && chat.length ? chat.length - 1 : 0;
 }
+
+/**
+ * Makes something that is not a button behave like one.
+ *
+ * Most of this interface is built from real `<button>` and `<select>` elements, which are
+ * reachable and operable for free. A handful of controls are not, because they are an icon,
+ * a card or a coloured cell rather than a label in a box: the tracker's four header icons,
+ * the HUD portrait, the portrait carousel's arrows, the System Builder's tab bar.
+ *
+ * Those had a click handler and nothing else. Tab moved straight past them, so the only way
+ * to reach them was with a mouse - and the character card was worse than that. It carried
+ * role="button" and tabindex="0" but no key handler, so it took focus, announced itself as a
+ * button, and did nothing when pressed. A promise with nothing behind it is worse than no
+ * promise.
+ *
+ * Activation goes through `el.click()` rather than a copy of the handler, so whatever the
+ * element already does on click is exactly what a keypress does. There is no second path to
+ * keep in step.
+ *
+ * @param {HTMLElement} el
+ * @param {{ label?: string, role?: string }} [options] `label` is what a screen reader
+ *   announces, and defaults to the element's own tooltip - which is usually the only place
+ *   an icon says what it does. `role` is 'button' unless the thing is really a tab.
+ * @returns {HTMLElement} The same element, so this can wrap a creation expression.
+ */
+export function makeActivatable(el, { label, role = 'button' } = {}) {
+    if (!el) return el;
+
+    el.setAttribute('role', role);
+    // Not overwritten: a caller may have put it in a particular tab order on purpose.
+    if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+
+    const announced = label ?? el.title ?? '';
+    if (announced && !el.hasAttribute('aria-label')) el.setAttribute('aria-label', announced);
+
+    // So the focus ring can be styled once rather than per component.
+    el.classList.add('sillynpc-activatable');
+
+    if (el.dataset.activatable === 'true') return el;
+    el.dataset.activatable = 'true';
+
+    el.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        // Space scrolls the page and Enter can submit a surrounding form; a control that
+        // did its job and also scrolled would be a worse answer than not working.
+        event.preventDefault();
+        el.click();
+    });
+
+    return el;
+}
