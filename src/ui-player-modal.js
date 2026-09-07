@@ -77,7 +77,9 @@ export function openPlayerModal() {
     
     debugLog('Opening player modal', { persona });
 
-    const levelStat = settings.playerStats.find(s => (s.name === 'Level' || s.name === 'LvL') && s.visible !== false);
+    // Not gated on visible: that now says whether the stat belongs on the in-chat
+    // tracker, which has nothing to do with the badge on the sheet.
+    const levelStat = settings.playerStats.find(s => s.name === 'Level' || s.name === 'LvL');
     const levelValue = levelStat ? (state.player.stats[levelStat.name] || levelStat.defaultValue || '1') : null;
 
     const modalHtml = `

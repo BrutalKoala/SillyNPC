@@ -668,13 +668,14 @@ export const defaultSettings = {
          * follow the field when it is renamed, and captioning a value in two places is
          * what made a tracker read HP while every other screen read Health.
          *
-         * {{globals}} and {{fields}} say where each set goes. A template with neither
+         * {{globals}}, {{player}} and {{fields}} say where each set goes. A template with none
          * still gets them, appended, which is what every template written before this
          * one will do.
          */
         template: `<div class="sillynpc-status-box">
     <div class="sillynpc-status-header">{{globals}}</div>
     <div class="sillynpc-status-divider"></div>
+    <div class="sillynpc-status-player">{{player}}</div>
     <div class="sillynpc-status-characters">
         {{#characters}}
         <div class="sillynpc-status-char">👤 {{name}} — {{fields}}</div>
@@ -1003,6 +1004,17 @@ export function normalizeSettings(settings) {
             for (const stat of settings.statusTracker.playerStats) {
                 if (stat.format === undefined) stat.format = '{{value}}';
                 if (stat.maxStatValue === undefined) stat.maxStatValue = '';
+
+                /* The two flags used to be one decision: the HUD drew a stat only when it
+                   was Primary AND visible, and visible did nothing at all on a stat that
+                   was not Primary. They are separate places now - HUD and Tracker - and the
+                   HUD no longer consults visible.
+
+                   So a stat that was Primary with visible off, which appeared nowhere,
+                   would start appearing on the HUD. Clearing Primary keeps it where it was.
+                   Nothing else is touched: visible carries its value over and becomes the
+                   Tracker flag, which is the point of the change. */
+                if (stat.isPrimary && stat.visible === false) stat.isPrimary = false;
             }
         }
         if (!settings.statusTracker.collections) {

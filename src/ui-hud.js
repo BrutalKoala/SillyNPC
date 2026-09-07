@@ -275,7 +275,9 @@ export function updateHUD(updatedState = null) {
 
     const layout = hudLayoutFor(settings.hudLayout);
     const style = layout.meters;
-    const primaryStats = settings.playerStats.filter(s => s.isPrimary && s.visible !== false);
+    // HUD is its own flag now. It used to read visible as well, which is the flag that
+    // says whether a stat belongs on the in-chat tracker - a different place entirely.
+    const primaryStats = settings.playerStats.filter(s => s.isPrimary);
 
     const meters = primaryStats.map(statDef => {
         const actualKey = findMatchingStatKey(state.player.stats, statDef.name) || statDef.name;

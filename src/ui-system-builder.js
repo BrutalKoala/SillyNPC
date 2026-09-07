@@ -445,10 +445,24 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                     <option value="text" ${stat.type !== 'bar' ? 'selected' : ''}>Text</option>
                     <option value="bar" ${stat.type === 'bar' ? 'selected' : ''}>Meter</option>
                 </select>
-                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;">
+                ${settingsKey === 'playerStats' ? `
+                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;"
+                       title="Draw this on the floating HUD, as a meter with its name and value.">
+                    <input type="checkbox" class="stat-primary" ${stat.isPrimary ? 'checked' : ''}>
+                    <small>HUD</small>
+                </label>
+                <label style="display:flex; align-items:center; gap:4px; margin-left:6px;"
+                       title="Show this in the tracker box in the chat, with your other fields and before your collections.">
+                    <input type="checkbox" class="stat-visible" ${stat.visible !== false ? 'checked' : ''}>
+                    <small>Tracker</small>
+                </label>
+                ` : `
+                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;"
+                       title="Show this in the tracker box in the chat.">
                     <input type="checkbox" class="stat-visible" ${stat.visible !== false ? 'checked' : ''}>
                     <small>Visible</small>
                 </label>
+                `}
                 <label style="display:flex; align-items:center; gap:4px; margin-left:6px;"
                        title="${formatIsToggleable(stat.format)
                             ? 'Show the field name in front of the value on the tracker.'
@@ -464,10 +478,6 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                        title="Allowed values, separated by commas. Leave empty to allow anything."
                        style="flex:1.2; min-width:120px; font-size:0.85em; height:24px; margin-left:10px;">
                 ${settingsKey === 'playerStats' ? `
-                <label style="display:flex; align-items:center; gap:4px; margin-left:10px;">
-                    <input type="checkbox" class="stat-primary" ${stat.isPrimary ? 'checked' : ''}>
-                    <small>Primary (HUD)</small>
-                </label>
                 <label style="display:flex; align-items:center; gap:4px; margin-left:6px;" title="Colour of this stat's meter on the floating HUD">
                     <input type="color" class="stat-color" value="${stat.color || '#7aa2f7'}" style="width:26px; height:20px; padding:0; border:0; background:none; cursor:pointer;">
                     <small>Meter</small>

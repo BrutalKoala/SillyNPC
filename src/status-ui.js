@@ -923,6 +923,60 @@ export function buildStatusHtml(state, settings) {
             visibleGlobalStats.forEach(s => renderedGlobalKeys.add(s.name.toLowerCase()));
         }
 
+        /* The player's own fields.
+         *
+         * These had nowhere to go in the chat: the box drew the world line and a row per
+         * character, and a player stat was only ever a HUD meter. The Tracker box on each
+         * one says whether it belongs here - the same list, the same renderer and the same
+         * treatment of a hidden field that the world line already gets.
+         *
+         * Before the player's collections, which is where the request put them, and that
+         * is why this runs first: both this and the collection insert below anchor to the
+         * character rows, so whichever goes in last ends up nearer them.
+         */
+        const visiblePlayerStats = (settings.playerStats || []).filter(stat => stat?.name
+            && stat.visible !== false);
+        (settings.playerStats || []).forEach(stat => {
+            if (stat?.name && stat.visible === false) html = stripFieldReference(html, stat.name);
+        });
+
+        if (visiblePlayerStats.length > 0) {
+            const playerStatsHtml = renderFieldSet(
+                visiblePlayerStats,
+                (stat) => {
+                    // The stored key can differ in case from the configured name - the same
+                    // tolerant match the sheet makes, rather than a lookup that quietly
+                    // reads empty for a stat somebody renamed the capitals of.
+                    const stats = state.player?.stats || {};
+                    const key = Object.keys(stats)
+                        .find(k => k.toLowerCase() === stat.name.toLowerCase()) || stat.name;
+                    return stats[key] || stat.defaultValue || '';
+                },
+                'player');
+
+            if (html.includes('{{player}}')) {
+                // The template says where the set goes.
+                html = html.replace(/{{player}}/g, playerStatsHtml);
+            } else {
+                const block = `<div class="sillynpc-status-player">${playerStatsHtml}</div>`;
+                // Before the character rows, wherever the template keeps them.
+                if (html.includes('{{#characters}}')) {
+                    html = html.replace(/(\s*{{#characters}})/, `\n    ${block}$1`);
+                } else if (html.includes('sillynpc-status-characters')) {
+                    html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-characters[^"]*"[^>]*>)/s,
+                        `${block}\n    $1`);
+                } else if (html.includes('sillynpc-status-box')) {
+                    html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-box[^"]*"[^>]*>)/s,
+                        `$1\n    ${block}`);
+                } else {
+                    html += `\n${block}`;
+                }
+            }
+        } else {
+            // Nothing to put there, so the placeholder must not survive as text.
+            html = html.replace(/{{player}}/g, '');
+        }
+
         // Handle Player Collections in Template
         if (state.player && state.player.collections) {
             for (const [colId, items] of Object.entries(state.player.collections)) {
