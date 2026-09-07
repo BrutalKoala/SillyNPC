@@ -42,6 +42,32 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     --sillynpc-font-size-base: 14px;
     --sillynpc-line-height: 1.5;
 
+    /* Type Scale
+     *
+     * Every size in the menus, the sheets and the tracker comes from these seven steps.
+     * Before them there were twenty-nine distinct values - 0.72em, 0.75em, 0.8em and 0.85em
+     * all meaning "small", chosen by eye in whatever file needed one - and the seams showed
+     * wherever two surfaces met.
+     *
+     * Relative, not absolute, so the whole scale follows --sillynpc-font-size-base and the
+     * reader's own Menu Text Size. Ten sizes used to be written in px and ignored both; the
+     * item cards, the sheet title and the stat cards did not grow when somebody asked for
+     * larger text.
+     *
+     * The floating HUD is deliberately not on this scale. It sizes itself in px inside a
+     * transform: scale(), so its numbers are geometry rather than typography and following
+     * a text setting would break its proportions.
+     *
+     * Decorative sizes - a 3em plus sign on an empty card, the letter on a fallback avatar -
+     * are icon geometry too, and are left where they are. */
+    --sillynpc-text-xs: 0.72em;
+    --sillynpc-text-sm: 0.8em;
+    --sillynpc-text-md: 0.875em;
+    --sillynpc-text-base: 1em;
+    --sillynpc-text-lg: 1.15em;
+    --sillynpc-text-xl: 1.4em;
+    --sillynpc-text-2xl: 1.7em;
+
     /* Spacing Scale */
     --sillynpc-space-xs: 4px;
     --sillynpc-space-sm: 8px;
@@ -150,7 +176,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     border-bottom: none;
     padding: 10px var(--sillynpc-space-md);
     cursor: pointer;
-    font-size: 0.95em;
+    font-size: var(--sillynpc-text-base);
     opacity: 0.7;
     transition: background 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     display: flex;
@@ -185,7 +211,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     justify-content: center;
     gap: 6px;
     padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     margin-top: var(--sillynpc-space-xs);
     width: 100%;
     border-radius: 6px;
@@ -228,7 +254,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     border-bottom: 1px solid var(--sillynpc-accent);
     margin-bottom: var(--sillynpc-space-lg);
     margin-top: var(--sillynpc-space-lg);
-    font-size: 1.1em;
+    font-size: var(--sillynpc-text-lg);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
@@ -284,7 +310,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 .sillynpc-setting-row > label,
 .sillynpc-setting-label {
     font-weight: 500;
-    font-size: 1em;
+    font-size: var(--sillynpc-text-base);
     flex: 1;
     text-align: left;
     margin: 0;
@@ -398,14 +424,14 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 }
 
 .sillynpc-setting .sillynpc-number-suffix {
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     white-space: nowrap;
     opacity: 0.75;
 }
 
 .sillynpc-setting .slider-value {
     font-family: var(--sillynpc-font-mono);
-    font-size: 1em;
+    font-size: var(--sillynpc-text-base);
     width: 50px;
     text-align: right;
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
@@ -1323,7 +1349,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     padding: var(--sillynpc-space-sm);
     background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
     color: white;
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -1459,7 +1485,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 .sillynpc-editor-title {
     flex: 1;
     margin: 0;
-    font-size: 1.4em;
+    font-size: var(--sillynpc-text-xl);
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
 
@@ -1512,7 +1538,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     justify-content: center;
     gap: 10px;
     color: var(--sillynpc-fg-secondary);
-    font-size: 1.2em;
+    font-size: var(--sillynpc-text-lg);
 }
 
 .sillynpc-editor-bigpreview-empty i {
@@ -1628,7 +1654,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     border: none;
     color: var(--sillynpc-fg-secondary);
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     padding: var(--sillynpc-space-xs);
     transition: color 0.2s;
 }
@@ -1818,7 +1844,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     cursor: pointer !important;
     opacity: 0.5 !important;
     padding: 4px !important;
-    font-size: 14px !important;
+    font-size: var(--sillynpc-text-base) !important;
     color: inherit !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -1839,7 +1865,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
    have spent time on, so it must not read as the obvious thing to click. */
 .sillynpc-restore-recommended {
     margin-top: 6px;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     opacity: 0.7;
 }
 
@@ -1868,7 +1894,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 .sillynpc-time-rule input[type="text"],
 .sillynpc-time-rule input[type="number"] {
     height: 26px;
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     padding: 2px 6px;
 }
 
@@ -1935,7 +1961,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     border: 1px solid var(--sillynpc-accent-text, var(--sillynpc-accent));
     border-radius: var(--sillynpc-radius-md);
     background: color-mix(in srgb, var(--sillynpc-bg-secondary), transparent 25%);
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
 }
 
 .sillynpc-review-header {
@@ -1948,7 +1974,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 
 .sillynpc-review-owner {
     margin-top: var(--sillynpc-space-sm);
-    font-size: 0.8em;
+    font-size: var(--sillynpc-text-sm);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     opacity: 0.6;
@@ -2009,7 +2035,7 @@ span.sillynpc-review-to {
     width: 100%;
     padding-left: 32px;
     opacity: 0.55;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
 }
 
 /* The line carries the reader's own account of the change as well as the extension's
@@ -2030,7 +2056,7 @@ span.sillynpc-review-to {
     padding: var(--sillynpc-space-sm);
     border-left: 2px solid var(--sillynpc-border);
     opacity: 0.75;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
 }
 
 .sillynpc-review-loose-note {
@@ -2071,7 +2097,7 @@ span.sillynpc-review-to {
 .sillynpc-review-dest-select {
     height: 24px;
     padding: 1px 4px;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     max-width: 130px;
     background: var(--sillynpc-bg-primary);
     color: inherit;
@@ -2084,7 +2110,7 @@ span.sillynpc-review-to {
     align-items: center;
     gap: 4px;
     margin-left: 32px;
-    font-size: 0.8em;
+    font-size: var(--sillynpc-text-sm);
     opacity: 0.5;
     cursor: pointer;
 }
@@ -2332,7 +2358,7 @@ span.sillynpc-review-to {
 
 .sillynpc-sheet-close {
     cursor: pointer;
-    font-size: 20px;
+    font-size: var(--sillynpc-text-lg);
     opacity: 0.6;
     transition: opacity 0.2s ease, transform 0.2s ease;
     display: flex;
@@ -2354,7 +2380,7 @@ span.sillynpc-review-to {
 }
 
 .sillynpc-sheet-title .persona-name {
-    font-size: 24px;
+    font-size: var(--sillynpc-text-xl);
     font-weight: bold;
 }
 
@@ -2364,7 +2390,7 @@ span.sillynpc-review-to {
     padding: 2px 10px;
     border-radius: var(--sillynpc-radius-sm);
     font-weight: bold;
-    font-size: 14px;
+    font-size: var(--sillynpc-text-md);
 }
 
 .sillynpc-sheet-body {
@@ -2428,7 +2454,7 @@ span.sillynpc-review-to {
     border-bottom: none;
     border-radius: 5px 5px 0 0;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--sillynpc-text-md);
     opacity: 0.7;
     margin-bottom: -1px;
 }
@@ -2489,14 +2515,14 @@ span.sillynpc-review-to {
 }
 
 .sillynpc-attribute-item .attr-name {
-    font-size: 12px;
+    font-size: var(--sillynpc-text-sm);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     opacity: 0.6;
 }
 
 .sillynpc-attribute-item .attr-value {
-    font-size: 18px;
+    font-size: var(--sillynpc-text-lg);
     font-weight: bold;
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
@@ -2545,7 +2571,7 @@ span.sillynpc-review-to {
 
 .sillynpc-item-card .item-name {
     font-weight: bold;
-    font-size: 16px;
+    font-size: var(--sillynpc-text-lg);
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
 
@@ -2555,7 +2581,7 @@ span.sillynpc-review-to {
 }
 
 .sillynpc-item-card .item-description {
-    font-size: 13px;
+    font-size: var(--sillynpc-text-md);
     opacity: 0.7;
 }
 
@@ -2575,7 +2601,7 @@ span.sillynpc-review-to {
 
 .sillynpc-item-card .item-actions i {
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--sillynpc-text-base);
 }
 
 .sillynpc-item-card .item-actions i:hover {
@@ -2682,7 +2708,7 @@ span.sillynpc-review-to {
 }
 
 .readonly-field .field-label {
-    font-size: 0.75em;
+    font-size: var(--sillynpc-text-sm);
     font-weight: bold;
     text-transform: uppercase;
     opacity: 0.7;
@@ -2692,7 +2718,7 @@ span.sillynpc-review-to {
 }
 
 .readonly-field .field-value {
-    font-size: 0.95em;
+    font-size: var(--sillynpc-text-base);
     white-space: pre-wrap;
     word-break: break-word;
 }
@@ -2723,7 +2749,7 @@ span.sillynpc-review-to {
     border-radius: 6px;
     border-left: 3px solid var(--SmartThemeQuoteColor, #c9a96e);
     background: color-mix(in srgb, currentColor 8%, transparent);
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     line-height: 1.4;
 }
 
@@ -2767,7 +2793,7 @@ span.sillynpc-review-to {
     left: 50%;
     transform: translateX(-50%);
     font-family: var(--sillynpc-font-mono);
-    font-size: 0.8em;
+    font-size: var(--sillynpc-text-sm);
     padding: 1px 8px;
     border-radius: 10px;
     background: rgba(0, 0, 0, 0.55);
@@ -2853,7 +2879,7 @@ span.sillynpc-review-to {
     opacity: 0.4;
     color: #fff;
     background: rgba(0, 0, 0, 0.55);
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     transition: opacity 0.15s ease, background 0.15s ease;
     z-index: 2;
 }
@@ -2921,7 +2947,7 @@ span.sillynpc-review-to {
 /* Which page, because half of what makes this useful is learning where things are rather
    than being taken there blind every time. */
 .sillynpc-settings-search-where {
-    font-size: 0.8em;
+    font-size: var(--sillynpc-text-sm);
     color: var(--sillynpc-fg-secondary);
 }
 
@@ -3027,7 +3053,7 @@ span.sillynpc-review-to {
    the body colour rather than the accent. */
 .sillynpc-subsection-title {
     margin: var(--sillynpc-space-lg) 0 var(--sillynpc-space-sm);
-    font-size: 1em;
+    font-size: var(--sillynpc-text-base);
     letter-spacing: 0.04em;
     color: var(--sillynpc-fg-primary, inherit);
     text-align: left;
@@ -3102,7 +3128,7 @@ span.sillynpc-review-to {
 
 .sillynpc-pool-tags {
     width: 100%;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     text-align: left;
 }
 
@@ -3450,7 +3476,7 @@ span.sillynpc-review-to {
     inset: 0 0 0 auto;
     width: auto;
     justify-content: flex-end;
-    font-size: 0.72em;
+    font-size: var(--sillynpc-text-xs);
 }
 
 /* ─── Underlines ────────────────────────────────────────────────────────────
@@ -3467,7 +3493,7 @@ span.sillynpc-review-to {
 }
 .sillynpc-hud-underline .sillynpc-hud-stat-name {
     display: block;
-    font-size: 0.72em;
+    font-size: var(--sillynpc-text-xs);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     opacity: 0.85;
@@ -3485,7 +3511,7 @@ span.sillynpc-review-to {
     inset: 0 0 auto auto;
     width: auto;
     height: auto;
-    font-size: 0.72em;
+    font-size: var(--sillynpc-text-xs);
 }
 
 /* ─── Pip Rows ──────────────────────────────────────────────────────────────
@@ -3514,7 +3540,7 @@ span.sillynpc-review-to {
     width: auto;
     height: auto;
     margin-left: 0.4em;
-    font-size: 0.72em;
+    font-size: var(--sillynpc-text-xs);
 }
 .sillynpc-hud-pips .sillynpc-hud-stat-row { display: flex; align-items: center; }
 
@@ -3670,7 +3696,7 @@ span.sillynpc-review-to {
 .sillynpc-checkpoint-when {
     flex: 1;
     min-width: 0;
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     /* A long label must not push the buttons off the row. */
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3857,7 +3883,7 @@ span.sillynpc-review-to {
 }
 
 .sillynpc-profile-label {
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     font-weight: bold;
     color: var(--sillynpc-accent-text, var(--sillynpc-accent));
 }
@@ -3897,7 +3923,7 @@ span.sillynpc-review-to {
     border: none;
     padding: 2px 4px;
     cursor: pointer;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     line-height: 1;
     opacity: 0.45;
     color: inherit;
@@ -3985,7 +4011,7 @@ textarea.sillynpc-profile-input {
     border-bottom: 2px solid transparent;
     color: var(--sillynpc-fg-secondary);
     padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
-    font-size: 0.95em;
+    font-size: var(--sillynpc-text-base);
     cursor: pointer;
     border-radius: var(--sillynpc-radius-sm) var(--sillynpc-radius-sm) 0 0;
 }
@@ -4082,7 +4108,7 @@ textarea.sillynpc-profile-input {
 
 .sillynpc-cv-category {
     text-align: center;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     color: var(--sillynpc-fg-secondary);
     padding: 4px 8px;
     background: var(--sillynpc-bg-secondary);
@@ -4113,7 +4139,7 @@ textarea.sillynpc-profile-input {
 }
 
 .sillynpc-cv-label {
-    font-size: 0.75em;
+    font-size: var(--sillynpc-text-sm);
     font-weight: bold;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -4141,7 +4167,7 @@ textarea.sillynpc-profile-input {
     background: var(--sillynpc-bg-secondary);
     border: 1px solid var(--sillynpc-border);
     border-radius: 999px;
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
 }
 
 .sillynpc-cv-chip-key { color: var(--sillynpc-fg-secondary); }
@@ -4269,7 +4295,7 @@ textarea.sillynpc-profile-input {
     border-radius: var(--sillynpc-radius-sm);
     border: 1px solid var(--sillynpc-border);
     background: var(--sillynpc-bg-secondary);
-    font-size: 0.9em;
+    font-size: var(--sillynpc-text-md);
     color: var(--sillynpc-fg-secondary);
 }
 
@@ -4369,7 +4395,7 @@ textarea.sillynpc-profile-input {
 
 .sillynpc-thread-status {
     margin-top: 2px;
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     opacity: 0.75;
 }
 
@@ -4380,7 +4406,7 @@ textarea.sillynpc-profile-input {
 
 .sillynpc-thread-kind {
     flex: 0 0 auto;
-    font-size: 0.7em;
+    font-size: var(--sillynpc-text-xs);
     font-weight: bold;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -4405,7 +4431,7 @@ textarea.sillynpc-profile-input {
 }
 
 .sillynpc-thread-quote {
-    font-size: 0.85em;
+    font-size: var(--sillynpc-text-md);
     font-style: italic;
     color: var(--sillynpc-fg-secondary);
     overflow-wrap: anywhere;
