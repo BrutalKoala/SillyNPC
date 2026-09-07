@@ -30,27 +30,33 @@ export function mergeStatValue(oldVal, newVal, maxVal) {
     const strOld = oldVal !== undefined && oldVal !== null ? String(oldVal) : '';
     const strNew = String(newVal);
     
-    // No configured maximum does not mean no maximum. A value arriving as "280/350"
-    // carries a ceiling this actor has and the stat definition does not, and throwing the
-    // denominator away here is how a character's own cap disappeared mid-story.
-    if (!maxVal) {
-        return clampToCeiling(strNew.trim());
-    }
-    
-    // If the old value has a max format, preserve it
-    if (strOld.includes('/') && !strNew.includes('/')) {
-        const parts = strOld.split('/');
-        if (parts.length === 2) {
-            return clampToCeiling(`${strNew.trim()}/${parts[1].trim()}`);
-        }
+    /* Three ceilings can apply, and this is the order of precedence.
+     *
+     * It used to be expressed as an early return - "no configured maximum, so send the new
+     * value as it stands" - which put the second rule below a branch that could never reach
+     * it. So a stat with no maxStatValue lost the actor's own ceiling the moment the model
+     * reported a bare number, which is the usual shape for a model reporting a stat. That is
+     * the same failure clampToCeiling's own note describes: a character given a ceiling of
+     * 350 lost it silently a few messages later, and with nothing left to cap them their
+     * Energy climbed past 350 unopposed. Only half of it was fixed then - clampToCeiling
+     * stopped stripping ceilings on load; this kept dropping them on merge.
+     */
+
+    // 1. The incoming value brought its own. "280/350" states a ceiling outright.
+    if (strNew.includes('/')) return clampToCeiling(strNew.trim());
+
+    // 2. The actor's own, which the stat definition may know nothing about: one character's
+    //    Energy caps at 350 while another's caps at 40, with nothing configured globally.
+    const parts = strOld.split('/');
+    if (strOld.includes('/') && parts.length === 2 && parts[1].trim()) {
+        return clampToCeiling(`${strNew.trim()}/${parts[1].trim()}`);
     }
 
-    // Otherwise, if a maxVal is provided and the new value is a plain number, append /maxVal
-    if (maxVal && !strNew.includes('/')) {
-        return clampToCeiling(`${strNew.trim()}/${String(maxVal).trim()}`);
-    }
+    // 3. The schema's, if it has one.
+    if (maxVal) return clampToCeiling(`${strNew.trim()}/${String(maxVal).trim()}`);
 
-    return clampToCeiling(newVal);
+    // Nothing anywhere has a ceiling, so the value carries none.
+    return clampToCeiling(strNew.trim());
 }
 
 /**
@@ -2996,8 +3002,22 @@ function applyCollectionUpdate(actor, collectionId, update, { allowReplace = fal
     if (!actor.collections[actualCollectionId]) actor.collections[actualCollectionId] = [];
     
     // Handle Delta Update (Object)
-    // Handle "clear"
+    /* "clear" is a replacement like any other, and is gated like one.
+     *
+     * It was not, which made it the one way past the care taken directly above: a bare list
+     * is downgraded to additions unless the caller says otherwise, precisely because a small
+     * model restating an inventory would otherwise delete everything it did not mention.
+     * `clear` skipped all of that and emptied the collection outright. Nothing in the
+     * extension sends it and no shipped prompt mentions it, so it was unreachable by design
+     * and fully reachable by accident - a model emitting a plausible "clear": true.
+     *
+     * Kept rather than deleted because the history scan does legitimately rebuild a list,
+     * and allowReplace is exactly the flag that says so. */
     if (update.clear === true) {
+        if (!allowReplace) {
+            debugLog(`Ignored "clear" on "${actualCollectionId}": a single message may not empty a collection.`);
+            return;
+        }
         actor.collections[actualCollectionId] = [];
         return;
     }
@@ -3152,11 +3172,20 @@ function updateItem(actor, collectionId, itemName, updates) {
     
     if (itemIndex !== -1) {
         const item = actor.collections[collectionId][itemIndex];
+
+        const merged = { ...item };
         Object.keys(updates).forEach(key => {
-            if (validFields.has(key)) {
-                item[key] = updates[key];
-            }
+            if (validFields.has(key)) merged[key] = updates[key];
         });
+
+        /* Normalised like the add and replace paths, which this used to skip: writing
+           straight through meant the field-name check was the only guard, so an update row
+           could store "seven" in a number field and a value outside a configured options
+           list. Both are reachable from an ordinary per-message reply.
+
+           `item` as the previous value for the same reason addItem passes it: a value
+           already stored off-list must not be refused on every later write. */
+        actor.collections[collectionId][itemIndex] = normaliseItem(merged, colDef.fields, item);
     }
 }
 
