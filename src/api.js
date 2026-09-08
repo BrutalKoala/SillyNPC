@@ -724,6 +724,108 @@ export async function removeCharacterImage(char, path, { deleteFile = false } = 
 }
 
 /**
+ * Every image path anything still points at.
+ *
+ * Four holders, and missing any one of them turns a cleanup into data loss:
+ *
+ *   - a character's current portrait and its whole gallery;
+ *   - a **persona's** record, which holds pictures the same way a character's does - the
+ *     player's own portrait lives there, and forgetting it would delete the face on the HUD;
+ *   - the fallback pool, whose entries belong to no character at all;
+ *   - a card's `defaultPortrait`, the pool face written onto a card that has none of its own.
+ *
+ * Pure, and separated from the deleting for that reason: this is the half where a mistake
+ * costs somebody their pictures, so it is the half worth testing.
+ *
+ * @param {object} [settings] Defaults to the live settings.
+ * @returns {Set<string>} Paths, exactly as they are stored.
+ */
+export function referencedImagePaths(settings = getSettings()) {
+    const keep = new Set();
+    const add = (value) => {
+        const path = String(value ?? '').trim();
+        if (path) keep.add(path);
+    };
+
+    for (const holder of [...(settings.characters || []),
+                          ...Object.values(settings.personaData || {})]) {
+        add(holder?.imageUrl);
+        add(holder?.defaultPortrait);
+        for (const image of holder?.images || []) add(image);
+    }
+    for (const entry of settings.defaultImages || []) add(entry?.src);
+
+    return keep;
+}
+
+/**
+ * Files in the save folder that nothing points at any more.
+ *
+ * Deleting a character has never deleted its pictures - deleteFile is opt-in throughout, so
+ * that the destructive reading is never the one that happens by omission - so they
+ * accumulate. This finds them; it does not remove anything.
+ *
+ * @returns {Promise<{ folder: string, files: string[], scanned: number }>}
+ */
+export async function findOrphanedImages() {
+    const folder = resolveImageFolder(getSettings().imageSaveRoute);
+
+    let files = [];
+    try {
+        const response = await fetch('/api/images/list', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ folder, sortField: 'date', sortOrder: 'asc' }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        files = await response.json();
+    } catch (err) {
+        debugLog('Could not list the save folder', err);
+        throw new Error(`Could not read user/images/${folder}.`);
+    }
+    if (!Array.isArray(files)) return { folder, files: [], scanned: 0 };
+
+    const keep = referencedImagePaths();
+    const orphans = files
+        .filter(file => typeof file === 'string')
+        .map(file => `/user/images/${folder}/${file}`)
+        .filter(path => !keep.has(path));
+
+    return { folder, files: orphans, scanned: files.length };
+}
+
+/**
+ * Deletes the given image files.
+ *
+ * Takes the list rather than finding it again, so what is deleted is exactly what the user
+ * was shown and agreed to - a second scan between the question and the answer could pick up
+ * a portrait generated in between.
+ *
+ * @param {string[]} paths
+ * @returns {Promise<{ deleted: number, failed: number }>}
+ */
+export async function deleteImageFiles(paths) {
+    let deleted = 0;
+    let failed = 0;
+
+    for (const path of paths || []) {
+        try {
+            const response = await fetch('/api/images/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                // Leading slash removed: the endpoint joins this to the user root.
+                body: JSON.stringify({ path: String(path).replace(/^\//, '') }),
+            });
+            if (response.ok) deleted += 1; else failed += 1;
+        } catch (err) {
+            debugLog('Could not delete', path, err);
+            failed += 1;
+        }
+    }
+    return { deleted, failed };
+}
+
+/**
  * Generates a portrait with a Google Gemini image model ("Nano Banana").
  *
  * This bypasses the Stable Diffusion extension deliberately. Its Google source only

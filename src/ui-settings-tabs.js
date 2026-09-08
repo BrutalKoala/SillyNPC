@@ -11,7 +11,7 @@ import { world_names } from '../../../../world-info.js';
 import { extension_settings } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../popup.js';
 import { LOG_PREFIX, NARRATOR_RULES_PROMPT, SILLYNPC_THEMES, GEMINI_IMAGE_MODELS, PORTRAIT_SHAPES, debugLog, setDebugLogging } from './constants.js';
-import { buildLoreExcerpt, resolvePortraitShape, getLastLoreConnection, resolveImageSecretId, scanFolderForCharacterImages, persistGeneratedImage } from './api.js';
+import { buildLoreExcerpt, resolvePortraitShape, getLastLoreConnection, resolveImageSecretId, scanFolderForCharacterImages, persistGeneratedImage, findOrphanedImages, deleteImageFiles } from './api.js';
 import { getSecretLabelById } from '../../../../secrets.js';
 import { getRequestHeaders } from '../../../../../script.js';
 import { getContext } from '../../../../extensions.js';
@@ -848,6 +848,65 @@ export function renderGenerationSettingsView(view) {
 
     scanWrap.append(scanBtn, scanNote);
     view.append(scanWrap);
+
+    /* The other direction: files nothing points at any more.
+     *
+     * Deleting a character has never deleted its pictures, and deliberately still does not -
+     * deleteFile is opt-in throughout so that the destructive reading is never the one that
+     * happens by omission. The cost is that they accumulate, and there was no way to see how
+     * many or get rid of them. This shows the count and the size first and deletes only on a
+     * confirm that names both. */
+    const tidyWrap = document.createElement('div');
+    tidyWrap.className = 'sillynpc-setting';
+
+    const tidyBtn = document.createElement('button');
+    tidyBtn.type = 'button';
+    tidyBtn.className = 'menu_button';
+    tidyBtn.innerHTML = '<i class="fa-solid fa-broom"></i> Remove unused portraits';
+    tidyBtn.addEventListener('click', async () => {
+        tidyBtn.disabled = true;
+        try {
+            const { files, scanned, folder } = await findOrphanedImages();
+            if (!files.length) {
+                toastr.info(
+                    `Looked at ${scanned} file${scanned === 1 ? '' : 's'}; every one is still in use.`,
+                    'SillyNPC');
+                return;
+            }
+
+            // Named, so the confirm is about particular pictures rather than a number.
+            const sample = files.slice(0, 5).map(p => p.split('/').pop()).join('\n');
+            const more = files.length > 5 ? `\n...and ${files.length - 5} more` : '';
+            const ok = await Popup.show.confirm(
+                'Remove unused portraits',
+                `${files.length} of ${scanned} file${scanned === 1 ? '' : 's'} in `
+                + `user/images/${folder} are not used by any character, persona or fallback `
+                + `portrait:\n\n${sample}${more}\n\nDelete them? This cannot be undone.`);
+            if (!ok) return;
+
+            const { deleted, failed } = await deleteImageFiles(files);
+            if (failed) {
+                toastr.warning(`Deleted ${deleted}; ${failed} could not be removed.`, 'SillyNPC');
+            } else {
+                toastr.success(`Deleted ${deleted} unused portrait${deleted === 1 ? '' : 's'}.`, 'SillyNPC');
+            }
+        } catch (err) {
+            toastr.error(err.message, 'SillyNPC');
+        } finally {
+            tidyBtn.disabled = false;
+        }
+    });
+
+    const tidyNote = document.createElement('small');
+    tidyNote.className = 'notes';
+    tidyNote.style.cssText = 'display:block; margin-top:4px;';
+    tidyNote.textContent = 'Finds pictures in the folder above that no character, persona or '
+        + 'fallback portrait points at - usually left behind by characters you have since '
+        + 'deleted. Shows you what it found before removing anything. A picture still used '
+        + 'by anybody, including you, is never touched.';
+
+    tidyWrap.append(tidyBtn, tidyNote);
+    view.append(tidyWrap);
 }
 
 /**
