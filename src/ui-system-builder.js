@@ -3,7 +3,7 @@ import { Popup } from '../../../../popup.js';
 import { updateHUD } from './ui-hud.js';
 import { escapeHtml, moveInList } from './utils.js';
 import { buildBulkBar, buildBulkCheckbox, spliceIndexes } from './ui-bulk-select.js';
-import { renameCollectionId, renameCollectionField, renameStat } from './status-logic.js';
+import { renameCollectionId, renameCollectionField, renameStat, isNumericStat } from './status-logic.js';
 import { makeActivatable } from './utils.js';
 
 /**
@@ -428,11 +428,11 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
             <div style="display:flex; gap:8px; width:100%; align-items:center;">
                 <small class="sillynpc-field-note">Format:</small>
                 <input type="text" class="text_pole stat-format" value="${escapeHtml(stat.format || '{{value}}')}" placeholder="e.g. HP: {{value}}" style="flex:1; font-size:var(--sillynpc-text-md); height:24px;">
-                ${stat.type === 'bar' ? `
+                ${isNumericStat(stat) ? `
                 <small class="sillynpc-field-note">Min:</small>
-                <input type="text" class="text_pole stat-min" value="${escapeHtml(stat.min ?? '')}" placeholder="0" title="Lower bound for a Meter. Use a negative number for ranges like -100..100." style="width:45px; font-size:var(--sillynpc-text-md); height:24px;">
-                <small class="sillynpc-field-note" title="The maximum this stat starts at. Once play moves the ceiling - a level-up, a new rank - the live value wins and this is no longer consulted.">Starts max:</small>
-                <input type="text" class="text_pole stat-max" value="${escapeHtml(stat.maxStatValue || '')}" placeholder="Max" title="Starting maximum only. The ceiling actually in play is read from the stat's own value, so a character who has grown past this is not clamped back." style="width:50px; font-size:var(--sillynpc-text-md); height:24px;">
+                <input type="text" class="text_pole stat-min" value="${escapeHtml(stat.min ?? '')}" placeholder="0" title="Lower bound. Use a negative number for ranges like -100..100." style="width:45px; font-size:var(--sillynpc-text-md); height:24px;">
+                <small class="sillynpc-field-note" title="The maximum this stat starts at, used only when an actor is first given it. After that the value itself carries the ceiling: write it as 53/53 for a meter, or as 53 for a plain number with no maximum.">Starts max:</small>
+                <input type="text" class="text_pole stat-max" value="${escapeHtml(stat.maxStatValue || '')}" placeholder="Max" title="Starting maximum only. The ceiling in play is read from the stat's own value - write 53/53 to set one, or 53 to have none - so a character who has grown past this is not clamped back, and one whose ceiling you cleared does not get it handed back." style="width:50px; font-size:var(--sillynpc-text-md); height:24px;">
                 ` : `
                 <small class="sillynpc-field-note">Write it:</small>
                 <input type="text" class="text_pole stat-hint" value="${escapeHtml(stat.hint || '')}"
@@ -444,9 +444,9 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                        placeholder="—" title="Blank for no limit. Anything longer is cut back to a word boundary and marked."
                        style="width:50px; font-size:var(--sillynpc-text-md); height:24px;">
                 `}
-                <select class="text_pole stat-type" title="How this stat is displayed" style="width:80px; font-size:var(--sillynpc-text-md); height:24px;">
-                    <option value="text" ${stat.type !== 'bar' ? 'selected' : ''}>Text</option>
-                    <option value="bar" ${stat.type === 'bar' ? 'selected' : ''}>Meter</option>
+                <select class="text_pole stat-type" title="What this stat holds. A Number is a quantity, so it can have a minimum, a maximum and time rules; write its value as 53/53 to get a meter, or as 53 for a plain number. Text is anything else." style="width:80px; font-size:var(--sillynpc-text-md); height:24px;">
+                    <option value="text" ${!isNumericStat(stat) ? 'selected' : ''}>Text</option>
+                    <option value="number" ${isNumericStat(stat) ? 'selected' : ''}>Number</option>
                 </select>
                 ${settingsKey === 'playerStats' ? `
                 <label class="sillynpc-check-group" style="margin-left:10px;"

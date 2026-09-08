@@ -1,6 +1,6 @@
 import { getSettings } from './settings.js';
 import { debugLog } from './constants.js';
-import { resolveMaxValue, loadStateFromMetadata, applyUpdate, saveStateToMetadata } from './status-logic.js';
+import { loadStateFromMetadata, applyUpdate, saveStateToMetadata } from './status-logic.js';
 import { splitValue, buildUpdateFromChanges } from './status-diff.js';
 import { parseClock, elapsedMinutes, describeDuration, DAY_MINUTES } from './status-clock.js';
 
@@ -65,16 +65,16 @@ function readStat(rule, target, state) {
     return target.actor?.stats?.[rule.stat];
 }
 
-/** The ceiling actually in play: the value's own denominator, else the schema's. */
-function ceilingFor(rule, live, trackerSettings) {
-    const fromValue = asNumber(splitValue(live).max);
-    if (fromValue !== null) return fromValue;
-
-    const schema = rule.scope === 'global' ? trackerSettings.globalStats
-        : rule.scope === 'characters' ? trackerSettings.npcStats
-            : trackerSettings.playerStats;
-    const statDef = (schema || []).find(s => s.name === rule.stat);
-    return asNumber(resolveMaxValue(statDef));
+/**
+ * The ceiling actually in play: the value's own denominator, and nothing else.
+ *
+ * It used to fall back to the configured maximum, which is a starting value - so a stat
+ * whose ceiling had been cleared went on being clamped to a number nothing displayed and
+ * nobody could change. Regeneration stopping at an invisible limit is the sort of thing
+ * that reads as the rule being broken rather than as a setting still applying.
+ */
+function ceilingFor(rule, live) {
+    return asNumber(splitValue(live).max);
 }
 
 /** The floor, if the schema names one. */
@@ -192,7 +192,7 @@ function evaluateTimeRules(state, messageId) {
             const before = asNumber(parts.current);
             if (before === null) continue;
 
-            const ceiling = ceilingFor(rule, live, trackerSettings);
+            const ceiling = ceilingFor(rule, live);
             const floor = floorFor(rule, trackerSettings);
 
             let after = before + ticks * amount;

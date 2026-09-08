@@ -14,23 +14,31 @@ import { applyMacros } from './macros.js';
 import { getContext } from '../../../../st-context.js';
 import { power_user } from '../../../../power-user.js';
 import { setUserAvatar, getUserAvatar } from '../../../../personas.js';
-import { getSettings, saveSettings, defaultSettings } from './settings.js';
+import { getSettings, saveSettings, defaultSettings, normaliseStatDefs } from './settings.js';
 import { LOG_PREFIX, debugLog, PROFILE_FIELDS, isStaticField } from './constants.js';
-import { extractJSON, safeJsonParse, splitValue, escapeRegExp, currentMessageIndex } from './utils.js';
+import { extractJSON, safeJsonParse, splitValue, escapeRegExp, currentMessageIndex, ceilingFromValue } from './utils.js';
 import { getIgnoredSpeakerLabels, normaliseSpeakerLabel } from './speaker-labels.js';
 import { describeThreads } from './threads.js';
 import { charactersFromActivatedLore } from './activated-lore.js';
 
 /**
- * Merges old and new stat values. If the old value had a max format (e.g. "50/100") 
- * and the new value is a single number, it preserves the max format ("new/100").
+ * Merges old and new stat values.
+ *
+ * A reported value keeps the ceiling the actor already carries: "50/100" updated with a
+ * bare 40 is "40/100". A value written by hand does not, because it is the whole value.
+ *
+ * @param {*} oldVal
+ * @param {*} newVal
+ * @param {{ verbatim?: boolean }} [options] verbatim means the new value is the whole
+ *   value, not a reading of part of one - see rule 2 below.
  */
-export function mergeStatValue(oldVal, newVal, maxVal) {
+export function mergeStatValue(oldVal, newVal, options = {}) {
+    const { verbatim = false } = options;
     if (newVal === undefined || newVal === null) return newVal;
     const strOld = oldVal !== undefined && oldVal !== null ? String(oldVal) : '';
     const strNew = String(newVal);
     
-    /* Three ceilings can apply, and this is the order of precedence.
+    /* Two ceilings can apply, and this is the order of precedence.
      *
      * It used to be expressed as an early return - "no configured maximum, so send the new
      * value as it stands" - which put the second rule below a branch that could never reach
@@ -38,42 +46,47 @@ export function mergeStatValue(oldVal, newVal, maxVal) {
      * reported a bare number, which is the usual shape for a model reporting a stat. That is
      * the same failure clampToCeiling's own note describes: a character given a ceiling of
      * 350 lost it silently a few messages later, and with nothing left to cap them their
-     * Energy climbed past 350 unopposed. Only half of it was fixed then - clampToCeiling
-     * stopped stripping ceilings on load; this kept dropping them on merge.
+     * Energy climbed past 350 unopposed.
      */
 
     // 1. The incoming value brought its own. "280/350" states a ceiling outright.
     if (strNew.includes('/')) return clampToCeiling(strNew.trim());
 
-    // 2. The actor's own, which the stat definition may know nothing about: one character's
-    //    Energy caps at 350 while another's caps at 40, with nothing configured globally.
+    /* 2. The actor's own, which the stat definition may know nothing about: one character's
+     *    Energy caps at 350 while another's caps at 40, with nothing configured globally.
+     *
+     *    Only for a value being reported rather than written. A model answering "Energy: 80"
+     *    is reading the current half of 280/350 and says nothing about the ceiling, so
+     *    keeping it is the only honest reading. Somebody typing 80 into the field has
+     *    written the whole value, and a rule that helpfully appends "/350" to it means the
+     *    ceiling can be changed but never removed - which is exactly what it meant.
+     */
     const parts = strOld.split('/');
-    if (strOld.includes('/') && parts.length === 2 && parts[1].trim()) {
+    if (!verbatim && strOld.includes('/') && parts.length === 2 && parts[1].trim()) {
         return clampToCeiling(`${strNew.trim()}/${parts[1].trim()}`);
     }
 
-    // 3. The schema's, if it has one.
-    if (maxVal) return clampToCeiling(`${strNew.trim()}/${String(maxVal).trim()}`);
-
-    // Nothing anywhere has a ceiling, so the value carries none.
+    /* And deliberately no third. The configured maximum is a *starting* maximum: it seeds a
+       stat the first time an actor is given one, and from then on the value is the only
+       thing that says whether there is a ceiling at all. Appending it here put a ceiling
+       back on any bare number, so a stat with a configured max could never lose one either. */
     return clampToCeiling(strNew.trim());
 }
 
 /**
- * Formats a default value with its defined maximum value if it doesn't already have one.
- */
-/**
- * A stat's effective maximum.
+ * A stat's *starting* maximum - the one a new actor is seeded with.
  *
- * An empty maxStatValue used to mean "this stat has no ceiling", which made
- * mergeStatValue strip the "/max" off any value. Combined with a default of "10/10"
- * that is incoherent: the stat starts at 10/10 and collapses to 8 on the first
- * update, losing the ceiling from the display AND from the prompt's STAT LIMITS
- * block. Defaults written as "cur/max" now supply the max when none is set
- * explicitly, which fixes existing configurations without a migration.
+ * Not the ceiling in play. That is read from the value itself, which is the only place it
+ * can honestly live: one character's Energy caps at 350 while another's caps at 40, and
+ * play raises a ceiling far more often than a setting does. This supplies the first one
+ * and is not consulted again, which is what the System Builder box has said all along -
+ * "Starting maximum only. The ceiling actually in play is read from the stat's own value."
+ *
+ * A default written as "10/10" supplies the max when none is set explicitly, so a system
+ * configured that way seeds correctly without anyone having to fill in a second box.
  *
  * @param {{maxStatValue?: string, defaultValue?: string}} statDef
- * @returns {string} The max, or '' when the stat genuinely has none.
+ * @returns {string} The starting max, or '' when the stat has none.
  */
 export function resolveMaxValue(statDef) {
     if (!statDef) return '';
@@ -85,6 +98,99 @@ export function resolveMaxValue(statDef) {
         if (denominator) return denominator;
     }
     return '';
+}
+
+/**
+ * The ceiling to tell a model about.
+ *
+ * The value's own, whenever there is a value: once an actor holds "160/180" that is their
+ * ceiling, and once they hold a bare "160" they have none and saying otherwise invents one.
+ * The configured maximum stands in only for a stat nobody has a value for yet, which is the
+ * one case where there is nothing else to read.
+ *
+ * @param {object} statDef
+ * @param {string|number} [storedValue] The actor's value, if they have one.
+ * @returns {string} The ceiling, or '' for none.
+ */
+export function promptCeiling(statDef, storedValue) {
+    const held = storedValue !== undefined && storedValue !== null && String(storedValue).trim() !== '';
+    if (!held) return resolveMaxValue(statDef);
+    if (ceilingFromValue(storedValue) === null) return '';
+    return String(splitValue(storedValue).max).trim();
+}
+
+/**
+ * The cast's highest ceiling for a stat, returned as the value that carries it.
+ *
+ * undefined when nobody holds the stat at all, so promptCeiling can fall back to the
+ * configured maximum; a value with no ceiling when somebody holds it and none of them has
+ * one, so that "they have no ceiling" survives rather than being read as "no data".
+ *
+ * @param {object[]} characters
+ * @param {string} name
+ */
+export function highestCeiling(characters, name) {
+    let best;
+    let bestNum = -Infinity;
+    for (const char of characters || []) {
+        const value = char?.stats?.[name];
+        if (value === undefined || value === null || String(value).trim() === '') continue;
+        const ceiling = ceilingFromValue(value);
+        if (ceiling === null) {
+            if (best === undefined) best = value;
+            continue;
+        }
+        if (ceiling > bestNum) { bestNum = ceiling; best = value; }
+    }
+    return best;
+}
+
+/**
+ * Does this stat hold a quantity?
+ *
+ * The field type used to be Text or Meter, which named the drawing rather than the
+ * content - so a field could be "a meter" while holding a date, and switching it back to
+ * Text left the HUD still drawing one. Number is what was meant: it says the value is a
+ * quantity, and whether a meter is drawn follows from the value.
+ *
+ * 'bar' is the old spelling and is still read, because a system preset saved before the
+ * rename carries it and is applied without passing through the settings migration.
+ *
+ * @param {{type?: string}} statDef
+ */
+export function isNumericStat(statDef) {
+    const type = statDef?.type;
+    return type === 'number' || type === 'bar';
+}
+
+/**
+ * The ceiling a value carries, if it carries one - regardless of what it is for.
+ *
+ * @param {{maxStatValue?: string, defaultValue?: string}} statDef Unused for the ceiling
+ *   itself; kept so callers read as "this stat, this value".
+ * @param {string|number} rawValue
+ */
+export function meterHasCeiling(statDef, rawValue) {
+    // Through the shared reader rather than a parseFloat of its own, or this says yes to a
+    // date: "14/01/2012" splits to a denominator of "01/2012", which parseFloat reads as 1.
+    return ceilingFromValue(rawValue) !== null;
+}
+
+/**
+ * Whether a stat is drawn as a meter.
+ *
+ * One function because there were two, in two files, disagreeing: the tracker box asked
+ * the field type (status-ui.js) and the HUD asked the value (ui-hud.js), so a field
+ * switched back to Text kept its meter on the HUD for as long as its value had a slash.
+ * Both halves have to hold - it must be a quantity, and the quantity must have a ceiling
+ * to fill. A bare 53 is just 53, and a bar pinned at 100% for the life of the chat was
+ * never information.
+ *
+ * @param {object} statDef
+ * @param {string|number} rawValue
+ */
+export function drawsMeter(statDef, rawValue) {
+    return isNumericStat(statDef) && meterHasCeiling(statDef, rawValue);
 }
 
 /**
@@ -1547,14 +1653,28 @@ function getStatusInstructions() {
     prompt += `1. Reasoning: Briefly explain the changes in 1-2 sentences (e.g., "The player took damage and used a potion."). Focus on stat changes, collection updates, and environment changes.\n`;
     prompt += `2. JSON Update: Provide the updated status block wrapped in <status_update> tags.\n`;
 
-    // Add Stat Maximums information
-    const describeMaxes = list => (list || [])
-        .map(stat => ({ stat, max: resolveMaxValue(stat) }))
+    /* The ceilings actually in play, not the configured ones.
+     *
+     * These were read straight off the settings, which contradicts the state this same
+     * prompt has just shown: a player whose Health had grown to 160/180 was told "Health:
+     * 160/180" and then "Player Max Stats: Health: 120", and a model resolves that by
+     * trusting the limit. It reads the other way too, and that is the report this came
+     * from - clear the ceiling on the sheet and the block went on announcing one.
+     *
+     * describeLimits in status-extractor.js makes the same reading for the reader model. */
+    const describeMaxes = (list, valueFor) => (list || [])
+        .map(stat => ({ stat, max: promptCeiling(stat, valueFor(stat.name)) }))
         .filter(entry => entry.max)
         .map(entry => `${entry.stat.name}: ${entry.max}`)
         .join(', ');
-    const playerMaxes = describeMaxes(settings.playerStats);
-    const npcMaxes = describeMaxes(settings.npcStats);
+
+    const playerStats = currentState.player?.stats || {};
+    const playerMaxes = describeMaxes(settings.playerStats,
+        name => playerStats[findMatchingStatKey(playerStats, name) || name]);
+    // One line for the whole cast, so the highest ceiling anyone present shows is the one
+    // named: a party where one character has been raised to 350 must not be told 40.
+    const npcMaxes = describeMaxes(settings.npcStats,
+        name => highestCeiling(currentState.characters, name));
 
     if (playerMaxes || npcMaxes) {
         prompt += `\n### STAT LIMITS (Maximums)\n`;
@@ -2086,20 +2206,20 @@ export function constrainToDefinition(def, incoming, existing) {
     return capToLength(def, kept);
 }
 
-function combineStatValue(existingValue, group, statDef) {
-    const configuredMax = resolveMaxValue(statDef);
-
+function combineStatValue(existingValue, group, statDef, options = {}) {
     let value = existingValue;
     if (group.whole !== undefined) {
-        value = mergeStatValue(value, group.whole, configuredMax);
+        value = mergeStatValue(value, group.whole, options);
     }
     if (group.current === undefined && group.max === undefined) return value;
 
     const parts = splitValue(value);
     let current = parts.current;
-    // The configured maximum is a fallback only: a value that carries its own denominator
-    // has already been raised in play, and that ceiling is the real one.
-    let max = parts.max || configuredMax || '';
+    /* The value's own denominator, and nothing else. The configured maximum used to stand
+       in for it, which meant a stat that had been given a ceiling in play could never lose
+       one: clear the "/120" and the setting handed it straight back. The setting seeds the
+       first value and says nothing after that. */
+    let max = parts.max || '';
 
     if (group.current !== undefined) current = String(group.current).trim();
     // A raised ceiling is a change like any other, so it is visible in the diff and can be
@@ -2147,9 +2267,11 @@ export function findMatchingStatKey(existingStats, searchKey) {
  * Merges an update into the current state.
  *
  * @param {object} update
- * @param {{ dryRun?: boolean, label?: string }} [options]
+ * @param {{ dryRun?: boolean, label?: string, verbatim?: boolean }} [options]
  *   dryRun returns the resulting state without saving, syncing or emitting, so callers
  *   can diff what an update *would* do before letting it happen.
+ *   verbatim says the values are whole values rather than readings of part of one, which
+ *   is what a person typing into a field submits - see mergeStatValue.
  * @returns {StatusState} The resulting state.
  */
 export function applyUpdate(update, options = {}) {
@@ -2157,7 +2279,7 @@ export function applyUpdate(update, options = {}) {
     // list in it is a mistake rather than an instruction to empty anything. The history
     // scan, which reads the whole story to produce a corrected list, passes it.
     const { dryRun = false, label = 'AI update', admitCharacters = false, allowReplace = false,
-        partOfMessage = false } = options;
+        partOfMessage = false, verbatim = false } = options;
     /* Refused here rather than at the end, because this function writes to two places and
        only one of them was guarded. Character cards live in settings, not in the cloned
        state, so the card writes below - and their saveSettings - happen before
@@ -2201,7 +2323,7 @@ export function applyUpdate(update, options = {}) {
             const actualKey = Object.keys(state.global).find(k => k.toLowerCase() === updKey.toLowerCase()) || updKey;
             if (validGlobalKeys.has(actualKey.toLowerCase())) {
                 const statDef = settings.globalStats.find(s => s.name.toLowerCase() === actualKey.toLowerCase());
-                const merged = mergeStatValue(state.global[actualKey], update.global[updKey], resolveMaxValue(statDef));
+                const merged = mergeStatValue(state.global[actualKey], update.global[updKey], { verbatim });
                 state.global[actualKey] = constrainToDefinition(statDef, merged, state.global[actualKey]);
             }
         });
@@ -2238,7 +2360,7 @@ export function applyUpdate(update, options = {}) {
 
         for (const [actualKey, group] of playerGroups) {
             const statDef = settings.playerStats.find(s => s.name.toLowerCase() === actualKey.toLowerCase());
-            const merged = combineStatValue(state.player.stats[actualKey], group, statDef);
+            const merged = combineStatValue(state.player.stats[actualKey], group, statDef, { verbatim });
             state.player.stats[actualKey] = constrainToDefinition(statDef, merged, state.player.stats[actualKey]);
         }
 
@@ -2369,7 +2491,7 @@ export function applyUpdate(update, options = {}) {
 
             for (const [canonicalKey, group] of charGroups) {
                 const statDef = settings.npcStats.find(s => s.name.toLowerCase() === canonicalKey.toLowerCase());
-                const merged = combineStatValue(charData.stats[canonicalKey], group, statDef);
+                const merged = combineStatValue(charData.stats[canonicalKey], group, statDef, { verbatim });
                 charData.stats[canonicalKey] = constrainToDefinition(statDef, merged, charData.stats[canonicalKey]);
 
                 // The card object lives in settings, not in the cloned state, so a dry
@@ -3929,6 +4051,14 @@ export function applySystemPreset(profile) {
     for (const stat of st.playerStats || []) {
         if (stat.format === undefined) stat.format = '{{value}}';
         if (stat.maxStatValue === undefined) stat.maxStatValue = '100';
+    }
+
+    /* The other door a schema comes through. normalizeSettings runs on load and never sees
+       this one, so a system saved before Meter was renamed to Number would arrive holding
+       'bar' - and only the systems somebody had saved would misbehave, which is the kind of
+       half-migration that takes weeks to be reported. */
+    for (const listName of ['globalStats', 'npcStats', 'playerStats']) {
+        normaliseStatDefs(st[listName]);
     }
 
     // The theme was called displayStyle and lived in config; it is menuStyle at the root

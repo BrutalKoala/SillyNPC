@@ -733,6 +733,37 @@ function settingsPredateHudFlagSplit(settings) {
  *
  * @param {object} settings The live extension_settings.sillynpc object.
  */
+/**
+ * Brings a list of stat definitions up to the current shape.
+ *
+ * Type, and the lower bound, arrived when meters were introduced. hint and maxLength
+ * joined them later, for the opposite kind of field: a free-text one had nothing said
+ * about it at all, so the reader was shown a name and a long previous value and carried on
+ * writing it. Both default to blank, which is no hint and no limit - what every field
+ * already had.
+ *
+ * 'bar' becomes 'number'. The type used to name the drawing rather than the content, which
+ * is why a field could be "a meter" while holding a date and why switching one back to Text
+ * left the HUD still drawing a meter. What it always meant was "this holds a quantity";
+ * whether a meter is drawn is now read from the value, where the ceiling is.
+ *
+ * Exported and called from two places, because a schema arrives by two doors: the settings
+ * on load, and a saved system preset on switch. A migration that only covers one of them
+ * silently misses every system somebody saved before it.
+ *
+ * @param {object[]} list Mutated in place. Missing or non-array is a no-op.
+ */
+export function normaliseStatDefs(list) {
+    if (!Array.isArray(list)) return;
+    for (const stat of list) {
+        if (!stat) continue;
+        stat.type = (stat.type === 'number' || stat.type === 'bar') ? 'number' : 'text';
+        if (stat.min === undefined) stat.min = '';
+        if (typeof stat.hint !== 'string') stat.hint = '';
+        if (stat.maxLength === undefined) stat.maxLength = '';
+    }
+}
+
 export function normalizeSettings(settings) {
     if (!settings || typeof settings !== 'object') return;
     const currentVersion = defaultSettings.version;
@@ -973,20 +1004,8 @@ export function normalizeSettings(settings) {
             }
         }
         
-        // Stat display type and lower bound, added when meters were introduced.
-        //
-        // hint and maxLength joined them later, for the opposite kind of field: a
-        // free-text one had nothing said about it at all, so the reader was shown a name
-        // and a long previous value and carried on writing it. Both default to blank,
-        // which is no hint and no limit - what every field already had.
         for (const listName of ['globalStats', 'npcStats', 'playerStats']) {
-            for (const stat of settings.statusTracker[listName] || []) {
-                if (!stat) continue;
-                if (stat.type !== 'bar') stat.type = 'text';
-                if (stat.min === undefined) stat.min = '';
-                if (typeof stat.hint !== 'string') stat.hint = '';
-                if (stat.maxLength === undefined) stat.maxLength = '';
-            }
+            normaliseStatDefs(settings.statusTracker[listName]);
         }
 
         // The same field a stat has had all along, on a collection. A stat could say how it

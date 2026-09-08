@@ -10,7 +10,6 @@ import {
     removeItem,
     updateMasterItem,
     renameMasterItem,
-    resolveMaxValue
 } from './status-logic.js';
 import { eventSource } from '../../../../events.js';
 import { escapeHtml, computeStatBar } from './utils.js';
@@ -747,10 +746,12 @@ export function updateAllExtensionThemes() {
                     if (statDef && state.player && state.player.stats) {
                         const actualKey = findMatchingStatKey(state.player.stats, statDef.name) || statDef.name;
                         const rawValue = state.player.stats[actualKey] || statDef.defaultValue || '0';
+                        // No configured max: the value's own ceiling, the same reading the
+                        // HUD makes when it builds the bar. A disagreement here shows as the
+                        // bar jumping to a different width on the next refresh.
                         const { percent } = computeStatBar({
                             rawValue,
                             min: statDef.min,
-                            max: resolveMaxValue(statDef),
                         });
                         bar.style.width = `${percent}%`;
                     }

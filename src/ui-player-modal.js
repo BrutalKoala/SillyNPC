@@ -341,9 +341,13 @@ export function commitInlineEdit(el, write = applyUpdate) {
 
     write(
         { player: { stats: { [el.dataset.stat]: value } } },
-        // Not the default label. These are somebody's own corrections, and a timeline
-        // that files them under "AI update" is a timeline that cannot be read.
-        { label: 'Edited on the sheet' },
+        /* Not the default label. These are somebody's own corrections, and a timeline that
+           files them under "AI update" is a timeline that cannot be read.
+
+           verbatim because this is the whole value, not a reading of part of one. Without
+           it a stat already holding "120/120" answers a typed "120" with "120/120" again -
+           the ceiling could be changed but never removed. */
+        { label: 'Edited on the sheet', verbatim: true },
     );
     return true;
 }
@@ -433,7 +437,8 @@ function attachModalListeners(dom) {
     dom.querySelectorAll('.sillynpc-inline-choice').forEach(el => {
         if (el.dataset.listenerAttached) return;
         el.addEventListener('change', () => {
-            applyUpdate({ player: { stats: { [el.dataset.stat]: el.value } } });
+            applyUpdate({ player: { stats: { [el.dataset.stat]: el.value } } },
+                { verbatim: true });
         });
         el.dataset.listenerAttached = 'true';
     });

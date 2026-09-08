@@ -1,8 +1,8 @@
 import { getSettings } from './settings.js';
 import { getContext } from '../../../../st-context.js';
 import { eventSource, event_types } from '../../../../events.js';
-import { loadStateFromMetadata, applyUpdate, parseMessageForUpdates, registerActiveCharacter, removeActiveCharacter, undoLastChange, getHistoryEntries, resolveMaxValue } from './status-logic.js';
-import { escapeRegExp, escapeHtml, extractJSON, safeJsonParse, computeStatBar, applyStatFormat, makeActivatable } from './utils.js';
+import { loadStateFromMetadata, applyUpdate, parseMessageForUpdates, registerActiveCharacter, removeActiveCharacter, undoLastChange, getHistoryEntries, resolveMaxValue, drawsMeter } from './status-logic.js';
+import { escapeRegExp, escapeHtml, extractJSON, safeJsonParse, computeStatBar, applyStatFormat, makeActivatable, splitValue } from './utils.js';
 import { findTemplateLabels, applyLabelFixes } from './template-labels.js';
 import { LOG_PREFIX, debugLog, BUILT_IN_DEFAULT_AVATAR } from './constants.js';
 import { stripAndPersist } from './status-history.js';
@@ -807,14 +807,20 @@ export function buildStatusHtml(state, settings) {
                (ui-shared.js) and the player sheet learned in 0.5.1. */
             const editable = `<span class="sillynpc-status-editable" data-type="${type}"${dataIndex} data-key="${escapeHtml(key)}" data-initial="${escapeHtml(rawValue)}" contenteditable="true">${escapeHtml(rawValue)}</span>`;
 
-            // A 'bar' stat keeps its editable value but gains a gauge behind it. The
-            // width is inline because it is per-value; everything else is themed CSS.
+            /* A Number whose value carries a ceiling keeps its editable value and gains a
+               gauge behind it. The width is inline because it is per-value; everything else
+               is themed CSS.
+
+               drawsMeter is shared with the HUD, which is the point of it: this used to ask
+               the field type and the HUD used to ask the value, so a field switched back to
+               Text went on being drawn as a meter in one of the two places. It also decides
+               from the value's own ceiling rather than the configured one, so a bare 53 is
+               drawn as 53 instead of as a bar pinned at 100% for the life of the chat. */
             let valueSpan = editable;
-            if (statDef.type === 'bar') {
+            if (drawsMeter(statDef, rawValue)) {
                 const { percent, numeric } = computeStatBar({
                     rawValue,
                     min: statDef.min,
-                    max: resolveMaxValue(statDef),
                 });
                 if (numeric) {
                     const slug = escapeHtml(String(key).toLowerCase().replace(/\s+/g, '-'));
@@ -828,7 +834,9 @@ export function buildStatusHtml(state, settings) {
             const rendered = applyStatFormat(statDef.format, {
                 value: valueSpan,
                 name: escapeHtml(key),
-                max: escapeHtml(resolveMaxValue(statDef) || ''),
+                // {{max}} in a format is the ceiling in play, which is the one being shown
+                // beside it - the configured one is only ever a starting value.
+                max: escapeHtml(String(splitValue(rawValue).max ?? '') || resolveMaxValue(statDef) || ''),
             });
             
             const regex = new RegExp(`{{${escapeRegExp(key)}}}`, 'g');
@@ -1230,7 +1238,9 @@ function attachInlineEditListeners(container) {
             // Labelled, so the change history says who made it. Without this a correction
             // typed by hand was filed as "AI update", which is the defect the player sheet
             // had fixed in 0.5.1 and this surface still carried.
-            applyUpdate(updateObj, { label: 'Manual edit' });
+            // verbatim: what was typed is the whole value. See mergeStatValue - without it
+            // an existing "120/120" puts its ceiling back on a typed "120".
+            applyUpdate(updateObj, { label: 'Manual edit', verbatim: true });
         });
         el.addEventListener('keydown', (e) => {
             e.stopPropagation();

@@ -10,7 +10,7 @@ import {
     aiMayEditProfileField, anyProfileFieldUnlocked, isStaticField,
 } from './constants.js';
 export { SYSTEM_PROMPT };
-import { extractJSON, safeJsonParse, splitValue, describeConnection, currentMessageIndex } from './utils.js';
+import { extractJSON, safeJsonParse, describeConnection, currentMessageIndex } from './utils.js';
 import { charactersMentionedIn } from './chat.js';
 import { mentionsName } from './mentions.js';
 import { charactersFromActivatedLore } from './activated-lore.js';
@@ -22,7 +22,8 @@ import {
     rememberSwipeBase,
     applyUpdate,
     reconcileScenePresence,
-    resolveMaxValue,
+    promptCeiling,
+    highestCeiling,
     getPlayerCard,
     findCardForName,
     statsInSystem,
@@ -461,28 +462,16 @@ function safePlayerCard() {
  * @param {object} state Current tracker state, used for live ceilings.
  */
 export function describeLimits(trackerSettings, state) {
-    /** The denominator of a "cur/max" value, if it has one and it is a number. */
-    const liveMax = (value) => {
-        const { max } = splitValue(value);
-        return max && Number.isFinite(parseFloat(max)) ? max : '';
-    };
-
-    /** The highest ceiling any present character currently shows for a stat. */
-    const liveNpcMax = (name) => {
-        let best = '';
-        for (const char of state?.characters || []) {
-            const found = liveMax(char?.stats?.[name]);
-            if (found && (!best || parseFloat(found) > parseFloat(best))) best = found;
-        }
-        return best;
-    };
-
-    const describe = (list, label, lookup) => {
+    const describe = (list, label, valueFor) => {
         const entries = (list || [])
             .map(stat => ({
                 name: stat.name,
-                // Live first, configured only as a fallback.
-                max: lookup(stat.name) || resolveMaxValue(stat),
+                /* The value's own ceiling whenever the actor holds a value, and the
+                   configured one only when nobody does. It used to fall back whenever the
+                   live reading came back blank, which cannot tell "this stat has no
+                   ceiling" from "nobody has this stat" - so a ceiling cleared on the sheet
+                   was replaced here by the configured one and announced to the model. */
+                max: promptCeiling(stat, valueFor(stat.name)),
                 min: stat.min,
             }))
             .filter(e => e.max || (e.min !== undefined && e.min !== ''))
@@ -526,8 +515,9 @@ export function describeLimits(trackerSettings, state) {
 
     return [
         describe(trackerSettings.playerStats, 'Player limits',
-            (name) => liveMax(state?.player?.stats?.[name])),
-        describe(trackerSettings.npcStats, 'Character limits', liveNpcMax),
+            (name) => state?.player?.stats?.[name]),
+        describe(trackerSettings.npcStats, 'Character limits',
+            (name) => highestCeiling(state?.characters, name)),
         describeChoices(trackerSettings.globalStats, 'World values'),
         describeChoices(trackerSettings.playerStats, 'Player values'),
         describeChoices(trackerSettings.npcStats, 'Character values'),

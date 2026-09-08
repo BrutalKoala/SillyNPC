@@ -1,12 +1,12 @@
 import { eventSource } from '../../../../events.js';
 import { getSettings, saveSettings } from './settings.js';
-import { loadStateFromMetadata, findMatchingStatKey, getPersonaData, getPlayerImageUrl, resolveMaxValue, hasOpenChat } from './status-logic.js';
+import { loadStateFromMetadata, findMatchingStatKey, getPersonaData, getPlayerImageUrl, resolveMaxValue, drawsMeter, hasOpenChat } from './status-logic.js';
 import { openPlayerModal } from './ui-player-modal.js';
 import {
     allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR,
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
-import { computeStatBar, splitValue, applyStatFormat, portraitRendition, ceilingFromValue } from './utils.js';
+import { computeStatBar, splitValue, applyStatFormat, portraitRendition } from './utils.js';
 import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
@@ -313,12 +313,15 @@ export function updateHUD(updatedState = null) {
         const bar = computeStatBar({
             rawValue,
             min: statDef.min,
-            max: resolveMaxValue(statDef),
         });
+        /* drawsMeter, not a rule of the HUD's own. This asked only whether the value had a
+           ceiling and never what kind of field it was, so a field switched back to Text kept
+           its meter here for as long as its value had a slash - while the tracker box, which
+           asked the type and not the value, disagreed in the other direction. */
         return {
             statDef,
             rawValue,
-            bar: { ...bar, numeric: bar.numeric && meterHasCeiling(statDef, rawValue) },
+            bar: { ...bar, numeric: bar.numeric && drawsMeter(statDef, rawValue) },
         };
     });
 
@@ -455,28 +458,6 @@ function applyHudProportions(container, meterCount, layout) {
  * @param {object} statDef
  * @returns {string}
  */
-/**
- * Whether this stat has a real maximum to fill a meter against.
- *
- * computeStatBar infers a ceiling from the value when none is configured, so a bare "7"
- * comes back at 100% - a bar that looks full whatever the number is. A meter needs a
- * maximum somebody actually set, either on the stat or in the value as "8/10". Without
- * one the value is shown on its own, the same as a stat whose value is not a number.
- *
- * Exported so the test exercises this rather than a copy of it: the first version of the
- * test reimplemented the rule and went on passing when the real code was broken.
- *
- * @param {object} statDef
- * @param {string} rawValue
- * @returns {boolean}
- */
-export function meterHasCeiling(statDef, rawValue) {
-    if (Number.isFinite(parseFloat(resolveMaxValue(statDef)))) return true;
-    // Through the shared reader rather than a parseFloat of its own, or this says yes to a
-    // date: "14/01/2012" splits to a denominator of "01/2012", which parseFloat reads as 1.
-    return ceilingFromValue(rawValue) !== null;
-}
-
 function meterColour(statDef) {
     return statDef.color || 'var(--sillynpc-accent-text, var(--sillynpc-accent))';
 }
@@ -505,7 +486,8 @@ function buildMeterRow(statDef, rawValue, bar, style) {
     const label = applyStatFormat(statDef.format, {
         value: rawValue,
         name: statDef.name,
-        max: resolveMaxValue(statDef) || '',
+        // The ceiling being shown, not the one this stat started with.
+        max: String(splitValue(rawValue).max ?? '') || resolveMaxValue(statDef) || '',
     });
 
     // Written by every layout and shown by the ones that want it. Underlines is built
