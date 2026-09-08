@@ -25,6 +25,7 @@ import {
     resolveMaxValue,
     getPlayerCard,
     findCardForName,
+    statsInSystem,
 } from './status-logic.js';
 import { computeStateDiff, partitionChanges, buildUpdateFromChanges, attachReasons } from './status-diff.js';
 import { setPendingChanges, isItemDecided } from './status-review.js';
@@ -390,10 +391,14 @@ function describeCurrentState(state, trackerSettings) {
     const summarise = (actor, target) => summariseCollections(actor, target, trackerSettings);
 
     const playerCollections = summarise(state.player, 'player');
+    /* Filtered by the schema rather than spread wholesale. A stat deleted in System Builder
+       leaves its value in the chat, and this described it to the reader on every extraction -
+       inviting it to report on something applyUpdate would then refuse to write. See
+       statsInSystem. */
     const shape = {
-        global: { ...(state.global || {}) },
+        global: statsInSystem(state.global, 'globalStats'),
         player: {
-            stats: { ...(state.player?.stats || {}) },
+            stats: statsInSystem(state.player?.stats, 'playerStats'),
             ...(playerCollections ? { collections: playerCollections } : {}),
             // The player's four fields live on their persona record, not in the scene cast.
             ...profileBlock(safePlayerCard()),
@@ -402,7 +407,7 @@ function describeCurrentState(state, trackerSettings) {
             const charCollections = summarise(char, 'npc');
             return {
                 name: char.name,
-                stats: { ...(char.stats || {}) },
+                stats: statsInSystem(char.stats, 'npcStats'),
                 ...(charCollections ? { collections: charCollections } : {}),
                 ...profileBlock(findCardForName(char.name)),
             };

@@ -945,7 +945,15 @@ export function loadStateFromMetadata() {
         stateOrigin.set(stateToReturn, committedChatId);
     }
 
-    // Always validate keys against current settings in case they were deleted from settings
+    /* Fills in stats the system declares and repairs their casing. It deliberately does NOT
+       remove a stored value whose stat has been deleted: erasing on load would take a stat's
+       history with it the moment somebody deletes one by mistake, and a System Profile
+       switch changes the schema under a chat without meaning to throw anything away.
+
+       A deleted stat is instead ignored wherever anything reads - the tracker box and both
+       prompts go through statsInSystem - so the value simply stops being seen. This comment
+       used to promise validation that was never written, which is how a deleted stat came to
+       be drawn and sent on every message while being unable to change. */
     const settings = getSettings().statusTracker;
 
     let stateChanged = false;
@@ -1307,12 +1315,14 @@ function summarizeCollection(collectionId, items, includeFull = false) {
 export function formatCompactStatus(state, fullDetail = false) {
     let output = "[Current Scene Status]\n";
     
+    /* Through the schema, not the stored object. A stat deleted in System Builder leaves its
+       value behind in the chat, and this block used to send it to the story model on every
+       single message - for a stat that could no longer change and was no longer configured
+       to exist. See statsInSystem. */
     const globalParts = [];
-    if (state.global) {
-        for (const [key, val] of Object.entries(state.global)) {
-            if (val !== undefined && val !== null && val !== '') {
-                globalParts.push(`${key}=${val}`);
-            }
+    for (const [key, val] of Object.entries(statsInSystem(state.global, 'globalStats'))) {
+        if (val !== undefined && val !== null && val !== '') {
+            globalParts.push(`${key}=${val}`);
         }
     }
     if (globalParts.length > 0) {
@@ -1323,11 +1333,9 @@ export function formatCompactStatus(state, fullDetail = false) {
 
     if (state.player) {
         const playerParts = [];
-        if (state.player.stats) {
-            for (const [key, val] of Object.entries(state.player.stats)) {
-                if (val !== undefined && val !== null && val !== '') {
-                    playerParts.push(`${key}=${val}`);
-                }
+        for (const [key, val] of Object.entries(statsInSystem(state.player.stats, 'playerStats'))) {
+            if (val !== undefined && val !== null && val !== '') {
+                playerParts.push(`${key}=${val}`);
             }
         }
         
@@ -1358,11 +1366,9 @@ export function formatCompactStatus(state, fullDetail = false) {
     if (state.characters && Array.isArray(state.characters)) {
         for (const char of state.characters) {
             const charParts = [];
-            if (char.stats) {
-                for (const [key, val] of Object.entries(char.stats)) {
-                    if (val !== undefined && val !== null && val !== '') {
-                        charParts.push(`${key}=${val}`);
-                    }
+            for (const [key, val] of Object.entries(statsInSystem(char.stats, 'npcStats'))) {
+                if (val !== undefined && val !== null && val !== '') {
+                    charParts.push(`${key}=${val}`);
                 }
             }
             
@@ -3431,6 +3437,43 @@ function moveKey(holder, oldName, newName) {
  * @param {string} newName
  * @returns {{ values: number, references: number, templateUpdated: boolean, cssMentions: boolean }}
  */
+/**
+ * The stored values a stat list still recognises.
+ *
+ * The schema lives in settings and the values live in the chat's metadata, and deleting a
+ * stat in System Builder only removes it from the first. Nothing removed the value, and
+ * four separate places read the stored object directly rather than the schema - the tracker
+ * box, the scene block sent to the story model, the reader's prompt, and the sheet's
+ * history - so a deleted stat kept being drawn and kept being sent on every message. It
+ * could never change, because applyUpdate filters incoming values against the schema and
+ * rejects anything it does not know; it was simply inert and permanent.
+ *
+ * So the schema is what decides, at every point that reads. The stored values are left
+ * alone deliberately rather than deleted: they cost nothing once nobody reads them, and
+ * erasing them would take a stat's history with it the moment somebody deletes one by
+ * mistake - or the moment a System Profile switch changes the schema under a chat.
+ *
+ * Case-insensitively, because a stored key and a configured name differ in case often
+ * enough that findMatchingStatKey and the player sheet both already allow for it.
+ *
+ * @param {Record<string, any>} stored The stats as the chat holds them.
+ * @param {'globalStats'|'playerStats'|'npcStats'} listKey
+ * @returns {Record<string, any>} A copy holding only what the schema still declares.
+ */
+export function statsInSystem(stored, listKey) {
+    if (!stored || typeof stored !== 'object') return {};
+    const declared = new Set(
+        (getSettings().statusTracker?.[listKey] || [])
+            .map(stat => String(stat?.name ?? '').trim().toLowerCase())
+            .filter(Boolean));
+
+    const out = {};
+    for (const [key, value] of Object.entries(stored)) {
+        if (declared.has(String(key).trim().toLowerCase())) out[key] = value;
+    }
+    return out;
+}
+
 export function renameStat(listKey, oldName, newName) {
     const empty = { values: 0, references: 0, templateUpdated: false, cssMentions: false };
     if (!STAT_SCOPES[listKey] || !oldName || !newName || oldName === newName) return empty;

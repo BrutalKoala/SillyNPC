@@ -1026,12 +1026,23 @@ export function buildStatusHtml(state, settings) {
             }
         }
         
-        // Also add any unknown AI global keys that are in state but not in settings
-        const unknownGlobalKeys = state.global ? Object.keys(state.global).filter(k => {
-            const lower = k.toLowerCase();
-            return !renderedGlobalKeys.has(lower) && !hiddenGlobalKeys.has(lower);
-        }) : [];
-        
+        /* There used to be a block here that drew an italic row for every key in the state
+           that the system did not declare, on the theory that it was surfacing a stat the
+           model had invented.
+
+           It could never do that. applyUpdate filters incoming values against the schema
+           and refuses anything it does not recognise, so nothing the reader reports can
+           reach the state in the first place. What the block actually showed was leftovers:
+           a stat deleted in System Builder keeps its stored value, and this drew it forever.
+           It was not even editable - the same filter rejected the edit - so the only way to
+           be rid of a deleted stat was to un-delete it and untick Visible.
+
+           The system decides what exists. A value the schema no longer declares is not
+           drawn, and is not sent to either model either; see statsInSystem. The stored
+           value is left where it is rather than erased, so nothing is lost if the stat
+           comes back. */
+        const unknownGlobalKeys = [];
+
         if (unknownGlobalKeys.length > 0 && settings.showGlobalStats) {
             const unknownGlobalHtml = unknownGlobalKeys.map(k => {
                 const val = state.global[k] || '';
@@ -1133,11 +1144,11 @@ export function buildStatusHtml(state, settings) {
                         visibleCharStats.forEach(s => renderedCharKeys.add(s.name.toLowerCase()));
                     }
 
-                    const unknownAIKeys = char.stats ? Object.keys(char.stats).filter(k => {
-                        const lower = k.toLowerCase();
-                        return !renderedCharKeys.has(lower) && !hiddenCharKeys.has(lower);
-                    }) : [];
-                    
+                    // The character half of the same thing. See the note by
+                    // unknownGlobalKeys: the schema decides, and a stat it no longer
+                    // declares is not drawn.
+                    const unknownAIKeys = [];
+
                     if (unknownAIKeys.length > 0) {
                         const unknownCharHtml = unknownAIKeys.map(k => {
                             const val = char.stats[k] || '';

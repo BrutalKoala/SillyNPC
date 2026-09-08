@@ -17,7 +17,8 @@ import {
     loadStateFromMetadata,
     applyUpdate,
     getPersonaData,
-    getPlayerCard
+    getPlayerCard,
+    statsInSystem
 } from './status-logic.js';
 
 /** 'profile' | 'edit' - the same two the character page has, for the same reason. */
@@ -521,7 +522,9 @@ async function openRestorePicker() {
     for (const point of points) {
         const option = document.createElement('option');
         option.value = String(point.messageId);
-        const summary = Object.entries(point.stats)
+        // Through the schema: a point recorded before a stat was deleted still holds its
+        // value, and listing it here would name a stat the system no longer has.
+        const summary = Object.entries(statsInSystem(point.stats, 'playerStats'))
             .filter(([, v]) => String(v).includes('/'))
             .map(([k, v]) => `${k} ${v}`).join(', ');
         option.textContent = `Message ${point.messageId} — ${summary || 'no meters'}`

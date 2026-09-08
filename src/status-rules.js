@@ -139,7 +139,19 @@ function measureElapsed(state, trackerSettings, messageId) {
  */
 function evaluateTimeRules(state, messageId) {
     const trackerSettings = getSettings().statusTracker;
-    const rules = (trackerSettings.timeRules || []).filter(r => r && r.enabled !== false && r.stat);
+
+    /* A rule whose stat has been deleted from the system is dead, and had to be said out
+       loud: readStat reaches into the stored state, where the deleted value is still
+       sitting, so the rule went on regenerating a number nobody could see and writing a
+       history entry for it every time the clock moved. */
+    const declaredIn = (scope) => new Set(
+        (trackerSettings[scope === 'global' ? 'globalStats'
+            : scope === 'characters' ? 'npcStats' : 'playerStats'] || [])
+            .map(s => String(s?.name ?? '').trim().toLowerCase()).filter(Boolean));
+
+    const rules = (trackerSettings.timeRules || []).filter(r =>
+        r && r.enabled !== false && r.stat
+        && declaredIn(r.scope).has(String(r.stat).trim().toLowerCase()));
 
     const { minutes, capped, anchor, raw } = measureElapsed(state, trackerSettings, messageId);
     if (!rules.length || minutes <= 0) return { rows: [], minutes, capped, anchor };
