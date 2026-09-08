@@ -21,7 +21,7 @@ import {
 } from './characters.js';
 import { reprocessAllMessages, triggerReprocess, chatRenderSignature } from './chat.js';
 import { syncAllLorebooks, renameLorebookEntry } from './lorebook.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, offerDownload } from './utils.js';
 import { buildPortraitBlock } from './ui-portrait.js';
 import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section.js';
 import { renderProfileView, renderProfileFields } from './ui-profile.js';
@@ -1478,14 +1478,8 @@ function buildAliasRow(char, index) {
 }
 
 function exportData() {
-    const json = exportSettingsData();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sillynpc-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    offerDownload(exportSettingsData(),
+        `sillynpc-export-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 async function importData() {

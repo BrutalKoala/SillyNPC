@@ -367,7 +367,14 @@ export function pruneThreads(state, now) {
  */
 export function describeThreads(state, now) {
     const settings = getSettings().statusTracker;
-    if (settings.threadsEnabled === false) return '';
+    /* Off unless explicitly on, which is what the other six checks say - status-extractor
+       in four places, history-scan and ui-threads. This one read it the other way round.
+       They agree today because the key is always present in the defaults, and diverge for
+       any truthy value that is not `true` (a 1 or a "true" from a hand-edited or imported
+       settings file), where threads would be injected into the prompt but never caught or
+       closed: the one combination that costs tokens while doing nothing. Six against one is
+       not a decision. */
+    if (settings.threadsEnabled !== true) return '';
 
     const active = activeThreads(state, now);
     if (!active.length) return '';

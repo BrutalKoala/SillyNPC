@@ -2158,6 +2158,18 @@ export function applyUpdate(update, options = {}) {
     // scan, which reads the whole story to produce a corrected list, passes it.
     const { dryRun = false, label = 'AI update', admitCharacters = false, allowReplace = false,
         partOfMessage = false } = options;
+    /* Refused here rather than at the end, because this function writes to two places and
+       only one of them was guarded. Character cards live in settings, not in the cloned
+       state, so the card writes below - and their saveSettings - happen before
+       saveStateToMetadata is ever reached; if that write is then refused, the cards are
+       left holding stats from a state that was never committed.
+       Only the no-chat case can fire for this function: the cross-chat guard tests the
+       state's recorded origin, and the clone below is fresh and unmarked. */
+    if (!dryRun && !hasOpenChat()) {
+        console.warn(LOG_PREFIX, 'Refused to apply a tracker update with no chat open.');
+        return null;
+    }
+
     // Findings for characters with nowhere to keep them, reported rather than dropped.
     const offstageSkipped = [];
     const state = structuredClone(committedState || loadStateFromMetadata());

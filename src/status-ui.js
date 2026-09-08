@@ -802,7 +802,10 @@ export function buildStatusHtml(state, settings) {
         const replaceStatTag = (template, statDef, rawValue, type, index = null) => {
             const key = statDef.name;
             const dataIndex = index !== null ? ` data-index="${index}"` : '';
-            const editable = `<span class="sillynpc-status-editable" data-type="${type}"${dataIndex} data-key="${escapeHtml(key)}" contenteditable="true">${escapeHtml(rawValue)}</span>`;
+            /* data-initial is what the blur handler compares against, so a field that was
+               clicked and left alone writes nothing. The same guard the item editor uses
+               (ui-shared.js) and the player sheet learned in 0.5.1. */
+            const editable = `<span class="sillynpc-status-editable" data-type="${type}"${dataIndex} data-key="${escapeHtml(key)}" data-initial="${escapeHtml(rawValue)}" contenteditable="true">${escapeHtml(rawValue)}</span>`;
 
             // A 'bar' stat keeps its editable value but gains a gauge behind it. The
             // width is inline because it is per-value; everything else is themed CSS.
@@ -1041,27 +1044,6 @@ export function buildStatusHtml(state, settings) {
            drawn, and is not sent to either model either; see statsInSystem. The stored
            value is left where it is rather than erased, so nothing is lost if the stat
            comes back. */
-        const unknownGlobalKeys = [];
-
-        if (unknownGlobalKeys.length > 0 && settings.showGlobalStats) {
-            const unknownGlobalHtml = unknownGlobalKeys.map(k => {
-                const val = state.global[k] || '';
-                return ` | <i>${escapeHtml(k)}</i> [<span class="sillynpc-status-editable" data-type="global" data-key="${escapeHtml(k)}" contenteditable="true">${escapeHtml(val)}</span>]`;
-            }).join('');
-            
-            if (html.includes('sillynpc-status-header')) {
-                html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-header[^"]*"[^>]*>)(.*?)(<\/div>)/s, (match, open, content, close) => {
-                    const cleanContent = content.trim();
-                    const insert = cleanContent ? unknownGlobalHtml : unknownGlobalHtml.substring(3);
-                    return `${open}${content}${insert}${close}`;
-                });
-            } else if (html.includes('sillynpc-status-box')) {
-                const headerHtml = `<div class="sillynpc-status-header">${unknownGlobalHtml.substring(3)}</div>\n    <div class="sillynpc-status-divider"></div>`;
-                html = html.replace(/(<div[^>]*class="[^"]*sillynpc-status-box[^"]*"[^>]*>)/s, `$1\n    ${headerHtml}`);
-            } else {
-                html = `<div class="sillynpc-status-header">${unknownGlobalHtml.substring(3)}</div>\n<div class="sillynpc-status-divider"></div>\n` + html;
-            }
-        }
 
         const charMatch = html.match(/{{#characters}}([\s\S]*?){{\/characters}}/);
         if (charMatch) {
@@ -1144,27 +1126,6 @@ export function buildStatusHtml(state, settings) {
                         visibleCharStats.forEach(s => renderedCharKeys.add(s.name.toLowerCase()));
                     }
 
-                    // The character half of the same thing. See the note by
-                    // unknownGlobalKeys: the schema decides, and a stat it no longer
-                    // declares is not drawn.
-                    const unknownAIKeys = [];
-
-                    if (unknownAIKeys.length > 0) {
-                        const unknownCharHtml = unknownAIKeys.map(k => {
-                            const val = char.stats[k] || '';
-                            return ` | <i>${escapeHtml(k)}</i> [<span class="sillynpc-status-editable" data-type="character" data-index="${index}" data-key="${escapeHtml(k)}" contenteditable="true">${escapeHtml(val)}</span>]`;
-                        }).join('');
-                        if (/(<\/div>\s*)$/.test(charRow)) {
-                            // Inject BEFORE the trailing whitespace and </div> to prevent ST from adding a <br>
-                            charRow = charRow.replace(/(\s*)(<\/div>\s*)$/, (match, space, div) => {
-                                return unknownCharHtml + space + div;
-                            });
-                        } else {
-                            charRow = charRow.trim() + unknownCharHtml;
-                        }
-                        unknownAIKeys.forEach(k => renderedCharKeys.add(k.toLowerCase()));
-                    }
-
                     // Handle Character Collections in Template
                     if (char.collections) {
                         for (const [colId, items] of Object.entries(char.collections)) {
@@ -1235,6 +1196,15 @@ function attachInlineEditListeners(container) {
             const type = el.dataset.type;
             const key = el.dataset.key;
             const newValue = el.innerText.trim();
+
+            /* Nothing typed, nothing written. This used to write on every blur, so merely
+               clicking a value and clicking away ran a whole update: it aged every tombstone
+               by one - and those expire after three, which is the guard that stops the model
+               re-adding an item you just deleted by hand - and filed an undo entry labelled
+               "AI update" for something the reader did. */
+            if (newValue === String(el.dataset.initial ?? '')) return;
+            el.dataset.initial = newValue;
+
             /* One branch per data-type buildStatusHtml emits. The player's was missing from
                the day player stats were first drawn in this box: the box rendered them
                contenteditable like everything else, this built an empty update, and
@@ -1257,7 +1227,10 @@ function attachInlineEditListeners(container) {
                     }];
                 }
             }
-            applyUpdate(updateObj);
+            // Labelled, so the change history says who made it. Without this a correction
+            // typed by hand was filed as "AI update", which is the defect the player sheet
+            // had fixed in 0.5.1 and this surface still carried.
+            applyUpdate(updateObj, { label: 'Manual edit' });
         });
         el.addEventListener('keydown', (e) => {
             e.stopPropagation();

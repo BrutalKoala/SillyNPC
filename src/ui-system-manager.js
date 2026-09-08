@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { offerDownload } from './utils.js';
 import { updateAllExtensionThemes } from './ui-shared.js';
 import { deleteSystemPreset, importSystemPreset, getActiveSystem, setActiveSystem, createSystem, saveCheckpoint, restoreCheckpoint, deleteCheckpoint, getCheckpoints } from './status-logic.js';
 import { Popup } from '../../../../popup.js';
@@ -18,13 +19,7 @@ function exportSystem(name) {
     const profile = settings.statusTracker.presets?.[name];
     if (!profile) return;
     
-    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_system.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    offerDownload(profile, `${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_system.json`);
 }
 
 /**

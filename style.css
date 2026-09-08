@@ -2294,17 +2294,17 @@ span.sillynpc-review-to {
 
 /* ─── HUD Widget ───────────────────────────────────────────────────────── */
 
+/* Its gap, padding and radius are set in HUD proportions further down, and were also set
+   here where they never applied - so editing them here did nothing at all. Declared once,
+   where the reasoning for the numbers is. */
 .sillynpc-hud-container {
     position: fixed;
     z-index: var(--sillynpc-z-hud);
     display: flex;
     align-items: center;
-    gap: var(--sillynpc-space-md);
-    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
     background: var(--sillynpc-bg-primary);
     backdrop-filter: var(--sillynpc-backdrop);
     border: 1px solid var(--sillynpc-border);
-    border-radius: var(--sillynpc-radius-lg);
     box-shadow: var(--sillynpc-shadow);
     pointer-events: all;
     transition: transform 0.2s ease, opacity 0.2s ease, background 0.3s, border-color 0.3s, box-shadow 0.3s;
@@ -2348,9 +2348,8 @@ span.sillynpc-review-to {
     pointer-events: none;
 }
 
+/* Its width and height follow the meter count and are set in HUD proportions below. */
 .sillynpc-hud-portrait {
-    width: 60px;
-    height: 60px;
     border-radius: 50%;
     /* Kept for the empty frame: the tint below still shows while no picture has loaded. */
     background-size: cover;
@@ -2372,7 +2371,7 @@ span.sillynpc-review-to {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    min-width: 120px;
+    /* min-width follows the meter width, in HUD proportions below. */
 }
 
 .sillynpc-hud-stat-row {
@@ -3393,6 +3392,7 @@ span.sillynpc-review-to {
 
 .sillynpc-hud-container {
     gap: var(--sillynpc-space-sm);
+    /* The only place these three are declared; see the note by the base rule. */
     /* 4px rather than 8. The panel is a backing plate for the portrait and its meters,
        and at 8 there was more panel than there was reason for it. */
     padding: var(--sillynpc-space-xs);

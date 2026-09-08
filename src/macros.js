@@ -1,5 +1,6 @@
 import { substituteParamsExtended } from '../../../../../script.js';
 import { debugLog } from './constants.js';
+import { escapeRegExp } from './utils.js';
 
 /**
  * Macros in the prompts you can edit.
@@ -40,7 +41,14 @@ import { debugLog } from './constants.js';
 export function modernisePlaceholders(text, names) {
     let out = String(text ?? '');
     for (const name of names) {
-        out = out.replace(new RegExp(`\\[${name.toUpperCase()}\\]`, 'g'), `{{${name}}}`);
+        /* Escaped, because a name goes straight into a pattern here. Every key passed today
+           is a hardcoded literal - name, lore, items, context, world, facts - so this has
+           never mattered; it is guarded because offering a stat name as a macro is an
+           obvious next step, and a stat called "HP (max)" would make new RegExp throw.
+           applyMacros is wrapped in try/catch precisely so a bad macro cannot take the
+           request with it, and this function is not - the throw would escape fillTemplate
+           and reach the caller. */
+        out = out.replace(new RegExp(`\\[${escapeRegExp(name.toUpperCase())}\\]`, 'g'), `{{${name}}}`);
     }
     return out;
 }

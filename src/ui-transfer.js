@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { offerDownload } from './utils.js';
 import { exportCharacters, importCharacters, parseTransferFile } from './character-transfer.js';
 import { LOG_PREFIX } from './constants.js';
 import { POPUP_TYPE, Popup } from '../../../../popup.js';
@@ -13,17 +14,6 @@ import { POPUP_TYPE, Popup } from '../../../../popup.js';
 /** Turns a filename into something a file system will accept. */
 function safeFileName(text) {
     return String(text || 'character').replace(/[^\w\-. ]+/g, '_').trim() || 'character';
-}
-
-/** Hands the browser a file to save. */
-function offerDownload(payload, fileName) {
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
 }
 
 /**

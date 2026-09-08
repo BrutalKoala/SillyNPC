@@ -321,6 +321,36 @@ export function moveInList(list, index, delta) {
     return true;
 }
 
+/**
+ * Hands the browser a file to save.
+ *
+ * One copy, where there were three - the manage popup's export, the system exporter and the
+ * character transfer each built the same eight lines. They also shared two habits that only
+ * Chrome tolerates, and SillyTavern runs in Firefox too: the anchor was never added to the
+ * document, which Firefox has historically required before a synthetic click dispatches, and
+ * the object URL was revoked on the very next line, which can abort a download that has not
+ * started. Attached, clicked, removed, and revoked a tick later.
+ *
+ * @param {*} payload Serialised as pretty JSON unless a string is passed.
+ * @param {string} fileName
+ * @param {string} [type]
+ */
+export function offerDownload(payload, fileName, type = 'application/json') {
+    const body = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    const url = URL.createObjectURL(new Blob([body], { type }));
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    // Deferred, not immediate: revoking synchronously can cancel the save.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function escapeRegExp(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -466,9 +496,26 @@ function tryRepairAndParse(str) {
 }
 
 /**
- * Simple JSON repair for common AI mistakes
- * @param {string} jsonStr 
- * @returns {any}
+ * A model's reply, parsed if it can be and repaired if it cannot.
+ *
+ * Three attempts in order: as written after trailing commas are removed; then
+ * closeOpenStructures, which closes whatever the reply ran out of room to close - the common
+ * failure, since a truncated object is what a token budget produces; then a last pass that
+ * quotes bare keys.
+ *
+ * That last pass cannot tell a key from text inside a string value, so it will rewrite
+ * `beta:` inside "alpha, beta: gamma" if it ever reaches it. **The safety is that JSON.parse
+ * then rejects the result**, not that anything checks - mangling a string leaves unbalanced
+ * quotes, so the parse throws and this returns null. That is worth knowing before changing
+ * it: making the pass smarter without keeping the parse as the arbiter would turn a safe
+ * failure into a quiet corruption.
+ *
+ * Measured against the shapes a model actually produces, it repairs trailing commas,
+ * truncated objects, truncated strings and unquoted keys, and returns null - never wrong
+ * data - for the two cases where unquoted keys and a colon inside a string value coincide.
+ *
+ * @param {string} jsonStr
+ * @returns {any} The parsed value, or null when nothing safe could be recovered.
  */
 export function safeJsonParse(jsonStr) {
     if (!jsonStr) return null;
@@ -532,13 +579,52 @@ export function splitValue(value) {
  * @param {{ rawValue?: any, min?: any, max?: any }} input
  * @returns {{ current: number, min: number, max: number, percent: number, numeric: boolean }}
  */
-export function computeStatBar({ rawValue, min, max }) {
-    // "8/10" - take the numerator, and the denominator as a max if none was configured.
-    const { current: currentText, max: maxText } = splitValue(rawValue);
-    const rhs = parseFloat(maxText);
-    const impliedMax = Number.isFinite(rhs) ? rhs : null;
+/**
+ * The ceiling a value carries in itself, or null when it carries none.
+ *
+ * Shared so the meter maths and the HUD's own "should this be a meter at all" test cannot
+ * disagree. They did: computeStatBar learned that a denominator with a second slash is a
+ * date rather than a ceiling, while meterHasCeiling went on running its own parseFloat -
+ * which reads "01/2012" as 1 - so the HUD kept drawing a date as a full bar after the
+ * maths had stopped treating it as one.
+ *
+ * @param {*} rawValue
+ * @returns {number|null}
+ */
+export function ceilingFromValue(rawValue) {
+    const { max } = splitValue(rawValue);
+    // A denominator is one number. A second slash means this is a date, not "cur/max".
+    if (String(max).includes('/')) return null;
+    const parsed = parseFloat(max);
+    return Number.isFinite(parsed) ? parsed : null;
+}
 
-    const signed = String(currentText).match(/-?\d+(?:\.\d+)?/);
+export function computeStatBar({ rawValue, min, max }) {
+    /* A date and a clock are not quantities, and both used to read as full meters.
+     *
+     * splitValue takes the FIRST slash, so "14/01/2012" came apart as 14 over "01/2012",
+     * parseFloat made that ceiling 1, and 14 clamped to it at 100%. Worse, meterHasCeiling
+     * asks the same parseFloat, so the HUD agreed it had a ceiling and drew the bar. A
+     * second slash is the tell: a denominator is one number, not a date.
+     *
+     * "05:30 AM" went the other way - the digit matcher took "05" and, with no ceiling
+     * anywhere, one was invented from the value itself. A colon is the tell there. "Morning"
+     * was always handled, because it has no digits at all; a clock does.
+     *
+     * A unit is still allowed on either side: "3/4 cups" stays a meter at 75%.
+     */
+    const { current: currentText } = splitValue(rawValue);
+    const impliedMax = ceilingFromValue(rawValue);
+
+    /* Two shapes that carry digits without being quantities.
+       A clock has a colon. A date has two separators, which is the same test status-clock
+       makes before it will hand anything to Date.parse - and it has to cover the dash form
+       as well as the slash, because "2012-01-14" carries no slash at all and would
+       otherwise be read as a bare 2012 with an invented ceiling. Two separators is what
+       keeps "-40" and "8-10" out of it. */
+    const clocklike = String(currentText).includes(':');
+    const datelike = /\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(String(rawValue ?? ''));
+    const signed = (clocklike || datelike) ? null : String(currentText).match(/-?\d+(?:\.\d+)?/);
     const current = signed ? parseFloat(signed[0]) : NaN;
 
     const lower = Number.isFinite(parseFloat(min)) ? parseFloat(min) : 0;

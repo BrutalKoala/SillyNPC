@@ -55,6 +55,11 @@ async function onScanClicked() {
     if (!confirmed) return;
 
     button?.classList.add('sillynpc-scanning');
+    /* Kept so the progress text below can be taken back off. Without this the button was
+       left reading "pass 3 of 3..." until it was remounted - and since makeActivatable
+       copied the original title into aria-label at mount, the tooltip and the screen-reader
+       name then disagreed as well. */
+    const restingTitle = button?.title;
     try {
         const result = await scanHistoryForCollections(({ chunk, of }) => {
             if (of > 1) button.title = `Reading the history - pass ${chunk} of ${of}...`;
@@ -89,6 +94,7 @@ async function onScanClicked() {
         toastr.error(String(err?.message || err), 'SillyNPC');
     } finally {
         button?.classList.remove('sillynpc-scanning');
+        if (button && restingTitle !== undefined) button.title = restingTitle;
     }
 }
 

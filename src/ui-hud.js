@@ -6,7 +6,7 @@ import {
     allThemeClasses, themeClassFor, BUILT_IN_DEFAULT_AVATAR,
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
-import { computeStatBar, splitValue, applyStatFormat, portraitRendition } from './utils.js';
+import { computeStatBar, splitValue, applyStatFormat, portraitRendition, ceilingFromValue } from './utils.js';
 import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
@@ -472,7 +472,9 @@ function applyHudProportions(container, meterCount, layout) {
  */
 export function meterHasCeiling(statDef, rawValue) {
     if (Number.isFinite(parseFloat(resolveMaxValue(statDef)))) return true;
-    return Number.isFinite(parseFloat(splitValue(rawValue).max));
+    // Through the shared reader rather than a parseFloat of its own, or this says yes to a
+    // date: "14/01/2012" splits to a denominator of "01/2012", which parseFloat reads as 1.
+    return ceilingFromValue(rawValue) !== null;
 }
 
 function meterColour(statDef) {

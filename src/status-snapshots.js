@@ -307,6 +307,24 @@ function historicalStateFromBlock(message, fallback) {
         // A block states values outright rather than as changes, so merge it over a copy.
         if (updates.global) Object.assign(state.global, updates.global);
         if (updates.player?.stats) Object.assign(state.player.stats, updates.player.stats);
+
+        /* Characters too, which this used to leave out while still reporting the result as
+           exact. The clone starts from the *latest* state, so a reconstruction showed
+           historical globals, historical player stats and today's character stats, all
+           labelled as known - a character's HP two hundred messages ago read as whatever it
+           is now. Matched by name, and a character the block names who is not in the
+           fallback is added rather than dropped: they were in the scene then. */
+        for (const incoming of Array.isArray(updates.characters) ? updates.characters : []) {
+            const name = String(incoming?.name ?? '').trim();
+            if (!name) continue;
+            let entry = (state.characters || []).find(
+                c => String(c?.name ?? '').toLowerCase() === name.toLowerCase());
+            if (!entry) {
+                entry = { name, stats: {}, collections: {} };
+                state.characters.push(entry);
+            }
+            if (incoming.stats) entry.stats = { ...entry.stats, ...incoming.stats };
+        }
         return state;
     } catch (err) {
         debugLog('Could not read a preserved status block', err);
