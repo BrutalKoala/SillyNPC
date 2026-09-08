@@ -540,7 +540,8 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
         // They were all shown on every row, which is why a Text field offered a lower
         // bound it has no use for - and where the room for the new pair came from.
         row.querySelector('.stat-max')?.addEventListener('input', (e) => { stat.maxStatValue = e.target.value; saveSettings(); });
-        row.querySelector('.stat-min')?.addEventListener('input', (e) => { stat.min = e.target.value; saveSettings(); });
+        // The lower bound is where a meter starts filling from, so the HUD is showing it.
+        row.querySelector('.stat-min')?.addEventListener('input', (e) => { stat.min = e.target.value; saveSettings(); updateHUD(); });
         row.querySelector('.stat-hint')?.addEventListener('input', (e) => { stat.hint = e.target.value; saveSettings(); });
         row.querySelector('.stat-length')?.addEventListener('input', (e) => {
             // Kept as typed rather than coerced: a half-typed number must not become 0,
@@ -562,7 +563,17 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
             });
         }
 
-        row.querySelector('.stat-type').addEventListener('change', (e) => { stat.type = e.target.value; saveSettings(); onRefresh(); });
+        /* updateHUD as well as onRefresh, which redraws this panel and nothing else. The HUD
+           is a separate element, so switching a field from Number back to Text left it still
+           drawing a meter until something else happened to redraw it - and that looked
+           exactly like the type not taking effect. The colour, order and HUD handlers above
+           and below already say the same thing. */
+        row.querySelector('.stat-type').addEventListener('change', (e) => {
+            stat.type = e.target.value;
+            saveSettings();
+            updateHUD();
+            onRefresh();
+        });
         row.querySelector('.stat-visible').addEventListener('change', (e) => { stat.visible = e.target.checked; saveSettings(); onRefresh(); });
         // A shortcut for writing Format, not a second mechanism: one place decides what
         // a field is labelled, and it is the box right there in the row.
