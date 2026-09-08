@@ -324,11 +324,19 @@ export function pruneThreads(state, now) {
             .filter(thread => thread.pinned || counted++ < openMax)
             .map(t => t.id));
 
-    // Newest first by the message they were opened at, so the tail dropped is the oldest.
+    /* Newest first by the message they were opened at, so the tail dropped is the oldest -
+       and pinned exempt here as well as above, which is what the paragraph above this
+       function has always promised and what the code did not do.
+
+       It went wrong for exactly the threads it should protect. A thread you wrote yourself
+       is pinned and has no `opened` message, so Number(null) || 0 sorted it last and made it
+       the first to be dropped: a hand-written thread, once closed, could not be reopened
+       because it was already gone. */
+    let keptCount = 0;
     const keptClosed = new Set(
         all.filter(t => t?.status === 'closed')
             .sort((a, b) => (Number(b?.opened) || 0) - (Number(a?.opened) || 0))
-            .slice(0, closedKeep)
+            .filter(t => t.pinned || keptCount++ < closedKeep)
             .map(t => t.id));
 
     let open = 0;
