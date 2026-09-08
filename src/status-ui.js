@@ -1224,9 +1224,18 @@ function attachInlineEditListeners(container) {
             const type = el.dataset.type;
             const key = el.dataset.key;
             const newValue = el.innerText.trim();
+            /* One branch per data-type buildStatusHtml emits. The player's was missing from
+               the day player stats were first drawn in this box: the box rendered them
+               contenteditable like everything else, this built an empty update, and
+               applyUpdate({}) changed nothing - so the typed value simply came back on the
+               next redraw with nothing to say it had been dropped. */
             const updateObj = {};
             if (type === 'global') {
                 updateObj.global = { [key]: newValue };
+            } else if (type === 'player') {
+                // stats, rather than bare: applyUpdate reads `update.player.stats ||
+                // update.player`, and the bare form would collide with `name`.
+                updateObj.player = { stats: { [key]: newValue } };
             } else if (type === 'character') {
                 const index = parseInt(el.dataset.index);
                 const state = loadStateFromMetadata();
