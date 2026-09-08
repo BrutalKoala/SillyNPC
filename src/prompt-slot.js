@@ -115,7 +115,15 @@ function writeListEntry(key, text, name, depth) {
             name,
             role: 'system',
             content: text,
-            // Not a system prompt, so it can be detached or deleted like the user's own.
+            /* Not a system prompt, so SillyTavern lets it be moved, disabled and deleted
+               like the user's own rather than pinning it.
+
+               Deleting it there does not stick, and that is deliberate: writeListEntry runs
+               on every send and puts the entry back, which is what makes the block survive a
+               preset being swapped underneath it. The extension's own setting is the switch.
+               Said plainly because the previous wording promised it could be "detached or
+               deleted", and somebody who deleted it and watched it return had no way to tell
+               which of the two was the bug. */
             system_prompt: false,
             marker: false,
             // In-Chat at the depth the extension slot was using, so nothing moves on the

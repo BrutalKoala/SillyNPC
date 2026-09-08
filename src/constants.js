@@ -135,8 +135,6 @@ export const HUD_LAYOUTS = Object.freeze([
       note: 'Docked against the side of the screen with its outer half cut away. Takes the least room of any of them.' },
 ]);
 
-const LAYOUT_IDS = new Set(HUD_LAYOUTS.map(l => l.id));
-
 /** The chosen layout, or the default when the setting holds something unknown. */
 export function hudLayoutFor(id) {
     return HUD_LAYOUTS.find(l => l.id === id) || HUD_LAYOUTS[0];
@@ -145,11 +143,6 @@ export function hudLayoutFor(id) {
 /** Every layout class, so switching layouts can clear the one before it. */
 export function allHudLayoutClasses() {
     return HUD_LAYOUTS.map(l => `sillynpc-hud-${l.id}`);
-}
-
-/** Whether an id names a layout this version ships. */
-export function isHudLayout(id) {
-    return LAYOUT_IDS.has(id);
 }
 
 /**
@@ -409,6 +402,45 @@ export const DIALOGUE_FORMAT_PROMPT = [
  * `hint` is what Fill tells the model to write, so the prompt is generated from this list
  * rather than spelled out a second time somewhere it can fall out of step.
  */
+/* Moved here from defaultSettings, where being a default meant normalizeSettings cloned
+ * it into every settings.json and then never updated it - so a stored copy went stale the
+ * day the built-in improved, and a key that looks editable but is not invited exactly that
+ * misreading. It is a constant: recommendedImagePrompt reads it directly so a Restore
+ * button hands back the suggestion rather than the text somebody was trying to replace.
+ * The editable template is imgGenPrompt, which is a different key. */
+/**
+ * Portrait instructions, one shape per backend.
+ *
+ * The two want different things and one template cannot be right for both. A Gemini
+ * image model follows plain description; Stable Diffusion wants comma-separated tags
+ * and treats a sentence as a bag of words. The old single default mixed the two -
+ * prose labels like "Visual Profile (from Lore):" alongside tag conventions like
+ * "masterpiece" and "8k resolution" - and suited neither.
+ *
+ * {{context}} is the last few messages, as many as Image Context Length asks for. On
+ * Lore Only it is empty, and an empty one takes its label with it rather than leaving
+ * the model an apology to read - see fillImagePrompt.
+ *
+ * Macros: {{name}}, {{lore}}, {{items}}, {{context}}.
+ */
+export const IMAGE_PROMPT_BY_BACKEND = Object.freeze({
+    gemini: [
+        'A character portrait of {{name}}.',
+        '',
+        'Medium & Style: Modern anime art style, high-quality manhwa character illustration, clean sharp line art, cel-shaded digital anime aesthetic, natural anime colors, sharp focus, atmospheric background.',
+        '',
+        'Visual Description: {{lore}}',
+        'Attire & Physical Gear: {{items}} {{context}}',
+        '',
+        'Composition & Pose: Solo character portrait, upper body and head, centered, facing the viewer. Calm, relaxed neutral pose, idle resting state. Clear, natural atmospheric lighting.',
+        '',
+        'Negative Constraints: No magical auras, no glowing energy swirls, no magic circles, no spell effects, no floating runes, no elemental fire/wind/lightning, no particle ribbons, no text, no letters, no logos, no watermarks, no photorealism, no 3D render.',
+    ].join('\n'),
+    sd: 'masterpiece, best quality, highly detailed, portrait of {{name}}, ' +
+        '{{lore}}, {{items}}, solo, upper body, looking at viewer, ' +
+        'detailed face, cinematic lighting, sharp focus, {{context}}',
+});
+
 export const PROFILE_FIELDS = [
     {
         id: 'age',

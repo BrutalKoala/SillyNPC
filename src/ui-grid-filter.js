@@ -110,8 +110,3 @@ export function buildGridFilterRow(root) {
     row.append(input, count);
     return { row, apply };
 }
-
-/** Sets the filter directly, for a caller that has no box to type into. */
-export function setGridFilter(text) {
-    gridFilter = String(text ?? '');
-}

@@ -206,29 +206,6 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
 
 /* ─── Buttons ──────────────────────────────────────────────────────────── */
 
-.sillynpc-export-btn,
-.sillynpc-import-btn {
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
-    font-size: var(--sillynpc-text-md);
-    margin-top: var(--sillynpc-space-xs);
-    width: 100%;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-.sillynpc-import-btn {
-    opacity: 0.8;
-}
-
-.sillynpc-import-btn:hover {
-    opacity: 1;
-}
-
 /* ─── Tab Panel ────────────────────────────────────────────────────────── */
 
 .sillynpc-tab-panel {
@@ -2767,15 +2744,6 @@ span.sillynpc-review-to {
        hundreds of pixels of dead scroll width once the bar is horizontal. */
     .sillynpc-tabs > div[style*="flex-grow"] {
         display: none;
-    }
-
-    /* Same width:100% problem as the tabs - left alone these two sat on their own
-       full-width rows and made the bar ~200px tall. */
-    .sillynpc-tabs .sillynpc-import-btn,
-    .sillynpc-tabs .sillynpc-export-btn {
-        width: auto;
-        flex: 0 0 auto;
-        margin-top: 0;
     }
 
     /* Without this the panel refuses to shrink inside the column flex and the

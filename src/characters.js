@@ -315,8 +315,19 @@ export function addAlias(id, pattern) {
 }
 
 /**
- * Move the character 'fromId' to the position of 'toId' in the settings array.
- * Also syncs category if they differ.
+ * Drops one card where another one sits, and moves it into that card's category.
+ *
+ * The category change is the part worth saying out loud, because nothing on screen asks
+ * about it: dragging a card onto one in another group is how a character is moved between
+ * groups, so the drop target's category is taken rather than kept. Dragging within a group
+ * is then just a reorder, since the category it takes is the one it already had.
+ *
+ * The target is looked up again after the splice, because removing the dragged card shifts
+ * every index after it - and if the target has gone in the meantime the card is put back
+ * where it started rather than left out of the list.
+ *
+ * @param {string} fromId The card being dragged.
+ * @param {string} toId The card it was dropped on.
  */
 export function reorderCharacters(fromId, toId) {
     const chars = getSettings().characters;
@@ -341,7 +352,15 @@ export function reorderCharacters(fromId, toId) {
 }
 
 /**
- * Move the character 'fromId' to the end of 'category'.
+ * Moves a card into a category, at the end of whoever is already in it.
+ *
+ * For a drop on the group itself rather than on a card in it, where there is no neighbour to
+ * take a position from. The list is a single flat array and the grid groups it on the way
+ * out, so "in this category" means "sitting after the last member of it" - and a category
+ * with no members yet appends to the end of the list.
+ *
+ * @param {string} fromId
+ * @param {string} category '' for uncategorised, which is a category like any other here.
  */
 export function moveCharacterToCategory(fromId, category) {
     const chars = getSettings().characters;

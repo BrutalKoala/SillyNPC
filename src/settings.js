@@ -9,6 +9,7 @@ import {
     DEFAULT_PORTRAIT_SHAPE,
     SYSTEM_PROMPT,
     DIALOGUE_FORMAT_PROMPT,
+    IMAGE_PROMPT_BY_BACKEND,
     PROFILE_FIELDS
 } from './constants.js';
 import { resolveImageFolder } from './utils.js';
@@ -31,6 +32,21 @@ export const defaultSettings = {
      */
     menuFontScale: 1.0,
     trackerFontScale: 1.0,
+    /* Declared here rather than created part-way through normalizeSettings, which is where
+       these five used to appear as "if not set, set it". They worked, because every reader
+       tolerates absence - but nothing that enumerates defaultSettings could see them, so
+       export, import repair and any future reset-to-defaults all skipped them. That form
+       additionally meant a legitimately falsy value could never be stored: harmless for
+       five strings, and the wrong idiom to copy. */
+    menuStyle: 'default',
+    dividerStyle: 'subtle',
+    avatarShape: 'rounded',
+    avatarSize: 'medium',
+    colorStyle: 'text',
+    /* Which System Profile is in use, or '' for none. It was not in this file at all - it
+       came into being the first time setActiveSystem wrote it - so the same enumeration
+       problem applied, and reading the defaults gave no hint that the concept existed. */
+    activeSystem: '',
     /**
      * Whether the story model is told how to lay dialogue out.
      *
@@ -281,38 +297,6 @@ export const defaultSettings = {
     portraitShape: DEFAULT_PORTRAIT_SHAPE,
     personaData: {},
     master_items: {},
-    /**
-     * Portrait instructions, one shape per backend.
-     *
-     * The two want different things and one template cannot be right for both. A Gemini
-     * image model follows plain description; Stable Diffusion wants comma-separated tags
-     * and treats a sentence as a bag of words. The old single default mixed the two -
-     * prose labels like "Visual Profile (from Lore):" alongside tag conventions like
-     * "masterpiece" and "8k resolution" - and suited neither.
-     *
-     * {{context}} is the last few messages, as many as Image Context Length asks for. On
-     * Lore Only it is empty, and an empty one takes its label with it rather than leaving
-     * the model an apology to read - see fillImagePrompt.
-     *
-     * Macros: {{name}}, {{lore}}, {{items}}, {{context}}.
-     */
-    imgGenPromptByBackend: {
-        gemini: [
-            'A character portrait of {{name}}.',
-            '',
-            'Medium & Style: Modern anime art style, high-quality manhwa character illustration, clean sharp line art, cel-shaded digital anime aesthetic, natural anime colors, sharp focus, atmospheric background.',
-            '',
-            'Visual Description: {{lore}}',
-            'Attire & Physical Gear: {{items}} {{context}}',
-            '',
-            'Composition & Pose: Solo character portrait, upper body and head, centered, facing the viewer. Calm, relaxed neutral pose, idle resting state. Clear, natural atmospheric lighting.',
-            '',
-            'Negative Constraints: No magical auras, no glowing energy swirls, no magic circles, no spell effects, no floating runes, no elemental fire/wind/lightning, no particle ribbons, no text, no letters, no logos, no watermarks, no photorealism, no 3D render.',
-        ].join('\n'),
-        sd: 'masterpiece, best quality, highly detailed, portrait of {{name}}, ' +
-            '{{lore}}, {{items}}, solo, upper body, looking at viewer, ' +
-            'detailed face, cinematic lighting, sharp focus, {{context}}',
-    },
     /** The template actually in use. Seeded from the backend default above. */
     imgGenPrompt: '',
     /**
@@ -933,11 +917,7 @@ export function normalizeSettings(settings) {
                 .map(tag => String(tag).trim()).filter(Boolean),
         }));
 
-    if (!settings.menuStyle) settings.menuStyle = 'default';
-    if (!settings.dividerStyle) settings.dividerStyle = 'subtle';
-    if (!settings.avatarShape) settings.avatarShape = 'rounded';
-    if (!settings.avatarSize) settings.avatarSize = 'medium';
-    if (!settings.colorStyle) settings.colorStyle = 'text';
+
     if (typeof settings.speakerIgnoreList !== 'string') settings.speakerIgnoreList = '';
 
     // A new default only reaches new installs, and the reason for raising this was an
@@ -1192,7 +1172,7 @@ export function resolveImagePrompt(backend) {
  */
 export function recommendedImagePrompt(backend) {
     const which = (backend ?? getSettings().imageBackend) === 'gemini' ? 'gemini' : 'sd';
-    return defaultSettings.imgGenPromptByBackend[which];
+    return IMAGE_PROMPT_BY_BACKEND[which];
 }
 
 export function getSettings() {

@@ -3,6 +3,7 @@ import { renderExtensionTemplateAsync } from '../../../extensions.js';
 import { LOG_PREFIX, extensionName, debugLog } from './src/constants.js';
 import { getContext } from '../../../st-context.js';
 import { initSettings, saveSettings, getSettings } from './src/settings.js';
+import { REVIEW_EVENT } from './src/status-review.js';
 import { repairDefaultImages } from './src/default-portraits.js';
 import { 
     openManagePopup
@@ -481,7 +482,7 @@ jQuery(async () => {
             }
         });
 
-        eventSource.on('sillynpc-review-changed', ({ messageId } = {}) => {
+        eventSource.on(REVIEW_EVENT, ({ messageId } = {}) => {
             try {
                 const mesEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
                 if (mesEl) reprocessMessage(mesEl);

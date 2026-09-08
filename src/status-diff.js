@@ -39,7 +39,7 @@ function itemLabel(item, primary) {
  * separately, its ceiling. Keeping them apart matters because they carry different risk -
  * a value moving is ordinary, a ceiling moving is worth seeing.
  */
-function diffStat({ scope, actor, label, before, after, settings, policy, threshold }) {
+function diffStat({ scope, actor, label, before, after, policy, threshold }) {
     const changes = [];
     if (String(before ?? '') === String(after ?? '')) return changes;
 
@@ -165,7 +165,7 @@ export function computeStateDiff(before, after, trackerSettings) {
         changes.push(...diffStat({
             scope: 'global', actor: null, label: key,
             before: before?.global?.[key], after: after?.global?.[key],
-            settings: trackerSettings, policy, threshold,
+            policy, threshold,
         }));
     }
 
@@ -177,7 +177,7 @@ export function computeStateDiff(before, after, trackerSettings) {
         changes.push(...diffStat({
             scope: 'player', actor: null, label: key,
             before: before?.player?.stats?.[key], after: after?.player?.stats?.[key],
-            settings: trackerSettings, policy, threshold,
+            policy, threshold,
         }));
     }
     changes.push(...diffCollections({
@@ -205,7 +205,7 @@ export function computeStateDiff(before, after, trackerSettings) {
             changes.push(...diffStat({
                 scope: 'character', actor: afterChar.name, label: stat,
                 before: beforeChar.stats?.[stat], after: afterChar.stats?.[stat],
-                settings: trackerSettings, policy, threshold,
+                policy, threshold,
             }));
         }
         changes.push(...diffCollections({

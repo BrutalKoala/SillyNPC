@@ -46,8 +46,3 @@ export function nextTrackerView(view) {
     const at = TRACKER_VIEWS.indexOf(view);
     return TRACKER_VIEWS[(at + 1) % TRACKER_VIEWS.length];
 }
-
-/** Reset, for tests and for a fresh session. */
-export function resetTrackerView() {
-    current = 'full';
-}

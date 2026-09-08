@@ -178,11 +178,6 @@ export function faceAssignmentVersion() {
     return faceVersion;
 }
 
-/** Everything this chat has handed out, for the panel that lists it. */
-export function getRuns() {
-    return facesRecord()?.runs ?? [];
-}
-
 /** Forgets every assignment, so the next sighting of everybody draws again. */
 export function clearRuns() {
     const record = facesRecord({ create: true });
