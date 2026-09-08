@@ -301,7 +301,13 @@ function historicalStateFromBlock(message, fallback) {
     const raw = getPreservedStatusRaw(message);
     if (!raw) return null;
     try {
-        const { updates } = parseMessageForUpdates(raw);
+        /* `update`, singular, which is the key parseMessageForUpdates actually returns. This
+           read `updates`, so it was always undefined and this function always returned null:
+           the preserved-block path has never once run. Everything older than the
+           applied-changes record was therefore reported as approximate, and the blocks
+           status-history goes to the trouble of keeping on message.extra - specifically so
+           history can be rebuilt from them - were never read. */
+        const { update: updates } = parseMessageForUpdates(raw);
         if (!updates) return null;
         const state = structuredClone(fallback);
         // A block states values outright rather than as changes, so merge it over a copy.
