@@ -182,6 +182,13 @@ export function chatRenderSignature() {
         tracker.enabled,
         tracker.showOnlyAtBottom,
         tracker.customCSS,
+        /* The layout itself, which shapes the box more than anything else here and was the
+           one thing this list left out. The template box has no onChange, so a hand edit
+           was saved and then ignored until something unrelated forced a redraw - Tidy
+           labels and Reset both reprocess, which is why it went unnoticed. Watching it here
+           rather than wiring the control also covers a template arriving from an import, a
+           preset, or a system switch. */
+        tracker.template,
         JSON.stringify(tracker.globalStats || []),
         JSON.stringify(tracker.playerStats || []),
         JSON.stringify(tracker.npcStats || []),
