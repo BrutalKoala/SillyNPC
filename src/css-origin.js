@@ -105,15 +105,33 @@ export function trapInlineDisplay(el, report) {
  *
  * Everything is one long file path in a browser, and a data attribute has to stay a line
  * somebody can look at.
+ *
+ * The **first frame outside a library comes first**, because it is the answer and the
+ * frames above it are not. The first reading of this reported three frames and all three
+ * were jQuery's own `hide` machinery - true, and useless: what nobody could see was which
+ * line called it. Anything under a lib/ directory is somebody else's plumbing.
+ *
+ * The library frames are kept after it rather than dropped, since "jQuery hide" and
+ * "jQuery fadeOut's completion" are different answers and the chain is what tells them
+ * apart.
  */
-export function shortenStack(stack, frames = 3) {
-    return String(stack ?? '')
+export function shortenStack(stack, frames = 10) {
+    const lines = String(stack ?? '')
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.startsWith('at ') && !line.includes('css-origin.js'))
-        .slice(0, frames)
-        .map(line => line.replace(/^at\s+/, '').replace(/https?:\/\/[^/]+\//, ''))
-        .join(' <- ') || 'no stack';
+        .map(line => line.replace(/^at\s+/, '').replace(/https?:\/\/[^/]+\//, ''));
+
+    if (!lines.length) return 'no stack';
+
+    const isLibrary = (line) => line.includes('lib/') || line.includes('node_modules');
+    const caller = lines.findIndex(line => !isLibrary(line));
+
+    const ordered = caller > 0
+        ? [`CALLER: ${lines[caller]}`, ...lines.slice(0, caller), ...lines.slice(caller + 1)]
+        : lines;
+
+    return ordered.slice(0, frames).join(' <- ');
 }
 
 /**
