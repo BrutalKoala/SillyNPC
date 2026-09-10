@@ -45,12 +45,23 @@ const BLOCK_TAGS = new Set(['P', 'BLOCKQUOTE', 'LI']);
  * A message with no block elements at all is one block: plenty of replies are a single
  * unwrapped line, and treating those as nothing would lose them entirely.
  */
+const BLOCK_SELECTOR = 'p, blockquote, li';
+
 function blockElements(textContainer) {
-    const candidates = [...textContainer.querySelectorAll('p, blockquote, li')]
+    const candidates = [...textContainer.querySelectorAll(BLOCK_SELECTOR)]
         .filter(el => BLOCK_TAGS.has(el.tagName));
 
-    const innermost = candidates.filter(el =>
-        !candidates.some(other => other !== el && el.contains(other)));
+    /* Innermost wins: a candidate with no candidate inside it. Asked of each one directly
+       rather than by comparing every candidate with every other.
+     *
+     * Measured, because the comparison version was quadratic in a message's paragraphs and
+       that looked like the reason the app went sticky in a long chat. It was not - at a
+       realistic twelve paragraphs the two are within 5% of each other
+       (visual/beats-cost.html), and the real cost was reading every message at all, which
+       is fixed by caching on the caller's side. This stays because it is the plainer way
+       to say "innermost" and it does hold up on a very long message, not because it was
+       the bug. */
+    const innermost = candidates.filter(el => el.querySelector(BLOCK_SELECTOR) === null);
 
     return innermost.length ? innermost : [textContainer];
 }
