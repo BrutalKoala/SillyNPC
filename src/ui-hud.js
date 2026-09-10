@@ -253,7 +253,7 @@ function ensurePortraitImage(portrait) {
      * First the full picture, in case a downscaled rendition was the problem, and then
      * the built-in face. */
     face.addEventListener('error', () => {
-        const full = face.dataset.source;
+        const full = face.dataset.sillynpcSource;
         if (full && face.getAttribute('src') !== full) face.src = full;
         else if (face.getAttribute('src') !== BUILT_IN_DEFAULT_AVATAR) {
             face.src = BUILT_IN_DEFAULT_AVATAR;
@@ -341,7 +341,7 @@ function recordFaceState(portrait, face, src) {
  * picture back. That matches the report exactly, and it is the only one of the candidates
  * with a remedy that does not depend on knowing which candidate it is.
  *
- * Clearing dataset.source makes the next updateHUD assign the full picture again rather
+ * Clearing dataset.sillynpcSource makes the next updateHUD assign the full picture again rather
  * than deciding nothing has changed.
  *
  * If the frame's data-face still reads `ok:<width>` after this, the rendition was never
@@ -349,7 +349,7 @@ function recordFaceState(portrait, face, src) {
  */
 export function forgetPortrait() {
     const face = hudContainer?.querySelector('.sillynpc-hud-portrait-img');
-    if (face) face.dataset.source = '';
+    if (face) face.dataset.sillynpcSource = '';
 }
 
 export function updateHUD(updatedState = null) {
@@ -432,19 +432,40 @@ export function updateHUD(updatedState = null) {
     // Compared before assigning: updateHUD runs on every status change, and re-setting an
     // identical src makes the picture flicker while the browser re-fetches it.
     const face = ensurePortraitImage(portrait);
+    /* --- why the attribute has this ungainly name ---
+     *
+     * It was `data-source`, and that is what made the picture disappear whenever the
+     * SillyTavern preset changed. `setupChatCompletionPromptManager` ends with
+     * (scripts/openai.js:6034):
+     *
+     *     $('[data-source]').each(function () { ... $(this).toggle(matchesSource); });
+     *
+     * A document-wide selector. Every element anywhere on the page carrying a
+     * `data-source` attribute is hidden unless its comma-separated list names the
+     * current chat-completion source - and a file path names no source at all, so the
+     * portrait was hidden by a control panel it has nothing to do with.
+     *
+     * It took six rounds to find because it is invisible from inside this extension:
+     * nothing here hides the picture, no stylesheet accounts for it, and every diagnosis
+     * that started from our own code was looking in the wrong repository. The answer
+     * came from trapping the inline write and reading the caller off its stack.
+     *
+     * So: **any data attribute this extension puts on an element in the live document is
+     * a name shared with SillyTavern and every other extension.** Namespaced from here
+     * on, and a check asserts it. */
     /* Also when the picture on screen is broken, not only when the source has changed.
      *
      * The comparison alone has no way back. Whatever leaves the element unable to draw -
      * a rendition that came out unusable, a file that went away, a reload of settings
-     * under it - `dataset.source` still matches, so the src is never written again and
+     * under it - `dataset.sillynpcSource` still matches, so the src is never written again and
      * the portrait stays blank until the whole HUD is rebuilt by a page refresh. Which is
      * exactly how it was reported: gone after changing preset, back after F5.
      *
      * naturalWidth is zero only for an image that has finished trying and failed; a
      * picture still loading has complete false and is left alone. */
     const broken = face?.complete && face.naturalWidth === 0;
-    if (face && (face.dataset.source !== src || broken)) {
-        face.dataset.source = src;
+    if (face && (face.dataset.sillynpcSource !== src || broken)) {
+        face.dataset.sillynpcSource = src;
         face.src = src;
     }
     recordFaceState(portrait, face, src);
@@ -589,7 +610,7 @@ function showPortraitAtSize(face, src) {
     if (!wanted) return;
 
     portraitRendition(src, wanted).then(ready => {
-        if (ready && ready !== face.getAttribute('src') && face.dataset.source === src) {
+        if (ready && ready !== face.getAttribute('src') && face.dataset.sillynpcSource === src) {
             face.src = ready;
         }
     }).catch(() => { /* the full picture is already on screen */ });
