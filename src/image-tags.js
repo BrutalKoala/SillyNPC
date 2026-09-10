@@ -182,7 +182,21 @@ export function forgetImageTags(char, path) {
  * @returns {string[]}
  */
 export function valuesForField(field) {
-    const stats = getSettings().statusTracker?.npcStats || [];
-    const stat = stats.find(s => String(s?.name ?? '') === field);
-    return Array.isArray(stat?.options) ? stat.options.filter(Boolean).map(String) : [];
+    const tracker = getSettings().statusTracker || {};
+    /* A character's own fields first, then the world's.
+     *
+     * Both can drive a picture - somebody looks different Wounded, and somebody looks
+     * different at Night - and they share one namespace here because a tag on a card is
+     * keyed by the field's name and nothing else. Two fields of the same name in the two
+     * scopes therefore collide, and the character's wins, which is the same order the
+     * value itself is resolved in. The picker says which scope each name came from so a
+     * collision is visible rather than merely documented.
+     */
+    for (const list of [tracker.npcStats, tracker.globalStats]) {
+        const stat = (list || []).find(s => String(s?.name ?? '') === field);
+        if (stat) {
+            return Array.isArray(stat.options) ? stat.options.filter(Boolean).map(String) : [];
+        }
+    }
+    return [];
 }
