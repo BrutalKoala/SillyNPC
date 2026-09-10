@@ -291,7 +291,11 @@ export function updateHUD(updatedState = null) {
         face.dataset.source = src;
         face.src = src;
     }
-    if (face) showPortraitAtSize(face, src);
+    // Measured after applyHudProportions below, not here: the portrait's size is set by
+    // that call, so measuring now reads whatever the *previous* render left behind - or,
+    // on the first draw of a session, the stylesheet's default. Either way the rendition
+    // is chosen for the wrong size, and choosing one too small is precisely the blur this
+    // was built to remove.
 
     // Update Stats
     const statsContainer = hudContainer.querySelector('.sillynpc-hud-stats');
@@ -350,6 +354,14 @@ export function updateHUD(updatedState = null) {
     }
 
     applyHudProportions(hudContainer, meters.length, layout);
+
+    /* Now the portrait is the size it is going to be, so it can be measured.
+     *
+     * This used to run beside the src assignment, three hundred lines up and before the
+     * size was applied. The rendition was therefore picked for the frame's previous size,
+     * which is right only when nothing has changed - and wrong on the first draw, after a
+     * layout change, and whenever the number of meters moves the frame. */
+    if (face) showPortraitAtSize(face, src);
 }
 
 /**
