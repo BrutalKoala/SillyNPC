@@ -366,19 +366,27 @@ jQuery(async () => {
            Written again here, which puts them back at the foot of the new list.
            Nothing happens for a block that is not managed there. */
         eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+            /* Redrawn first, and in a try of its own.
+             *
+             * Reported as the HUD's portrait disappearing on a preset change and staying
+             * gone until the page was reloaded. Nothing else asks the HUD to draw again -
+             * none of the events that do, a message or a chat change or a settings
+             * control, fires when a preset is swapped - so whatever leaves the picture
+             * unusable, the recovery inside updateHUD never gets a turn.
+             *
+             * It was added below the two calls that follow, which was the mistake: the
+             * catch around them exists because they are expected to fail sometimes, and
+             * putting the redraw behind them let a failure in the prompt work silently
+             * take the HUD with it. Two unrelated jobs, two failure paths. */
+            try {
+                updateHUD();
+            } catch (err) {
+                debugLog('Could not redraw the HUD after the preset change', err);
+            }
+
             try {
                 applyDialogueFormatPrompt();
                 applyNarratorRulesPrompt();
-                /* And redraw the HUD.
-                 *
-                 * Reported as its portrait disappearing on a preset change and staying
-                 * gone until the page was refreshed. The staying gone is the part this
-                 * fixes: nothing here asked the HUD to draw again, and none of the events
-                 * that do - a message, a chat change, a settings control - fires when a
-                 * preset is swapped. So whatever left the picture unusable, the recovery
-                 * built into updateHUD never got a turn, and a reload was the only thing
-                 * that rebuilt the widget. */
-                updateHUD();
             } catch (err) {
                 debugLog('Could not put the writing prompts back after the preset change', err);
             }
