@@ -7,6 +7,7 @@ import {
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
 import { computeStatBar, splitValue, applyStatFormat, portraitRendition } from './utils.js';
+import { whyHidden } from './css-origin.js';
 import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
@@ -297,8 +298,15 @@ function recordFaceState(portrait, face, src) {
         portrait.dataset.faceBox = `${Math.round(box.width)}x${Math.round(box.height)}`
             + ` ${css.display}/${css.visibility}/${css.opacity}`
             + ` frame:${Math.round(frame.width)}x${Math.round(frame.height)}`;
+
+        // Only when it is actually hidden. See whyHidden.
+        const invisible = css.display === 'none' || css.visibility === 'hidden'
+            || Number(css.opacity) === 0 || box.width === 0 || box.height === 0;
+        if (invisible) portrait.dataset.faceWhy = whyHidden(face);
+        else delete portrait.dataset.faceWhy;
     } else {
         portrait.dataset.faceBox = 'no element';
+        delete portrait.dataset.faceWhy;
     }
 }
 
