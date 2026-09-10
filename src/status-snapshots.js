@@ -48,6 +48,26 @@ export const APPLIED_SWIPE_KEY = 'sillynpc_applied_swipe';
 /** What a message opened or settled among the threads. See recordThreadChanges. */
 export const THREADS_KEY = 'sillynpc_threads';
 
+/**
+ * The world's fields as they stood at this message.
+ *
+ * The change rows above say what *moved*, which is enough to walk backwards from today -
+ * until the walk reaches a message older than the record, after which everything before it
+ * is an approximation. That is fine for a tracker box, which says so, and not fine for
+ * anything that has to act on the answer: a background chosen for message 45 from a guess
+ * is wrong intermittently and only in old parts of a story, which is the hardest kind of
+ * wrong to notice.
+ *
+ * So the globals are written down rather than only derived, and the walk uses them to
+ * correct itself. They are small - a handful of short strings - and there is one per
+ * message that changed anything.
+ *
+ * Like every other key here it lives in `extra`, which SillyTavern carries with the
+ * message and never puts in a prompt. Nothing in the prompt path reads it; it exists for
+ * this extension and what builds on it.
+ */
+export const GLOBALS_KEY = 'sillynpc_globals';
+
 function messageAt(messageId) {
     return getContext()?.chat?.[Number(messageId)] ?? null;
 }
@@ -126,6 +146,14 @@ export function recordAppliedChanges(messageId, changes) {
     // A reviewed change lands after the automatic part of the same message, so append
     // rather than replace, or the earlier half is forgotten.
     message.extra[APPLIED_KEY] = Array.isArray(existing) ? existing.concat(rows) : rows;
+
+    /* And what the world looks like now that they have landed.
+     *
+     * Written after the changes rather than beside them because it is the state *at* this
+     * message, not the state it started from. Overwritten rather than appended for the
+     * reviewed half of the same message, which is right: the second write knows more.
+     */
+    message.extra[GLOBALS_KEY] = { ...(loadStateFromMetadata()?.global ?? {}) };
     // Which reply these describe. The appended half belongs to the same one, so writing it
     // again is right rather than merely harmless.
     message.extra[APPLIED_SWIPE_KEY] = currentSwipeOf(message);
@@ -381,6 +409,23 @@ function buildTimeline(chat, current) {
                 exact = true;
                 reason = 'preserved-block';
             }
+        }
+
+        /* The world's fields, when this message wrote them down.
+         *
+         * Always, not only once the chain has broken - a snapshot is what the globals were,
+         * and the walk's own arithmetic is a derivation of it. Correcting from the record
+         * whenever there is one keeps the two from quietly disagreeing about a value the
+         * change rows never mentioned, which is every global a rule or an edit moved
+         * without going through an update.
+         *
+         * The globals only. The rest of the state has no snapshot and stays derived, so
+         * `exact` is not touched here: it describes the whole state, and knowing the world
+         * for certain says nothing about anybody's stats.
+         */
+        const storedGlobals = chat[i]?.extra?.[GLOBALS_KEY];
+        if (storedGlobals && typeof storedGlobals === 'object') {
+            running.global = { ...storedGlobals };
         }
 
         states.set(i, {
