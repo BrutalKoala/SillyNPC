@@ -22,7 +22,8 @@ import {
 import { reprocessAllMessages, triggerReprocess, chatRenderSignature } from './chat.js';
 import { syncAllLorebooks, renameLorebookEntry } from './lorebook.js';
 import { escapeHtml, offerDownload } from './utils.js';
-import { buildPortraitBlock } from './ui-portrait.js';
+import { buildPortraitBlock, openLightbox } from './ui-portrait.js';
+import { taggedFields, valuesForField, getImageTag, setImageTag } from './image-tags.js';
 import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section.js';
 import { renderProfileView, renderProfileFields } from './ui-profile.js';
 import { renderThreadsView } from './ui-threads.js';
@@ -1172,8 +1173,11 @@ function renderEditor() {
     
     // Lore last. It is a whole panel with three modes and it used to sit second, above
     // the fields people actually come here to edit.
+    const tagsContainer = document.createElement('div');
+    tagsContainer.className = 'sillynpc-editor-field';
+
     right.append(nameField, aliasField, profileContainer, overridesContainer,
-        collectionsContainer, loreContainer);
+        tagsContainer, collectionsContainer, loreContainer);
     
     main.append(left, vDivider, right);
     editView.append(sticky, main);
@@ -1182,7 +1186,94 @@ function renderEditor() {
     renderProfileFields(char, profileContainer);
     renderLorebookSection(char, loreContainer, { onChange: renderEditor });
     renderOverridesSection(char, overridesContainer);
+    renderPictureTagsSection(char, tagsContainer);
     renderCollectionsSection(char, collectionsContainer);
+}
+
+/**
+ * What each of this character's pictures means.
+ *
+ * Drawn only when something has asked for pictures to be tagged. SillyNPC has no use for
+ * a tag of its own, so with nothing registered this is not an empty section with a promise
+ * in it - it is not there at all, and the character page looks exactly as it did.
+ *
+ * A grid rather than a control on the portrait carousel. The carousel shows one picture at
+ * a time, which is right for choosing the one in use and wrong for saying what a dozen of
+ * them are for - and it is shared with the player sheet, which has no tags.
+ */
+function renderPictureTagsSection(char, container) {
+    if (!container) return;
+    container.replaceChildren();
+
+    const fields = taggedFields();
+    const gallery = Array.isArray(char.images) ? char.images.filter(Boolean) : [];
+    if (fields.length === 0 || gallery.length === 0) return;
+
+    const header = document.createElement('div');
+    header.className = 'sillynpc-aliases-header';
+    header.innerHTML = `
+        <label>Picture Tags</label>
+        <small class="notes">Which of this character's pictures stands for which value.
+        A value with no picture uses the one the chat already shows.</small>
+    `;
+    container.append(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'sillynpc-tag-grid';
+
+    gallery.forEach((path, index) => {
+        const row = document.createElement('div');
+        row.className = 'sillynpc-tag-row';
+
+        const thumb = document.createElement('img');
+        thumb.className = 'sillynpc-tag-thumb';
+        thumb.src = path;
+        thumb.alt = `Picture ${index + 1}`;
+        // The grid is thumbnails; this is the only way to see which picture a row is.
+        thumb.title = 'Click to view full size';
+        thumb.addEventListener('click', () => openLightbox(path));
+        /* The one in use, marked. Gallery order decides between two pictures carrying the
+           same tag, and the reader has no other way to see what that order is. */
+        if (path === char.imageUrl) thumb.classList.add('in-use');
+        row.append(thumb);
+
+        const selects = document.createElement('div');
+        selects.className = 'sillynpc-tag-fields';
+
+        for (const field of fields) {
+            const values = valuesForField(field);
+            const cell = document.createElement('label');
+            cell.className = 'sillynpc-tag-field';
+
+            const name = document.createElement('small');
+            name.textContent = field;
+            cell.append(name);
+
+            /* A field whose values are not enumerated has nothing to offer. It should
+               never reach here - the picker on the other side only lists fields with an
+               Allowed values list - so this says why rather than drawing an empty box. */
+            if (values.length === 0) {
+                const none = document.createElement('small');
+                none.className = 'notes';
+                none.textContent = 'no allowed values set';
+                cell.append(none);
+                selects.append(cell);
+                continue;
+            }
+
+            const select = buildChoiceSelect(values, getImageTag(char, path, field));
+            select.addEventListener('change', () => {
+                setImageTag(char, path, field, select.value);
+            });
+            cell.append(select);
+            selects.append(cell);
+        }
+
+        row.append(selects);
+        grid.append(row);
+    });
+
+    container.append(grid);
 }
 
 function renderCollectionsSection(char, container) {

@@ -4602,3 +4602,82 @@ textarea.sillynpc-profile-input {
     align-items: baseline;
     gap: var(--sillynpc-space-sm);
 }
+
+/* ─── Picture Tags ─────────────────────────────────────────────────────── */
+
+/* Which of a character's pictures stands for which field value. One row per picture,
+   drawn only when something has registered an interest - see image-tags.js.
+
+   A row rather than the portrait carousel because a card can hold a dozen pictures and
+   the carousel shows one: saying what they are all for is a list, not a stepper. */
+
+.sillynpc-tag-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sillynpc-space-sm);
+    margin-top: var(--sillynpc-space-sm);
+}
+
+.sillynpc-tag-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sillynpc-space-md);
+    background: rgba(255, 255, 255, 0.05);
+    padding: var(--sillynpc-space-sm);
+    border-radius: 6px;
+}
+
+.sillynpc-tag-thumb {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: zoom-in;
+    /* Gallery order decides between two pictures carrying the same tag, so the reader
+       needs to be able to tell the rows apart at a glance; a transparent border keeps
+       the row from shifting when the marked one below adds its own. */
+    border: 2px solid transparent;
+}
+
+.sillynpc-tag-thumb.in-use {
+    border-color: var(--sillynpc-accent);
+}
+
+/* --- the min-width: 0 below are what stop the editor scrolling sideways ---
+ *
+ * A flex item defaults to `min-width: auto`, which means it refuses to shrink below its
+ * content - and a <select>'s content is its *widest option*. The allowed values are the
+ * user's own words with no length they are held to, so a "Relation to Player" reading
+ * "Utterly devoted beyond all reason" makes the control as wide as the sentence and takes
+ * the character page sideways with it.
+ *
+ * The nesting is why there are two, and honestly: they are redundant with each other. The
+ * column overflows only when *both* go - measured in the verbose case in
+ * visual/picture-tags.html, which was written after these rules and which failed with
+ * every shrink allowance removed and passed with any one of them left. Kept as a pair
+ * because they are the standard idiom at each level of a nested flex, not because each is
+ * separately load-bearing.
+ *
+ * The option list still shows the whole value when it is open. Only the closed control is
+ * clipped, which is the right way round. */
+.sillynpc-tag-fields {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: var(--sillynpc-space-md);
+    min-width: 0;
+}
+
+.sillynpc-tag-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 140px;
+    min-width: 0;
+}
+
+.sillynpc-tag-field > small {
+    opacity: 0.75;
+    font-size: var(--sillynpc-text-sm);
+}
