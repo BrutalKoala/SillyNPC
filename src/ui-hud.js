@@ -278,6 +278,28 @@ function recordFaceState(portrait, face, src) {
     /* The tail only. It separates a file path from a data: URL, which is the distinction
        that matters, without putting a whole base64 image into an attribute. */
     portrait.dataset.faceTail = String(src ?? '').slice(-40);
+
+    /* And how it is being laid out, because `ok` turned out not to mean visible.
+     *
+     * The first reading of this diagnostic came back `ok:864` over a circle with nothing
+     * in it: the file is fetched, decoded and 864 pixels wide, and still nothing is
+     * painted. That eliminates every question about data and loading at once and leaves
+     * only how the element is drawn - a box collapsed to nothing, or display, visibility
+     * or opacity turned off by something.
+     *
+     * Reported as one string rather than guessed at a fifth time. The frame's box comes
+     * with it: a frame of the right size holding an image of no size is a different bug
+     * from both of them being wrong. */
+    if (face) {
+        const box = face.getBoundingClientRect();
+        const frame = portrait.getBoundingClientRect();
+        const css = getComputedStyle(face);
+        portrait.dataset.faceBox = `${Math.round(box.width)}x${Math.round(box.height)}`
+            + ` ${css.display}/${css.visibility}/${css.opacity}`
+            + ` frame:${Math.round(frame.width)}x${Math.round(frame.height)}`;
+    } else {
+        portrait.dataset.faceBox = 'no element';
+    }
 }
 
 /**
