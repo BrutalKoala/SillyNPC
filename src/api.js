@@ -4,6 +4,7 @@ import { loadWorldInfo, saveWorldInfo, createWorldInfoEntry } from '../../../../
 import { executeSlashCommandsOnChatInput } from '../../../../slash-commands.js';
 import { saveBase64AsFile } from '../../../../utils.js';
 import { LOG_PREFIX, debugLog, PORTRAIT_SHAPES, DEFAULT_PORTRAIT_SHAPE, PROFILE_FIELDS } from './constants.js';
+import { forgetImageTags } from './image-tags.js';
 // The chat draws this picture beside every line the character speaks, so changing it
 // leaves the chat stale. reprocess.js holds the handle so any module can ask.
 import { triggerReprocess } from './reprocess.js';
@@ -688,6 +689,12 @@ export async function removeCharacterImage(char, path, { deleteFile = false } = 
 
     const at = char.images.indexOf(path);
     if (at >= 0) char.images.splice(at, 1);
+
+    /* And whatever the picture was said to mean. The tag map is keyed by path, so an
+       entry left behind would come back to life the moment the same file was adopted
+       again - which is the ordinary case, since taking a picture off a character does
+       not delete it. */
+    forgetImageTags(char, path);
 
     // Step to whatever is left rather than leaving the character pointing at a gap.
     if (char.imageUrl === path) {
