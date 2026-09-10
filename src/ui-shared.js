@@ -43,6 +43,38 @@ function markAdvanced(wrap, spec) {
     wrap.dataset.advanced = 'true';
     if (!getSettings().devMode) wrap.style.display = 'none';
 }
+
+/**
+ * Which settings object a control reads and writes.
+ *
+ * These builders carry the label, the help text, the advanced gating and the saving, which
+ * is why every settings surface here is made of them - and why an addon wants them too. But
+ * they read SillyNPC's own settings by name, so an addon using them as they stood would
+ * write its settings into this extension's file.
+ *
+ * An optional store is the whole of the fix. Omitted, which is every existing call, it is
+ * exactly what it always was; supplied, the control belongs to somebody else entirely. The
+ * alternative was a second copy of five builders, and two copies of a control that saves is
+ * how the two stop agreeing about what saving means.
+ *
+ * Dev mode is deliberately not part of it: "show me the advanced controls" is one decision
+ * about one person's screen, not a per-extension preference.
+ *
+ * defaults comes with it because the slider and number controls fall back to the schema
+ * default for their key when nothing is stored - and reading SillyNPC's schema for somebody
+ * else's key finds nothing, which puts a slider at its minimum rather than where the addon
+ * says it starts.
+ *
+ * @param {{ store?: { get: () => object, save: () => void, defaults?: object } }} [options]
+ * @returns {{ read: () => object, write: () => void, defaults: object }}
+ */
+function storeOf(options) {
+    return {
+        read: options?.store?.get ?? getSettings,
+        write: options?.store?.save ?? saveSettings,
+        defaults: options?.store?.defaults ?? defaultSettings,
+    };
+}
 /**
  * @param {object} options
  * @param {string} [options.recommended] Adds a control that restores this text.
@@ -58,6 +90,7 @@ function markAdvanced(wrap, spec) {
  */
 export function buildSettingTextArea(options) {
     const { key, label, help, onChange, recommended, showTokens = false, emptyNote = '' } = options;
+    const { read, write } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
     // Says which setting this is, so a control can be found by what it writes rather
@@ -75,14 +108,14 @@ export function buildSettingTextArea(options) {
     textarea.className = 'text_pole sillynpc-setting-textarea';
     textarea.rows = 6;
     textarea.style.marginTop = '6px';
-    textarea.value = getNestedValue(getSettings(), key) ?? '';
+    textarea.value = getNestedValue(read(), key) ?? '';
     const tokens = showTokens
         ? buildTokenReadout(() => textarea.value, { note: emptyNote })
         : null;
 
     textarea.addEventListener('input', () => {
-        setNestedValue(getSettings(), key, textarea.value);
-        saveSettings();
+        setNestedValue(read(), key, textarea.value);
+        write();
         tokens?.refresh();
         onChange?.();
     });
@@ -113,8 +146,8 @@ export function buildSettingTextArea(options) {
             if (!ok) return;
 
             textarea.value = recommended;
-            setNestedValue(getSettings(), key, recommended);
-            saveSettings();
+            setNestedValue(read(), key, recommended);
+            write();
             tokens?.refresh();
             onChange?.();
         });
@@ -126,6 +159,7 @@ export function buildSettingTextArea(options) {
 
 export function buildSettingSelect(spec) {
     const { key, label, help, options, onChange } = spec;
+    const { read, write } = storeOf(spec);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
     // Says which setting this is, so a control can be found by what it writes rather
@@ -146,10 +180,10 @@ export function buildSettingSelect(spec) {
         o.textContent = opt.label;
         select.append(o);
     }
-    select.value = getNestedValue(getSettings(), key) ?? '';
+    select.value = getNestedValue(read(), key) ?? '';
     select.addEventListener('change', () => {
-        setNestedValue(getSettings(), key, select.value);
-        saveSettings();
+        setNestedValue(read(), key, select.value);
+        write();
         onChange?.();
     });
     row.append(text, select);
@@ -168,6 +202,7 @@ export function buildSettingSelect(spec) {
 
 export function buildSettingToggle(options) {
     const { key, label, help, onChange } = options;
+    const { read, write } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
     // Says which setting this is, so a control can be found by what it writes rather
@@ -186,10 +221,10 @@ export function buildSettingToggle(options) {
 
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.checked = !!getNestedValue(getSettings(), key);
+    input.checked = !!getNestedValue(read(), key);
     input.addEventListener('change', () => {
-        setNestedValue(getSettings(), key, input.checked);
-        saveSettings();
+        setNestedValue(read(), key, input.checked);
+        write();
         onChange?.();
     });
     
@@ -210,6 +245,7 @@ export function buildSettingToggle(options) {
 
 export function buildSettingSlider(options) {
     const { key, label, help, min = 0, max = 100, step = 1, suffix = '', onChange } = options;
+    const { read, write, defaults } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
     // Says which setting this is, so a control can be found by what it writes rather
@@ -235,8 +271,8 @@ export function buildSettingSlider(options) {
     // sliders like hudScale (0.5-2.0) and meaningless for the rest. Fall back to the
     // schema default for this exact key, then clamp into the slider's own range so the
     // control can never start outside the bounds it advertises.
-    const schemaDefault = getNestedValue(defaultSettings, key);
-    const raw = getNestedValue(getSettings(), key) ?? schemaDefault ?? min;
+    const schemaDefault = getNestedValue(defaults, key);
+    const raw = getNestedValue(read(), key) ?? schemaDefault ?? min;
     const numeric = Number(raw);
     slider.value = String(Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : min)));
     
@@ -253,11 +289,11 @@ export function buildSettingSlider(options) {
     // position with it. Twelve controls in the tracker panel are sliders.
     slider.addEventListener('input', () => {
         valueDisp.textContent = `${slider.value}${suffix}`;
-        setNestedValue(getSettings(), key, Number(slider.value));
+        setNestedValue(read(), key, Number(slider.value));
     });
 
     slider.addEventListener('change', () => {
-        saveSettings();
+        write();
         onChange?.();
     });
     
@@ -299,6 +335,7 @@ export function buildSettingSlider(options) {
  */
 export function buildSettingNumber(options) {
     const { key, label, help, suffix = '', onChange } = options;
+    const { read, write, defaults } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
     // Says which setting this is, so a control can be found by what it writes rather
@@ -318,8 +355,8 @@ export function buildSettingNumber(options) {
     field.step = '1';
     field.className = 'text_pole sillynpc-number-input';
 
-    const schemaDefault = getNestedValue(defaultSettings, key);
-    const raw = getNestedValue(getSettings(), key) ?? schemaDefault ?? 0;
+    const schemaDefault = getNestedValue(defaults, key);
+    const raw = getNestedValue(read(), key) ?? schemaDefault ?? 0;
     field.value = String(raw);
 
     // Store per keystroke so nothing is lost if the panel is rebuilt mid-edit, but tell
@@ -328,7 +365,7 @@ export function buildSettingNumber(options) {
     field.addEventListener('input', () => {
         const numeric = Number(field.value);
         if (field.value.trim() !== '' && Number.isFinite(numeric) && numeric >= 0) {
-            setNestedValue(getSettings(), key, Math.floor(numeric));
+            setNestedValue(read(), key, Math.floor(numeric));
         }
     });
 
@@ -337,9 +374,9 @@ export function buildSettingNumber(options) {
         const value = field.value.trim() !== '' && Number.isFinite(numeric) && numeric >= 0
             ? Math.floor(numeric)
             : Number(schemaDefault) || 0;
-        setNestedValue(getSettings(), key, value);
+        setNestedValue(read(), key, value);
         field.value = String(value);
-        saveSettings();
+        write();
         onChange?.();
     });
 
