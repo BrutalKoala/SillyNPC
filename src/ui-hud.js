@@ -171,6 +171,20 @@ export function initHUD() {
     const face = document.createElement('img');
     face.className = 'sillynpc-hud-portrait-img';
     face.alt = '';
+    /* A picture that cannot be drawn falls back rather than staying blank.
+     *
+     * Deliberately not `img.remove()`, which is what the chat's avatars do: those are one
+     * of many and a missing one is a gap, while this is the only portrait the HUD has and
+     * removing it means nothing can ever put it back - updateHUD looks the element up and
+     * does nothing when it is not there. First the full picture, in case a downscaled
+     * rendition was the problem, and then the built-in face. */
+    face.addEventListener('error', () => {
+        const full = face.dataset.source;
+        if (full && face.getAttribute('src') !== full) face.src = full;
+        else if (face.getAttribute('src') !== BUILT_IN_DEFAULT_AVATAR) {
+            face.src = BUILT_IN_DEFAULT_AVATAR;
+        }
+    });
     portrait.appendChild(face);
     portrait.addEventListener('mousedown', startDrag);
     makeActivatable(portrait, { label: 'Open your character sheet' });
@@ -287,7 +301,18 @@ export function updateHUD(updatedState = null) {
     // Compared before assigning: updateHUD runs on every status change, and re-setting an
     // identical src makes the picture flicker while the browser re-fetches it.
     const face = portrait.querySelector('.sillynpc-hud-portrait-img');
-    if (face && face.dataset.source !== src) {
+    /* Also when the picture on screen is broken, not only when the source has changed.
+     *
+     * The comparison alone has no way back. Whatever leaves the element unable to draw -
+     * a rendition that came out unusable, a file that went away, a reload of settings
+     * under it - `dataset.source` still matches, so the src is never written again and
+     * the portrait stays blank until the whole HUD is rebuilt by a page refresh. Which is
+     * exactly how it was reported: gone after changing preset, back after F5.
+     *
+     * naturalWidth is zero only for an image that has finished trying and failed; a
+     * picture still loading has complete false and is left alone. */
+    const broken = face?.complete && face.naturalWidth === 0;
+    if (face && (face.dataset.source !== src || broken)) {
         face.dataset.source = src;
         face.src = src;
     }
