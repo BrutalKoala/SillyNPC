@@ -19,9 +19,11 @@ import { getSettings, saveSettings } from './settings.js';
  * Who wants pictures tagged, and by which fields.
  *
  * SillyNPC has no use for tags of its own, so the character page draws no tagging control
- * until something registers an interest. That is what keeps the base extension from
- * knowing its addon exists: it is told "these fields want tagging", not "the Immersion
- * addon is installed".
+ * until something registers an interest. That is the whole reason it is a registration
+ * rather than a check for a particular extension: this file is told "these fields want
+ * tagging", never "such-and-such is installed", so no addon's name appears here and the
+ * next one to want the same thing needs no edit. A check in the test suite asserts that
+ * nothing in SillyNPC names an addon, because a comment is the first step towards code.
  *
  * A function rather than a list, because the fields are a setting on the other side and
  * asking each time is the difference between a live answer and a copy taken at load.
