@@ -68,6 +68,28 @@ export const THREADS_KEY = 'sillynpc_threads';
  */
 export const GLOBALS_KEY = 'sillynpc_globals';
 
+/**
+ * Everybody's stats as they stood at this message.
+ *
+ * The same argument as the globals above, for the other half of the state. The change
+ * rows are enough to walk backwards until the walk reaches a gap, after which every
+ * character's numbers are an approximation - fine for a tracker box that says so, and not
+ * fine for anything that acts on the answer. A portrait chosen for message 45 from a guess
+ * is the wrong face, intermittently, only in old parts of a story.
+ *
+ * Stats only, and by name. Collections stay derived: they are far larger, and knowing what
+ * somebody was carrying is not what anything reads this for.
+ *
+ * This one is not small - measured at about 350 bytes for a two-character scene against
+ * roughly 100 for the globals, so a long chat grows by a percent or two per character on
+ * stage. `recordMessageHistory: false` turns the whole record off for anyone who would
+ * rather have the file back.
+ *
+ * Like every other key here it lives in `extra`, which SillyTavern carries with the
+ * message and never puts in a prompt.
+ */
+export const CHARS_KEY = 'sillynpc_chars';
+
 function messageAt(messageId) {
     return getContext()?.chat?.[Number(messageId)] ?? null;
 }
@@ -153,7 +175,12 @@ export function recordAppliedChanges(messageId, changes) {
      * message, not the state it started from. Overwritten rather than appended for the
      * reviewed half of the same message, which is right: the second write knows more.
      */
-    message.extra[GLOBALS_KEY] = { ...(loadStateFromMetadata()?.global ?? {}) };
+    const now = loadStateFromMetadata();
+    message.extra[GLOBALS_KEY] = { ...(now?.global ?? {}) };
+    message.extra[CHARS_KEY] = Object.fromEntries(
+        (now?.characters ?? [])
+            .filter(c => c?.name)
+            .map(c => [c.name, { ...(c.stats ?? {}) }]));
     // Which reply these describe. The appended half belongs to the same one, so writing it
     // again is right rather than merely harmless.
     message.extra[APPLIED_SWIPE_KEY] = currentSwipeOf(message);
@@ -426,6 +453,34 @@ function buildTimeline(chat, current) {
         const storedGlobals = chat[i]?.extra?.[GLOBALS_KEY];
         if (storedGlobals && typeof storedGlobals === 'object') {
             running.global = { ...storedGlobals };
+        }
+
+        /* And everybody's stats, the same way and for the same reason.
+         *
+         * Replacing the stats of whoever the snapshot names, and adding an entry for
+         * anyone the walk has lost - somebody who left the cast later is still in this
+         * message and still needs their numbers.
+         *
+         * Never *removing* an entry the snapshot omits. The snapshot carries stats and
+         * nothing else, so an entry it does not mention may still hold collections the
+         * walk reconstructed, and dropping it to match would throw those away to gain
+         * nothing.
+         *
+         * `exact` is untouched here, as with the globals: it describes the whole state,
+         * and knowing everybody's numbers says nothing about what they were carrying.
+         */
+        const storedChars = chat[i]?.extra?.[CHARS_KEY];
+        if (storedChars && typeof storedChars === 'object') {
+            if (!Array.isArray(running.characters)) running.characters = [];
+            for (const [name, stats] of Object.entries(storedChars)) {
+                let entry = running.characters.find(
+                    c => String(c?.name ?? '').toLowerCase() === name.toLowerCase());
+                if (!entry) {
+                    entry = { name, stats: {}, collections: {} };
+                    running.characters.push(entry);
+                }
+                entry.stats = { ...stats };
+            }
         }
 
         states.set(i, {
