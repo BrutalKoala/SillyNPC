@@ -168,24 +168,7 @@ export function initHUD() {
        positioned outside its edges. Clipping the picture with overflow on the frame would
        cut those off, so the picture rounds itself with border-radius: inherit and the
        frame keeps its overflow. */
-    const face = document.createElement('img');
-    face.className = 'sillynpc-hud-portrait-img';
-    face.alt = '';
-    /* A picture that cannot be drawn falls back rather than staying blank.
-     *
-     * Deliberately not `img.remove()`, which is what the chat's avatars do: those are one
-     * of many and a missing one is a gap, while this is the only portrait the HUD has and
-     * removing it means nothing can ever put it back - updateHUD looks the element up and
-     * does nothing when it is not there. First the full picture, in case a downscaled
-     * rendition was the problem, and then the built-in face. */
-    face.addEventListener('error', () => {
-        const full = face.dataset.source;
-        if (full && face.getAttribute('src') !== full) face.src = full;
-        else if (face.getAttribute('src') !== BUILT_IN_DEFAULT_AVATAR) {
-            face.src = BUILT_IN_DEFAULT_AVATAR;
-        }
-    });
-    portrait.appendChild(face);
+    ensurePortraitImage(portrait);
     portrait.addEventListener('mousedown', startDrag);
     makeActivatable(portrait, { label: 'Open your character sheet' });
     portrait.addEventListener('click', (e) => {
@@ -219,6 +202,46 @@ export function resetHudPosition() {
         hudContainer.style.removeProperty('margin');
     }
     updateHUD();
+}
+
+/**
+ * The portrait's <img>, made if it is not there.
+ *
+ * Called on every draw, not only when the HUD is built. The frame is looked up by class
+ * and the picture inside it by another, so anything that leaves the frame without its
+ * image - and the reported case is real, even if what does it is not yet known - leaves
+ * the HUD permanently faceless: updateHUD finds nothing and does nothing, and only
+ * rebuilding the whole widget with a page refresh puts it back.
+ *
+ * Making it here instead means the invariant is restored by the next draw rather than by
+ * the reader.
+ *
+ * @param {HTMLElement} portrait The frame.
+ * @returns {HTMLImageElement|null}
+ */
+function ensurePortraitImage(portrait) {
+    if (!portrait) return null;
+    const existing = portrait.querySelector('.sillynpc-hud-portrait-img');
+    if (existing) return existing;
+
+    const face = document.createElement('img');
+    face.className = 'sillynpc-hud-portrait-img';
+    face.alt = '';
+    /* A picture that cannot be drawn falls back rather than staying blank.
+     *
+     * Deliberately not `img.remove()`, which is what the chat's avatars do: those are one
+     * of many and a missing one is a gap, while this is the only portrait the HUD has.
+     * First the full picture, in case a downscaled rendition was the problem, and then
+     * the built-in face. */
+    face.addEventListener('error', () => {
+        const full = face.dataset.source;
+        if (full && face.getAttribute('src') !== full) face.src = full;
+        else if (face.getAttribute('src') !== BUILT_IN_DEFAULT_AVATAR) {
+            face.src = BUILT_IN_DEFAULT_AVATAR;
+        }
+    });
+    portrait.prepend(face);
+    return face;
 }
 
 export function updateHUD(updatedState = null) {
@@ -300,7 +323,7 @@ export function updateHUD(updatedState = null) {
         || BUILT_IN_DEFAULT_AVATAR;
     // Compared before assigning: updateHUD runs on every status change, and re-setting an
     // identical src makes the picture flicker while the browser re-fetches it.
-    const face = portrait.querySelector('.sillynpc-hud-portrait-img');
+    const face = ensurePortraitImage(portrait);
     /* Also when the picture on screen is broken, not only when the source has changed.
      *
      * The comparison alone has no way back. Whatever leaves the element unable to draw -

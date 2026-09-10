@@ -369,6 +369,16 @@ jQuery(async () => {
             try {
                 applyDialogueFormatPrompt();
                 applyNarratorRulesPrompt();
+                /* And redraw the HUD.
+                 *
+                 * Reported as its portrait disappearing on a preset change and staying
+                 * gone until the page was refreshed. The staying gone is the part this
+                 * fixes: nothing here asked the HUD to draw again, and none of the events
+                 * that do - a message, a chat change, a settings control - fires when a
+                 * preset is swapped. So whatever left the picture unusable, the recovery
+                 * built into updateHUD never got a turn, and a reload was the only thing
+                 * that rebuilt the widget. */
+                updateHUD();
             } catch (err) {
                 debugLog('Could not put the writing prompts back after the preset change', err);
             }
