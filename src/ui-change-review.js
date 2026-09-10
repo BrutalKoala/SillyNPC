@@ -38,11 +38,11 @@ function ownerOf(change) {
 /**
  * Draws the panel for one message, or nothing when there is nothing to review.
  *
- * @param {Element} mesEl The `.mes` element.
+
  * @param {string|number} messageId
  * @returns {HTMLElement|null}
  */
-function buildReviewPanel(mesEl, messageId) {
+function buildReviewPanel(messageId) {
     const pending = getPendingChanges(messageId);
     if (!pending.length) return null;
 
@@ -328,14 +328,22 @@ function buildNeverAgain(row, change) {
 
 /**
  * Places the panel under a message, replacing any previous one.
- * @param {Element} mesEl
+ *
+ * The panel itself knows nothing about where it is drawn - every control on it closes over
+ * the message id, so nothing in it walks the DOM to find out which reply it belongs to.
+ * That is what lets a second surface ask for one: hand it any container and it builds a
+ * working panel there, which is how the visual novel offers the same review without the
+ * chat being on screen. The `.mes_text` lookup below is placement and nothing else.
+ *
+ * @param {Element} container A `.mes`, or anywhere else the panel should live.
  * @param {string|number} messageId
  */
-export function renderReviewPanel(mesEl, messageId) {
+export function renderReviewPanel(container, messageId) {
+    const mesEl = container;
     if (!mesEl) return;
     mesEl.querySelectorAll('.sillynpc-review-panel').forEach(el => el.remove());
 
-    const panel = buildReviewPanel(mesEl, messageId);
+    const panel = buildReviewPanel(messageId);
     if (!panel) return;
 
     const textContainer = mesEl.querySelector('.mes_text');
