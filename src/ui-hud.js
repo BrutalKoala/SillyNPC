@@ -7,7 +7,7 @@ import {
     hudLayoutFor, allHudLayoutClasses,
 } from './constants.js';
 import { computeStatBar, splitValue, applyStatFormat, portraitRendition } from './utils.js';
-import { whyHidden } from './css-origin.js';
+import { whyHidden, trapInlineDisplay, shortenStack } from './css-origin.js';
 import { makeActivatable } from './utils.js';
 
 let hudContainer = null;
@@ -170,6 +170,18 @@ export function initHUD() {
        cut those off, so the picture rounds itself with border-radius: inherit and the
        frame keeps its overflow. */
     ensurePortraitImage(portrait);
+    /* Watch for whoever sets display on it. The picture ends up with an inline
+       `display: none` that no stylesheet accounts for, and neither this extension nor
+       SillyTavern nor the installed theme has a line that obviously would - so the
+       assignment is caught where it happens and the caller written down. Recording only;
+       the value still lands. See trapInlineDisplay. */
+    const trapped = portrait.querySelector('.sillynpc-hud-portrait-img');
+    if (trapped) {
+        trapInlineDisplay(trapped, (value, stack) => {
+            if (value !== 'none') return;
+            portrait.dataset.faceHiddenBy = shortenStack(stack);
+        });
+    }
     portrait.addEventListener('mousedown', startDrag);
     makeActivatable(portrait, { label: 'Open your character sheet' });
     portrait.addEventListener('click', (e) => {
@@ -302,7 +314,10 @@ function recordFaceState(portrait, face, src) {
         // Only when it is actually hidden. See whyHidden.
         const invisible = css.display === 'none' || css.visibility === 'hidden'
             || Number(css.opacity) === 0 || box.width === 0 || box.height === 0;
-        if (invisible) portrait.dataset.faceWhy = whyHidden(face);
+        if (invisible) {
+            const by = portrait.dataset.faceHiddenBy;
+            portrait.dataset.faceWhy = by ? `${whyHidden(face)} << ${by}` : whyHidden(face);
+        }
         else delete portrait.dataset.faceWhy;
     } else {
         portrait.dataset.faceBox = 'no element';

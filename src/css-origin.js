@@ -68,6 +68,55 @@ export function rulesSetting(el, property, value) {
 }
 
 /**
+ * Catches whoever sets `display` inline on an element, and remembers where they were.
+ *
+ * The last unknown in a bug that has taken six rounds: the HUD portrait ends up with an
+ * inline `display: none` that no stylesheet accounts for, so some JavaScript is doing it -
+ * and neither this extension, SillyTavern nor the installed theme has a line that
+ * obviously would. A MutationObserver can say the attribute changed but not who changed
+ * it; the callback runs later, on its own stack.
+ *
+ * An own property on the element's style object shadows the prototype's accessor, so the
+ * assignment can be caught synchronously - and `new Error().stack` inside the setter is
+ * the caller's stack, which is the entire question.
+ *
+ * The value is always applied. This watches; it does not defend.
+ *
+ * @param {HTMLElement} el
+ * @param {(value: string, stack: string) => void} report
+ */
+export function trapInlineDisplay(el, report) {
+    if (!el || el.dataset.displayTrapped === 'true') return;
+    el.dataset.displayTrapped = 'true';
+
+    Object.defineProperty(el.style, 'display', {
+        configurable: true,
+        get() { return this.getPropertyValue('display'); },
+        set(value) {
+            // setProperty rather than the shadowed accessor, or this calls itself.
+            this.setProperty('display', value);
+            try { report(String(value), new Error().stack ?? ''); } catch { /* never break a write */ }
+        },
+    });
+}
+
+/**
+ * The frames of a stack that are not this trap, shortened to something readable.
+ *
+ * Everything is one long file path in a browser, and a data attribute has to stay a line
+ * somebody can look at.
+ */
+export function shortenStack(stack, frames = 3) {
+    return String(stack ?? '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('at ') && !line.includes('css-origin.js'))
+        .slice(0, frames)
+        .map(line => line.replace(/^at\s+/, '').replace(/https?:\/\/[^/]+\//, ''))
+        .join(' <- ') || 'no stack';
+}
+
+/**
  * A one-line answer to "why can I not see this".
  *
  * The inline style comes first when there is one, because that says JavaScript did it
