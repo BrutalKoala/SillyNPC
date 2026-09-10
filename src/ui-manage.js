@@ -1205,9 +1205,10 @@ function renderPictureTagsSection(char, container) {
     if (!container) return;
     container.replaceChildren();
 
+    /* Nothing has asked for tags, so there is nothing here to configure and no heading
+       either. This is the whole of "the control appears only when something wants it". */
     const fields = taggedFields();
-    const gallery = Array.isArray(char.images) ? char.images.filter(Boolean) : [];
-    if (fields.length === 0 || gallery.length === 0) return;
+    if (fields.length === 0) return;
 
     const header = document.createElement('div');
     header.className = 'sillynpc-aliases-header';
@@ -1217,6 +1218,19 @@ function renderPictureTagsSection(char, container) {
         A value with no picture uses the one the chat already shows.</small>
     `;
     container.append(header);
+
+    /* Said, rather than shown as a blank space. Something has asked for tags, so the
+       heading is there and its absence would read as a bug - "this character has one
+       picture" is an answer, and it names what to do about it. */
+    const gallery = Array.isArray(char.images) ? char.images.filter(Boolean) : [];
+    if (gallery.length === 0) {
+        const empty = document.createElement('small');
+        empty.className = 'notes';
+        empty.textContent = 'This character has no pictures yet. Add one above and it can '
+            + 'be tagged.';
+        container.append(empty);
+        return;
+    }
 
     const grid = document.createElement('div');
     grid.className = 'sillynpc-tag-grid';
