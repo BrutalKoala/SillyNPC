@@ -24,7 +24,7 @@ import { tryAutoSyncLorebook, syncLorebookScope, repairEntryIdentities } from '.
 import { initStatusLogic, hasOpenChat, setSwipeBaseAligner } from './src/status-logic.js';
 import { rebaseToSwipe, revertToBase, alignSwipeBaseToNow } from './src/status-snapshots.js';
 import { extractStateFromMessage, resetExtractionState, tidyThreadsOnLoad, forgetExtractionsFrom } from './src/status-extractor.js';
-import { initHUD, updateHUD } from './src/ui-hud.js';
+import { initHUD, updateHUD, forgetPortrait } from './src/ui-hud.js';
 import { openPlayerModal } from './src/ui-player-modal.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { refreshScanButton } from './src/ui-scan-button.js';
@@ -379,6 +379,9 @@ jQuery(async () => {
              * putting the redraw behind them let a failure in the prompt work silently
              * take the HUD with it. Two unrelated jobs, two failure paths. */
             try {
+                // Rebuilt rather than merely redrawn - see forgetPortrait for which of the
+                // remaining explanations that covers, and which it does not.
+                forgetPortrait();
                 updateHUD();
             } catch (err) {
                 debugLog('Could not redraw the HUD after the preset change', err);

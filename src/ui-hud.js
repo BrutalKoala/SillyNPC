@@ -244,6 +244,63 @@ function ensurePortraitImage(portrait) {
     return face;
 }
 
+/**
+ * Writes down what state the portrait is actually in.
+ *
+ * Every way this can fail looks the same from outside - an empty circle - and that is why
+ * it has been misdiagnosed repeatedly: a missing element, a src that was never written, a
+ * src cleared to nothing, and a picture that loaded perfectly and draws nothing are four
+ * different bugs wearing one face. None can be told apart without a console, and a console
+ * is not always available to the person seeing it.
+ *
+ * So the frame carries the answer. No visual effect; two attributes a stylesheet can read
+ * out with `content: attr(data-face)`.
+ *
+ * It also earns its keep beyond any one bug: the frame shows a tint while no picture has
+ * loaded, and until now had no way to tell "still fetching" from "gave up".
+ *
+ * @param {HTMLElement} portrait The frame.
+ * @param {HTMLImageElement|null} face
+ * @param {string} src What it was last asked to show.
+ */
+function recordFaceState(portrait, face, src) {
+    if (!portrait) return;
+
+    let state;
+    if (!face) state = 'none';
+    else if (!face.hasAttribute('src')) state = 'nosrc';
+    else if (face.getAttribute('src') === '') state = 'empty';
+    else if (!face.complete) state = 'loading';
+    else if (face.naturalWidth === 0) state = 'broken';
+    else state = `ok:${face.naturalWidth}`;
+
+    portrait.dataset.face = state;
+    /* The tail only. It separates a file path from a data: URL, which is the distinction
+       that matters, without putting a whole base64 image into an attribute. */
+    portrait.dataset.faceTail = String(src ?? '').slice(-40);
+}
+
+/**
+ * Throws away what the portrait thinks it is showing, so the next draw rebuilds it.
+ *
+ * One of the remaining explanations for the picture vanishing on a preset change is a
+ * rendition that decoded to something unusable: portraitRendition caches by
+ * `source@step`, so once a bad one is in there every later draw is handed the same bad
+ * value, and only reloading the page - which drops the module and its cache - brings the
+ * picture back. That matches the report exactly, and it is the only one of the candidates
+ * with a remedy that does not depend on knowing which candidate it is.
+ *
+ * Clearing dataset.source makes the next updateHUD assign the full picture again rather
+ * than deciding nothing has changed.
+ *
+ * If the frame's data-face still reads `ok:<width>` after this, the rendition was never
+ * the problem and this line is doing nothing. See recordFaceState.
+ */
+export function forgetPortrait() {
+    const face = hudContainer?.querySelector('.sillynpc-hud-portrait-img');
+    if (face) face.dataset.source = '';
+}
+
 export function updateHUD(updatedState = null) {
     if (!hudContainer) return;
     
@@ -339,6 +396,7 @@ export function updateHUD(updatedState = null) {
         face.dataset.source = src;
         face.src = src;
     }
+    recordFaceState(portrait, face, src);
     // Measured after applyHudProportions below, not here: the portrait's size is set by
     // that call, so measuring now reads whatever the *previous* render left behind - or,
     // on the first draw of a session, the stylesheet's default. Either way the rendition
