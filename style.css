@@ -4611,6 +4611,28 @@ textarea.sillynpc-profile-input {
    A row rather than the portrait carousel because a card can hold a dozen pictures and
    the carousel shows one: saying what they are all for is a list, not a stepper. */
 
+/* The Pictures tab's body.
+ *
+ * text-align is said out loud rather than inherited: SillyTavern's own .popup centres
+ * everything inside every popup, so a page that does not say otherwise is centred by
+ * somebody else's stylesheet.
+ *
+ * Capped, because the tab is as wide as the menu - 80vw is over fifteen hundred pixels on
+ * a wide screen, and a row with a thumbnail at one end and a select at the other is not
+ * readable at that length. */
+.sillynpc-charview-body {
+    text-align: left;
+    max-width: 900px;
+}
+
+/* The note under the Pictures tab title. A block, so it sits under the heading
+   rather than beside it. */
+.sillynpc-tag-note {
+    display: block;
+    margin-bottom: var(--sillynpc-space-md);
+    max-width: 70ch;
+}
+
 .sillynpc-tag-grid {
     display: flex;
     flex-direction: column;
@@ -4629,8 +4651,13 @@ textarea.sillynpc-profile-input {
 
 .sillynpc-tag-thumb {
     flex: 0 0 auto;
-    width: 44px;
-    height: 60px;
+    /* Big enough to tell two portraits of the same character apart, which is the whole
+       job of this column - they are the same person in the same crop and the difference
+       is an expression. It was two thirds this size while the grid shared the Edit tab's
+       right-hand column with the aliases and the collections; its own tab is what bought
+       the room. */
+    width: 64px;
+    height: 86px;
     object-fit: cover;
     border-radius: 4px;
     cursor: zoom-in;
@@ -4675,6 +4702,11 @@ textarea.sillynpc-profile-input {
     gap: 2px;
     flex: 1 1 140px;
     min-width: 0;
+    /* Capped, or a character tagged by one field gets a dropdown holding the word "Calm"
+       stretched across eight hundred pixels. The cells share what is there while there
+       are several and stop growing once each has enough - a control wider than its
+       longest value is not more usable, only louder. */
+    max-width: 260px;
 }
 
 .sillynpc-tag-field > small {

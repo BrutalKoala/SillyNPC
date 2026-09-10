@@ -946,23 +946,31 @@ function openEditor(id) {
  * arriving at the readable page. Changing it does not persist: coming back to somebody
  * later is arriving again.
  *
- * @type {'profile'|'edit'}
+ * @type {'profile'|'edit'|'pictures'}
  */
 let charView = 'profile';
 
 /**
- * The two tabs, in their own class.
+ * The tabs, in their own class.
  *
  * NOT `.sillynpc-tab` with a `data-tab`, which is what the popup's own tab bar uses:
  * setupTabBar binds a click to every one of those inside manageRoot and renderManageView
  * strips `active` off any whose data-tab is not the open panel. An inner tab wearing that
  * class would switch the whole popup and then lose its own highlight on the next draw.
+ *
+ * Pictures appears only when something has asked for pictures to be tagged, so the bar is
+ * two tabs wide for anybody who has not asked - same rule as the section it replaced, and
+ * the reason it is a tab at all is that a grid of eleven thumbnails does not belong in a
+ * column beside the aliases and the collections.
  */
 function buildViewTabs(char) {
     const bar = document.createElement('div');
     bar.className = 'sillynpc-charview-tabs';
 
-    for (const [view, label] of [['profile', 'Profile'], ['edit', 'Edit']]) {
+    const views = [['profile', 'Profile'], ['edit', 'Edit']];
+    if (taggedFields().length > 0) views.push(['pictures', 'Pictures']);
+
+    for (const [view, label] of views) {
         const tab = document.createElement('button');
         tab.type = 'button';
         tab.className = 'sillynpc-charview-tab' + (charView === view ? ' active' : '');
@@ -1035,6 +1043,12 @@ function renderEditor() {
     sticky.className = 'sillynpc-editor-sticky';
     sticky.append(header, buildViewTabs(char));
 
+    /* A tab that is no longer offered must not stay open. Turning the addon off leaves
+       charView reading 'pictures' until the next character is opened, and the body would
+       then draw nothing under a bar with no matching tab - which looks like the page
+       failed rather than like a feature going away. */
+    if (charView === 'pictures' && taggedFields().length === 0) charView = 'profile';
+
     // Profile is the whole body when it is showing: the form below is built only for the
     // Edit tab, so nothing hidden is being assembled and wired on every draw.
     if (charView === 'profile') {
@@ -1042,6 +1056,16 @@ function renderEditor() {
         editView.append(sticky, view);
         renderProfileView(char, view)
             .catch(err => console.error(LOG_PREFIX, 'renderProfileView failed', err));
+        return;
+    }
+
+    // Same reasoning: its own body, so the tag grid gets the popup's full width rather
+    // than sharing a column with the aliases, the overrides and the collections.
+    if (charView === 'pictures') {
+        const view = document.createElement('div');
+        view.className = 'sillynpc-charview-body';
+        editView.append(sticky, view);
+        renderPictureTagsSection(char, view);
         return;
     }
 
@@ -1173,11 +1197,8 @@ function renderEditor() {
     
     // Lore last. It is a whole panel with three modes and it used to sit second, above
     // the fields people actually come here to edit.
-    const tagsContainer = document.createElement('div');
-    tagsContainer.className = 'sillynpc-editor-field';
-
     right.append(nameField, aliasField, profileContainer, overridesContainer,
-        tagsContainer, collectionsContainer, loreContainer);
+        collectionsContainer, loreContainer);
     
     main.append(left, vDivider, right);
     editView.append(sticky, main);
@@ -1186,7 +1207,6 @@ function renderEditor() {
     renderProfileFields(char, profileContainer);
     renderLorebookSection(char, loreContainer, { onChange: renderEditor });
     renderOverridesSection(char, overridesContainer);
-    renderPictureTagsSection(char, tagsContainer);
     renderCollectionsSection(char, collectionsContainer);
 }
 
@@ -1210,14 +1230,22 @@ function renderPictureTagsSection(char, container) {
     const fields = taggedFields();
     if (fields.length === 0) return;
 
-    const header = document.createElement('div');
-    header.className = 'sillynpc-aliases-header';
-    header.innerHTML = `
-        <label>Picture Tags</label>
-        <small class="notes">Which of this character's pictures stands for which value.
-        A value with no picture uses the one the chat already shows.</small>
-    `;
-    container.append(header);
+    /* Its own header rather than the borrowed .sillynpc-aliases-header. That class has no
+       rule anywhere, so its label and its note run together on one line - which passes
+       unnoticed as a small section heading inside a column and does not as the title of a
+       page. Not fixing it for the other sections here: they have looked that way for
+       months and changing five headings is not this change. */
+    const title = document.createElement('h3');
+    title.className = 'sillynpc-section-title';
+    title.textContent = 'Picture Tags';
+    container.append(title);
+
+    const note = document.createElement('small');
+    note.className = 'notes sillynpc-tag-note';
+    note.textContent = "Which of this character's pictures stands for which value. "
+        + 'A value with no picture uses the one the chat already shows, and where two '
+        + 'pictures share a value the higher one here wins.';
+    container.append(note);
 
     /* Said, rather than shown as a blank space. Something has asked for tags, so the
        heading is there and its absence would read as a bug - "this character has one
