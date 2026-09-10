@@ -25,6 +25,8 @@ import { triggerReprocess, setReprocessCallback } from './reprocess.js';
 export { triggerReprocess, setReprocessCallback };
 import { updateHUD } from './ui-hud.js';
 import { getTrackerView, setTrackerView, nextTrackerView } from './tracker-view.js';
+import { eventSource } from '../../../../events.js';
+import { messageBeats, MESSAGE_RENDERED_EVENT } from './beats.js';
 
 /** @type {{ characters: any[], caseInsensitive: boolean, combinedRegex: RegExp, charMap: Map<string, any>, regexAliases: any[] } | null} */
 let cachedOptimizedPatterns = null;
@@ -683,14 +685,26 @@ export function neutraliseModelColors(block) {
     }
     return count;
 }
+/**
+ * Colours each speaker's paragraph.
+ *
+ * Reads the beats rather than finding the paragraphs itself. It used to walk the avatars
+ * and climb each one to its block, which is the same walk messageBeats now does - and two
+ * walks answering "whose paragraph is this" is how they start answering differently. That
+ * has already cost this project twice, with the HUD and with deleted stats, so the walk is
+ * shared the moment there is a second caller for it.
+ *
+ * Narration beats are skipped here and only here: a paragraph with nobody speaking has no
+ * colour to take. It is still a beat, and the visual novel uses it.
+ */
 function decorateSpeechBlocks(container) {
     const settings = getSettings();
-    const seenBlocks = new Set();
-    const avatars = container.querySelectorAll('.sillynpc-chat-avatar');
-    for (const avatar of avatars) {
-        const block = findSpeechBlockContainer(avatar, container);
-        if (!block || seenBlocks.has(block)) continue;
-        seenBlocks.add(block);
+    for (const beat of messageBeats(container)) {
+        if (beat.isNarration) continue;
+        const block = beat.element;
+        // A message with no block elements is one beat whose element is the container
+        // itself, and painting the whole message as one speaker's is not what that means.
+        if (block === container) continue;
 
         // Reset classes to ensure setting changes apply
         block.classList.remove(
@@ -700,11 +714,10 @@ function decorateSpeechBlocks(container) {
         );
         block.style.removeProperty('--sillynpc-color');
 
-        const blockAvatars = block.querySelectorAll('.sillynpc-chat-avatar');
         block.classList.add('sillynpc-speech-block', `divider-${settings.dividerStyle || 'subtle'}`);
 
-        if (blockAvatars.length === 1) {
-            wrapSingleSpeakerBlock(block, blockAvatars[0]);
+        if (!beat.ambiguous) {
+            wrapSingleSpeakerBlock(block, beat.avatars[0]);
         } else {
             block.classList.add('sillynpc-multi-speaker');
         }
@@ -735,15 +748,6 @@ function wrapSingleSpeakerBlock(block, avatar) {
     block.appendChild(wrapper);
 }
 
-function findSpeechBlockContainer(anchor, mesTextEl) {
-    let el = anchor.parentElement;
-    while (el && el !== mesTextEl) {
-        const tag = el.tagName;
-        if (tag === 'P' || tag === 'BLOCKQUOTE' || tag === 'LI') return el;
-        el = el.parentElement;
-    }
-    return null;
-}
 
 function runReprocessLogic(mesEl) {
     if (!mesEl) return;
@@ -777,6 +781,14 @@ function runReprocessLogic(mesEl) {
                 console.error(LOG_PREFIX, `${task.name} failed`, e);
             }
         }
+
+        /* This message is now readable: the avatars are placed, so messageBeats can say who
+           speaks where. Anything reading a message rather than styling it has to wait for
+           exactly this moment, and the alternatives are all guesses - a rAF that usually
+           wins the race, or a MutationObserver over the whole chat.
+           Fired per message, so a whole-chat redraw fires it many times; a listener that
+           does real work should debounce. */
+        eventSource.emit(MESSAGE_RENDERED_EVENT, mesEl);
     } catch (err) {
         console.error(LOG_PREFIX, 'reprocessMessage failed', err);
     }
