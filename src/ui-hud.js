@@ -179,7 +179,13 @@ export function initHUD() {
     if (trapped) {
         trapInlineDisplay(trapped, (value, stack) => {
             if (value !== 'none') return;
-            portrait.dataset.faceHiddenBy = shortenStack(stack);
+            const by = shortenStack(stack);
+            portrait.dataset.faceHiddenBy = by;
+            /* And onto the visible attribute straight away, rather than waiting for the
+               next draw to fold it in. Every draw rebuilds the frame, so a hide arriving
+               after updateHUD has finished would be recorded on an element that is thrown
+               away before anything reads it - the reason recorded and never shown. */
+            portrait.dataset.faceWhy = `inline:none << ${by}`;
         });
     }
     portrait.addEventListener('mousedown', startDrag);
