@@ -4605,11 +4605,13 @@ textarea.sillynpc-profile-input {
 
 /* ─── Picture Tags ─────────────────────────────────────────────────────── */
 
-/* Which of a character's pictures stands for which field value. One row per picture,
-   drawn only when something has registered an interest - see image-tags.js.
+/* Which of a character's pictures stands for which field value, as a grid of cards -
+   drawn only when something has registered an interest, see image-tags.js.
 
-   A row rather than the portrait carousel because a card can hold a dozen pictures and
-   the carousel shows one: saying what they are all for is a list, not a stepper. */
+   Cards in as many columns as the menu is wide, rather than one full-width row per
+   picture. A generator gives a character forty pictures, and forty rows each as wide as
+   the menu - a thumbnail at one end, a short dropdown, and a strip of empty grey to the
+   far edge - is a long scroll through mostly nothing. */
 
 /* The Pictures tab's body.
  *
@@ -4617,53 +4619,57 @@ textarea.sillynpc-profile-input {
  * everything inside every popup, so a page that does not say otherwise is centred by
  * somebody else's stylesheet.
  *
- * Capped, because the tab is as wide as the menu - 80vw is over fifteen hundred pixels on
- * a wide screen, and a row with a thumbnail at one end and a select at the other is not
- * readable at that length. */
+ * No width cap any more. It was capped at 900px while each picture was a full-width row,
+ * because a row that long is unreadable; now that pictures are cards, a wider menu simply
+ * means more columns, which is exactly what the width is for. */
 .sillynpc-charview-body {
     text-align: left;
-    max-width: 900px;
 }
 
-/* The note under the Pictures tab title. A block, so it sits under the heading
-   rather than beside it. */
+/* The notes under the title keep a reading width of their own, since the body no
+   longer caps them. A block, so each sits under the heading rather than beside it. */
 .sillynpc-tag-note {
     display: block;
     margin-bottom: var(--sillynpc-space-md);
     max-width: 70ch;
 }
 
+/* auto-fill, not auto-fit: a character with two pictures keeps two card-sized cards in a
+   wide menu rather than two cards stretched across it. The minimum is a thumbnail plus a
+   dropdown wide enough to read "Distrustful" - below that, a narrow menu falls back to
+   a single column, which is the floor. min() keeps that minimum from exceeding a phone's
+   width, where a fixed 300px would push the page sideways. */
 .sillynpc-tag-grid {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: var(--sillynpc-space-sm);
     margin-top: var(--sillynpc-space-sm);
 }
 
+/* One picture: thumbnail beside its fields. The card is as wide as its column and no
+   wider, so the grey reaches only as far as the dropdowns inside it plus its padding. */
 .sillynpc-tag-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--sillynpc-space-md);
     background: rgba(255, 255, 255, 0.05);
-    padding: var(--sillynpc-space-sm);
+    padding: var(--sillynpc-space-sm) var(--sillynpc-space-md);
     border-radius: 6px;
+    min-width: 0;
 }
 
 .sillynpc-tag-thumb {
     flex: 0 0 auto;
     /* Big enough to tell two portraits of the same character apart, which is the whole
        job of this column - they are the same person in the same crop and the difference
-       is an expression. It was two thirds this size while the grid shared the Edit tab's
-       right-hand column with the aliases and the collections; its own tab is what bought
-       the room. */
+       is an expression. */
     width: 64px;
     height: 86px;
     object-fit: cover;
     border-radius: 4px;
     cursor: zoom-in;
-    /* Gallery order decides between two pictures carrying the same tag, so the reader
-       needs to be able to tell the rows apart at a glance; a transparent border keeps
-       the row from shifting when the marked one below adds its own. */
+    /* Pictures sharing a tag take turns, and the one in use is marked; a transparent
+       border keeps the other cards from shifting by the width the mark adds. */
     border: 2px solid transparent;
 }
 
@@ -4671,28 +4677,25 @@ textarea.sillynpc-profile-input {
     border-color: var(--sillynpc-accent);
 }
 
-/* --- the min-width: 0 below are what stop the editor scrolling sideways ---
+/* --- the fields, one under another ---
  *
- * A flex item defaults to `min-width: auto`, which means it refuses to shrink below its
- * content - and a <select>'s content is its *widest option*. The allowed values are the
- * user's own words with no length they are held to, so a "Relation to Player" reading
- * "Utterly devoted beyond all reason" makes the control as wide as the sentence and takes
- * the character page sideways with it.
+ * Stacked rather than side by side. Two or three fields beside each other made a card as
+ * wide as the menu again, which is what the grid exists to avoid, and a column of
+ * dropdowns scans in one direction.
  *
- * The nesting is why there are two, and honestly: they are redundant with each other. The
- * column overflows only when *both* go - measured in the verbose case in
- * visual/picture-tags.html, which was written after these rules and which failed with
- * every shrink allowance removed and passed with any one of them left. Kept as a pair
- * because they are the standard idiom at each level of a nested flex, not because each is
- * separately load-bearing.
- *
- * The option list still shows the whole value when it is open. Only the closed control is
- * clipped, which is the right way round. */
+ * The min-width: 0 at both levels is what lets a dropdown be narrower than its longest
+ * option. A flex item defaults to `min-width: auto`, a <select>'s content is its widest
+ * option, and an allowed value is the user's own words with no length they are held to -
+ * so without these a long value makes its card wider than its column. They are redundant
+ * with each other (measured in visual/picture-tags.html: the page overflows only with
+ * every shrink allowance removed) and kept as a pair because that is the idiom at each
+ * level of a nested flex. The open list still shows the whole value; only the closed
+ * control is clipped. */
 .sillynpc-tag-fields {
     display: flex;
+    flex-direction: column;
     flex: 1;
-    flex-wrap: wrap;
-    gap: var(--sillynpc-space-md);
+    gap: var(--sillynpc-space-sm);
     min-width: 0;
 }
 
@@ -4700,18 +4703,28 @@ textarea.sillynpc-profile-input {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    flex: 1 1 140px;
     min-width: 0;
-    /* Capped, or a character tagged by one field gets a dropdown holding the word "Calm"
-       stretched across eight hundred pixels. The cells share what is there while there
-       are several and stop growing once each has enough - a control wider than its
-       longest value is not more usable, only louder. */
-    max-width: 260px;
 }
 
 .sillynpc-tag-field > small {
     opacity: 0.75;
     font-size: var(--sillynpc-text-sm);
+}
+
+/* The picture's file name - what you would rename to tag it, and the only way to tell
+   which file on disk a card is.
+
+   Wrapped in full rather than cut with an ellipsis. Variants differ at the end -
+   wounded-2.png, wounded-3.png - and a timestamp name differs in its last digits, so
+   truncating either end hides exactly the part that tells two cards apart. Right-to-left
+   truncation would keep the end but lets the browser reorder the punctuation, which is
+   how a name comes out as "png.wounded-2". A name long enough to wrap costs one line. */
+.sillynpc-tag-filename {
+    font-size: var(--sillynpc-text-sm);
+    opacity: 0.6;
+    font-family: var(--monoFontFamily, ui-monospace, monospace);
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 
 /* A tag the file name supplied rather than one chosen here. Dimmer, because it is a

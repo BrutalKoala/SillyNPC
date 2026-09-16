@@ -1366,6 +1366,18 @@ function renderPictureTagsSection(char, container) {
             selects.append(cell);
         }
 
+        /* The file this card is. Without it there is no way to tell which file on disk to
+           rename - and renaming is the whole of tagging here - short of opening each
+           picture and guessing. Decoded, because the path is a URL and a name with a space
+           or an accent would otherwise read as "Varga%20Elza". */
+        const fileName = document.createElement('div');
+        fileName.className = 'sillynpc-tag-filename';
+        let shown = path.split('/').pop() || path;
+        try { shown = decodeURIComponent(shown); } catch { /* keep it as written */ }
+        fileName.textContent = shown;
+        fileName.title = shown;
+        selects.append(fileName);
+
         row.append(selects);
         grid.append(row);
     });
