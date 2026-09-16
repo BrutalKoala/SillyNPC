@@ -149,6 +149,84 @@ export function imageForTag(char, field, value) {
 }
 
 /**
+ * The values a filename says its picture is for.
+ *
+ * Forty pictures out of a generator, named for what they show, should not need forty
+ * dropdowns. `happy.png` says Happy; `happy-2.png` says Happy and is the second of them;
+ * `happy.rain.png` says Happy and Rain.
+ *
+ * **A part only counts when some field in play actually declares it as a value.** That
+ * rule does the whole of the work, and it is what makes this safe to turn on over pictures
+ * that were never named for it: `Varga_Elza_1787665547660.png` parses to one part that no
+ * field has ever heard of, so it says nothing, rather than tagging fifty-eight existing
+ * files with a timestamp nobody can match. Nothing on disk has to be renamed first.
+ *
+ * Dots rather than a separator of our own, because that is SillyTavern's own sprite rule -
+ * it reads the label as everything before the first `-` or `.`, so it sees `happy` in
+ * `happy.rain.png` and ignores the rest. A sprite pack downloaded for Expressions drops
+ * into a character's folder and works.
+ *
+ * Derived, never written into the tag map. Rename the file and the tag follows it; delete
+ * the file and nothing is left behind.
+ *
+ * @param {string} path A file path or bare filename.
+ * @param {Record<string, string[]>} valuesByField The fields in play and what each allows.
+ * @returns {Record<string, string>} Field to value, for the parts that named something.
+ */
+export function tagsFromFilename(path, valuesByField) {
+    const found = {};
+    if (!path || !valuesByField) return found;
+
+    const base = String(path).split('/').pop().replace(/\.[^.]+$/, '');
+    if (!base) return found;
+
+    for (const rawPart of base.split('.')) {
+        // "happy-2" and "happy - 2" are both the second Happy, not a value called happy-2.
+        const part = rawPart.replace(/[\s_-]*\d+$/, '').trim().toLowerCase();
+        if (!part) continue;
+
+        for (const [field, values] of Object.entries(valuesByField)) {
+            // First field wins a value two of them declare - the same precedence
+            // valuesForField uses, and the picker marks such a name as shared.
+            if (field in found) continue;
+            const match = (values || []).find(v => String(v).trim().toLowerCase() === part);
+            if (match !== undefined) {
+                found[field] = String(match);
+                break;
+            }
+        }
+    }
+    return found;
+}
+
+/**
+ * Everything this picture is tagged with: what its name says, plus what was set by hand.
+ *
+ * Explicit wins. The filename covers the forty that were named for their value and the
+ * grid covers the handful that need a second tag or a correction, and a correction that
+ * lost to a filename would be a control that visibly does nothing.
+ *
+ * @param {object} char
+ * @param {string} path
+ * @param {Record<string, string[]>} valuesByField
+ * @returns {Record<string, string>}
+ */
+export function effectiveTags(char, path, valuesByField) {
+    return { ...tagsFromFilename(path, valuesByField), ...(tagsFor(char)?.[path] ?? {}) };
+}
+
+/**
+ * The fields in play and the values each allows, ready for the two functions above.
+ *
+ * @returns {Record<string, string[]>} In the registered order, which decides ties.
+ */
+export function valuesByField() {
+    const out = {};
+    for (const field of taggedFields()) out[field] = valuesForField(field);
+    return out;
+}
+
+/**
  * Drops every tag on a picture that is no longer on the card.
  *
  * Called from removeCharacterImage rather than left to a sweep: the tag map is keyed by
