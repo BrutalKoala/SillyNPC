@@ -945,7 +945,7 @@ export async function toDataUrl(src) {
     }
 }
 
-async function generateViaGeminiImage(fullPrompt, referenceImages = []) {
+async function generateViaGeminiImage(fullPrompt, referenceImages = [], shape = resolvePortraitShape()) {
     const settings = getSettings();
     const model = settings.geminiImageModel || defaultSettings.geminiImageModel;
     // Omitted entirely when empty. Sending secret_id: '' is not the same as sending
@@ -996,7 +996,7 @@ ${fullPrompt}` : fullPrompt;
             model,
             messages: [{ role: 'user', content: messageContent }],
             request_images: true,
-            request_image_aspect_ratio: resolvePortraitShape().gemini,
+            request_image_aspect_ratio: shape.gemini,
             ...(secretId ? { secret_id: secretId } : {}),
             max_tokens: 8192,
             stream: false,
@@ -1091,6 +1091,28 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
 
     debugLog('Image prompt', fullPrompt);
 
+    return generateImage(fullPrompt, { owner: char, referenceImages });
+}
+
+/**
+ * Sends a finished prompt to the configured image backend and keeps the result.
+ *
+ * Split out of generateCharacterImageLogic, which used to build the character's prompt and
+ * talk to the backend in one body. Nothing below this line is about characters - it is
+ * "draw this, at this shape, and file it with whoever it belongs to" - which is what anything
+ * with a prompt of its own and a different frame needs, a place in landscape among them.
+ * Portraits pass the same prompt, references and shape they always did.
+ *
+ * @param {string} fullPrompt
+ * @param {object} [options]
+ * @param {object|string|null} [options.owner] Whose folder the result is saved into - any
+ *   card with a name, as persistGeneratedImage takes it.
+ * @param {{ gemini: string, pixels: {width:number,height:number}|null }} [options.shape]
+ *   Defaults to the portrait shape setting.
+ * @param {string[]} [options.referenceImages]
+ * @returns {Promise<string>} The stored path, or the image URL the backend returned.
+ */
+export async function generateImage(fullPrompt, { owner = null, shape = resolvePortraitShape(), referenceImages = [] } = {}) {
     // Gemini backend: skip the SD extension entirely and go straight to the Chat
     // Completion endpoint, which is the only path that reaches the Gemini image models.
     if (getSettings().imageBackend === 'gemini') {
@@ -1111,8 +1133,8 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
             );
         }
 
-        let geminiUrl = await generateViaGeminiImage(fullPrompt, resolved);
-        geminiUrl = await persistGeneratedImage(geminiUrl, char);
+        let geminiUrl = await generateViaGeminiImage(fullPrompt, resolved, shape);
+        geminiUrl = await persistGeneratedImage(geminiUrl, owner);
         recordUsage('image', { prompt: fullPrompt });
         // Deliberately not assigned: the result is offered as use, keep or discard, so
         // deciding here would make "discard" mean undoing something already done.
@@ -1136,7 +1158,7 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
     // PORTRAIT_SHAPES for why each pair is the pair it is. When the user has asked to keep
     // SillyTavern's own Resolution, we send no dimensions at all rather than a value that
     // would quietly beat it.
-    const { pixels } = resolvePortraitShape();
+    const { pixels } = shape;
     const size = pixels ? `width=${pixels.width} height=${pixels.height} ` : '';
     const command = `/sd quiet=true ${size}negative="${safeNegative}" ${safePrompt}`;
     console.info(LOG_PREFIX, 'Sending SD command:', command);
@@ -1196,7 +1218,7 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
     }
 
     if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
-        imageUrl = await persistGeneratedImage(imageUrl, char);
+        imageUrl = await persistGeneratedImage(imageUrl, owner);
     }
 
     // Not assigned here either - both backends hand the result back for the caller to

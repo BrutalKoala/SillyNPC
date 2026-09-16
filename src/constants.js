@@ -224,6 +224,17 @@ export const PORTRAIT_SHAPES = Object.freeze({
     st: { label: "Use SillyTavern's resolution", gemini: '3:4', pixels: null },
 });
 
+/**
+ * The frame for a background: landscape, the shape of the page it sits behind.
+ *
+ * Kept out of PORTRAIT_SHAPES on purpose. That list is what the Portrait Shape setting
+ * offers, and a 16:9 portrait is not something a character card should be asked for; this
+ * is handed straight to generateImage by whoever is drawing a place.
+ */
+export const LANDSCAPE_SHAPE = Object.freeze({
+    label: '16:9 - background', gemini: '16:9', pixels: { width: 1024, height: 576 },
+});
+
 /** Fallback shape: what the avatar frames and character cards are built around. */
 export const DEFAULT_PORTRAIT_SHAPE = '3:4';
 
