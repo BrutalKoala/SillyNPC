@@ -5,6 +5,7 @@ import { getContext } from '../../../st-context.js';
 import { initSettings, saveSettings, getSettings } from './src/settings.js';
 import { REVIEW_EVENT } from './src/status-review.js';
 import { repairDefaultImages } from './src/default-portraits.js';
+import { migrateImagesToFolders } from './src/character-images.js';
 import { 
     openManagePopup
 } from './src/ui-manage.js';
@@ -348,6 +349,25 @@ jQuery(async () => {
         // as it is, so nothing needs to wait for it to become a file on disk. Failures are
         // logged and tried again next time.
         repairDefaultImages().catch(err => console.warn(LOG_PREFIX, 'Portrait repair failed', err));
+        /* Every character's pictures into a folder of their own, once.
+         *
+         * Not awaited, for the same reason as the line above: a picture still in the flat
+         * folder is a picture that works, so nothing here needs to wait for it to move, and
+         * a failure costs only that it is tried again on the next load. Copy, confirm,
+         * re-point, delete - so an interruption never leaves a card pointing at a file that
+         * is not there. See migrateImagesToFolders. */
+        migrateImagesToFolders()
+            .then(({ moved, characters, failed }) => {
+                if (moved) {
+                    console.log(LOG_PREFIX,
+                        `Moved ${moved} picture(s) into folders for ${characters} character(s)`);
+                }
+                if (failed) {
+                    console.warn(LOG_PREFIX,
+                        `Stopped moving pictures into folders at ${failed}; will resume next load`);
+                }
+            })
+            .catch(err => console.warn(LOG_PREFIX, 'Could not move pictures into folders', err));
         initStatusLogic();
         try {
             initHUD();

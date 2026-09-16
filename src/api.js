@@ -5,6 +5,7 @@ import { executeSlashCommandsOnChatInput } from '../../../../slash-commands.js';
 import { saveBase64AsFile } from '../../../../utils.js';
 import { LOG_PREFIX, debugLog, PORTRAIT_SHAPES, DEFAULT_PORTRAIT_SHAPE, PROFILE_FIELDS } from './constants.js';
 import { forgetImageTags } from './image-tags.js';
+import { claimFolder, sharedFolder } from './character-images.js';
 // The chat draws this picture beside every line the character speaks, so changing it
 // leaves the chat stale. reprocess.js holds the handle so any module can ask.
 import { triggerReprocess } from './reprocess.js';
@@ -545,22 +546,39 @@ export async function saveLoreContent(char, world, uid, tags, content) {
  * Falls back to the original data URI if the upload fails, so image generation
  * never breaks just because the file could not be written.
  *
+ * **A character's pictures go in their own folder**, which is what makes forty of them
+ * manageable and what lets a filename say what a picture is *for* rather than who it
+ * belongs to. A picture with no character - the fallback portrait pool - keeps the
+ * configured route, which is what that setting means now.
+ *
+ * The name is a bare timestamp rather than the old `Varga_Elza_<ts>`. The folder already
+ * says who, and a name of nothing but digits is guaranteed to parse to no value at all,
+ * so a generated picture arrives untagged instead of claiming a meaning nobody gave it.
+ * Renaming it to the value it shows is the whole of tagging.
+ *
  * @param {string} dataUri
- * @param {string} charName
+ * @param {object|string|null} owner The character, or anything else for the shared pool.
  * @returns {Promise<string>}
  */
-export async function persistGeneratedImage(dataUri, charName) {
+export async function persistGeneratedImage(dataUri, owner) {
     const match = /^data:image\/([a-z0-9+.-]+);base64,(.+)$/i.exec(dataUri);
     if (!match) return dataUri;
 
     const [, rawFormat, base64] = match;
     const format = rawFormat.toLowerCase() === 'jpeg' ? 'jpg' : rawFormat.toLowerCase();
 
-    const folder = resolveImageFolder(getSettings().imageSaveRoute);
-    const fileName = `${characterImagePrefix(charName)}${Date.now()}`;
+    const isCharacter = owner && typeof owner === 'object';
+    // Claimed rather than merely read: writing for somebody is the moment their folder
+    // stops following their name. See character-images.js.
+    const folder = isCharacter ? claimFolder(owner) : '';
+
+    const [where, fileName] = folder
+        ? [folder, String(Date.now())]
+        : [sharedFolder(), `${characterImagePrefix(
+            typeof owner === 'string' ? owner : owner?.name)}${Date.now()}`];
 
     try {
-        return await saveBase64AsFile(base64, folder, fileName, format);
+        return await saveBase64AsFile(base64, where, fileName, format);
     } catch (err) {
         console.warn(LOG_PREFIX, 'Could not write generated image to disk; keeping inline data URI', err);
         return dataUri;
@@ -660,7 +678,7 @@ export async function scanFolderForCharacterImages() {
  * @returns {Promise<string>} The stored path, or the original data URI if writing failed.
  */
 export async function adoptImageForCharacter(char, dataUri) {
-    const stored = await persistGeneratedImage(dataUri, char.name);
+    const stored = await persistGeneratedImage(dataUri, char);
     if (!Array.isArray(char.images)) char.images = [];
     if (!char.images.includes(stored)) char.images.push(stored);
     char.imageUrl = stored;
@@ -1094,7 +1112,7 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
         }
 
         let geminiUrl = await generateViaGeminiImage(fullPrompt, resolved);
-        geminiUrl = await persistGeneratedImage(geminiUrl, char.name);
+        geminiUrl = await persistGeneratedImage(geminiUrl, char);
         recordUsage('image', { prompt: fullPrompt });
         // Deliberately not assigned: the result is offered as use, keep or discard, so
         // deciding here would make "discard" mean undoing something already done.
@@ -1178,7 +1196,7 @@ export async function generateCharacterImageLogic(char, { referenceImages = [] }
     }
 
     if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
-        imageUrl = await persistGeneratedImage(imageUrl, char.name);
+        imageUrl = await persistGeneratedImage(imageUrl, char);
     }
 
     // Not assigned here either - both backends hand the result back for the caller to

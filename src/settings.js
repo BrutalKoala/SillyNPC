@@ -882,6 +882,12 @@ export function normalizeSettings(settings) {
         if ('imageTags' in char && (!char.imageTags || typeof char.imageTags !== 'object')) {
             delete char.imageTags;
         }
+        /* Which folder their pictures are in. Absent until the first one is written for
+           them, and never reset from the name afterwards - that is what stops a rename
+           orphaning a library. See character-images.js. */
+        if ('imageFolder' in char && typeof char.imageFolder !== 'string') {
+            delete char.imageFolder;
+        }
         // Field by field rather than whole-object, so a profile written before a field
         // existed gains the new one instead of being replaced by a blank set.
         if (!char.profile || typeof char.profile !== 'object') char.profile = {};

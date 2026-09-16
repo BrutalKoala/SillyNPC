@@ -207,3 +207,178 @@ export async function refreshCharacterImages(char) {
 export function sharedFolder() {
     return String(getSettings().imageSaveRoute || 'sillynpc');
 }
+
+/* ─── Moving what is already on disk ──────────────────────────────────────── */
+
+/**
+ * Every path that belongs to something other than a character.
+ *
+ * The fallback portrait pool and the personas share the flat folder, and a file can be in
+ * two places at once - a character's gallery and the pool both pointing at one picture.
+ * Moving such a file would fix one and break the other, so it is left exactly where it is
+ * and the character keeps pointing at it there.
+ *
+ * Personas are left alone wholesale: a persona record has no name to make a folder from,
+ * and the player has one avatar rather than forty.
+ *
+ * @returns {Set<string>}
+ */
+function pathsSpokenForElsewhere() {
+    const settings = getSettings();
+    const held = new Set();
+
+    for (const entry of settings.defaultImages || []) {
+        if (entry?.src) held.add(entry.src);
+    }
+    for (const persona of Object.values(settings.personaData || {})) {
+        if (persona?.imageUrl) held.add(persona.imageUrl);
+        for (const path of persona?.images || []) held.add(path);
+    }
+    return held;
+}
+
+/** A file already on disk, as the base64 the upload endpoint wants. */
+async function readAsBase64(path) {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const blob = await response.blob();
+    const dataUri = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error('unreadable'));
+        reader.readAsDataURL(blob);
+    });
+
+    const comma = dataUri.indexOf(',');
+    if (comma < 0) throw new Error('not a data URI');
+    return dataUri.slice(comma + 1);
+}
+
+/** Whether a file is really there and really an image, before the original is deleted. */
+async function copyLanded(path) {
+    try {
+        const response = await fetch(path, { cache: 'no-store' });
+        if (!response.ok) return false;
+        const blob = await response.blob();
+        return blob.size > 0 && String(blob.type || '').startsWith('image/');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Moves one picture into its character's folder, and re-points everything that named it.
+ *
+ * **Copy, confirm, re-point, and only then delete.** In that order, and the order is the
+ * whole safety of this: an interruption at any point leaves a picture that exists in at
+ * least one place and a card that points at one that exists. The worst outcome is a file
+ * left behind in the old folder, which costs disk and nothing else.
+ *
+ * @returns {Promise<string>} The new path, or '' when nothing moved.
+ */
+async function moveOne(char, oldPath, folder) {
+    const file = oldPath.split('/').pop();
+    if (!file) return '';
+
+    const dot = file.lastIndexOf('.');
+    const stem = dot > 0 ? file.slice(0, dot) : file;
+    const format = dot > 0 ? file.slice(dot + 1).toLowerCase() : 'png';
+
+    const base64 = await readAsBase64(oldPath);
+
+    /* The endpoint directly rather than SillyTavern's saveBase64AsFile wrapper.
+     *
+     * That wrapper rewrites dots in the name into underscores, which is right for a name
+     * it is about to append an extension to and wrong for one that already survived a
+     * rename by hand - and a picture called `wounded.rain.png` is exactly the shape this
+     * whole feature encourages. Moving a file must not quietly rename it. */
+    const upload = await fetch('/api/images/upload', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        body: JSON.stringify({ image: base64, format, ch_name: folder, filename: stem }),
+    });
+    if (!upload.ok) throw new Error(`HTTP ${upload.status} writing ${file}`);
+    const newPath = (await upload.json())?.path;
+
+    if (!newPath || !(await copyLanded(newPath))) {
+        throw new Error(`the copy of ${file} could not be read back`);
+    }
+
+    // Every record that named the old path, including the tag map keyed by it.
+    char.images = (char.images || []).map(p => (p === oldPath ? newPath : p));
+    if (char.imageUrl === oldPath) char.imageUrl = newPath;
+    if (char.imageTags?.[oldPath]) {
+        char.imageTags[newPath] = char.imageTags[oldPath];
+        delete char.imageTags[oldPath];
+    }
+
+    try {
+        await fetch('/api/images/delete', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ path: oldPath.replace(/^\//, '') }),
+        });
+    } catch (err) {
+        // The move succeeded; the tidying did not. Nothing points at the old file now.
+        debugLog(`Could not remove ${oldPath} after copying it`, err);
+    }
+
+    return newPath;
+}
+
+/**
+ * Puts every character's pictures into their own folder, once.
+ *
+ * Runs on load rather than behind a button, which was asked for with the risk stated. What
+ * makes that survivable is that it is **resumable and never destructive in the wrong
+ * order**: each picture is copied, read back, re-pointed and only then deleted, and the
+ * settings are saved after each character. A failure stops the pass with everything before
+ * it done and everything after it untouched, and the next load carries on. Nothing is ever
+ * in a state where a card points at a file that is not there.
+ *
+ * Filenames are kept exactly as they are. Tidier names would be nice and are one more
+ * thing to go wrong in a pass that is already moving every picture in the library; the
+ * point of the folders is that a *new* name can now say what a picture is for.
+ *
+ * @returns {Promise<{ moved: number, characters: number, failed: string }>}
+ */
+export async function migrateImagesToFolders() {
+    const settings = getSettings();
+    if (settings.imagesFoldered) return { moved: 0, characters: 0, failed: '' };
+
+    const from = `/user/images/${sharedFolder()}/`;
+    const held = pathsSpokenForElsewhere();
+    let moved = 0;
+    let characters = 0;
+    let failed = '';
+
+    for (const char of settings.characters || []) {
+        const mine = (char.images || []).filter(p => p.startsWith(from) && !held.has(p));
+        if (mine.length === 0) continue;
+
+        const folder = claimFolder(char);
+        if (!folder) continue;
+
+        let any = false;
+        try {
+            for (const oldPath of mine) {
+                if (await moveOne(char, oldPath, folder)) { moved++; any = true; }
+            }
+        } catch (err) {
+            failed = `${char.name}: ${err?.message ?? err}`;
+            debugLog('Stopped moving pictures into folders', err);
+        }
+
+        if (any) { characters++; saveSettings(); }
+        // Stop the whole pass, so a server that has started refusing is not hammered
+        // nineteen more times. The next load resumes from where this one stopped.
+        if (failed) return { moved, characters, failed };
+    }
+
+    /* Only once everything got through. Set on a partial pass, the pictures left behind
+       would never be looked at again. */
+    settings.imagesFoldered = true;
+    saveSettings();
+    return { moved, characters, failed };
+}
