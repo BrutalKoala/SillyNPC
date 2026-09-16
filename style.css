@@ -4713,3 +4713,15 @@ textarea.sillynpc-profile-input {
     opacity: 0.75;
     font-size: var(--sillynpc-text-sm);
 }
+
+/* A tag the file name supplied rather than one chosen here. Dimmer, because it is a
+   statement about the file rather than a decision the reader made - and the box is not
+   empty, so it must not look like a control nobody has touched. */
+.sillynpc-tag-field > select.is-derived {
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.sillynpc-tag-refresh {
+    margin-bottom: var(--sillynpc-space-md);
+}

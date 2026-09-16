@@ -23,7 +23,9 @@ import { reprocessAllMessages, triggerReprocess, chatRenderSignature } from './c
 import { syncAllLorebooks, renameLorebookEntry } from './lorebook.js';
 import { escapeHtml, offerDownload } from './utils.js';
 import { buildPortraitBlock, openLightbox } from './ui-portrait.js';
-import { taggedFields, valuesForField, getImageTag, setImageTag } from './image-tags.js';
+import { taggedFields, getImageTag, setImageTag, tagsFromFilename, valuesByField }
+    from './image-tags.js';
+import { folderFor, refreshCharacterImages } from './character-images.js';
 import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section.js';
 import { renderProfileView, renderProfileFields } from './ui-profile.js';
 import { renderThreadsView } from './ui-threads.js';
@@ -1243,9 +1245,40 @@ function renderPictureTagsSection(char, container) {
     const note = document.createElement('small');
     note.className = 'notes sillynpc-tag-note';
     note.textContent = "Which of this character's pictures stands for which value. "
-        + 'A value with no picture uses the one the chat already shows, and where two '
-        + 'pictures share a value the higher one here wins.';
+        + 'A picture means everything it is tagged with at once, so one tagged Wounded and '
+        + 'Rain is only drawn when both hold - and beats a plain Wounded when they do. '
+        + 'Pictures sharing a tag take turns as the story runs.';
     container.append(note);
+
+    /* --- where to put the files ---
+     *
+     * The point of the folder is that a generator can write straight into it and a name
+     * can say what a picture is for, and neither is discoverable from a grid of
+     * thumbnails. So the path is on the page, next to the pictures it explains. */
+    const where = document.createElement('small');
+    where.className = 'notes sillynpc-tag-note';
+    const folder = folderFor(char);
+    where.innerHTML = `Drop pictures into <code>user/images/${escapeHtml(folder)}/</code> `
+        + 'and press Refresh. A file named for a value is tagged with it automatically - '
+        + '<code>wounded.png</code>, <code>wounded-2.png</code> for a second of them, '
+        + '<code>wounded.rain.png</code> for one meaning both.';
+    container.append(where);
+
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'menu_button sillynpc-tag-refresh';
+    refresh.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh from folder';
+    refresh.addEventListener('click', async () => {
+        refresh.disabled = true;
+        try {
+            await refreshCharacterImages(char);
+            renderEditor();
+        } catch (err) {
+            console.error(LOG_PREFIX, 'Could not re-read the picture folder', err);
+            refresh.disabled = false;
+        }
+    });
+    container.append(refresh);
 
     /* Said, rather than shown as a blank space. Something has asked for tags, so the
        heading is there and its absence would read as a bug - "this character has one
@@ -1254,11 +1287,14 @@ function renderPictureTagsSection(char, container) {
     if (gallery.length === 0) {
         const empty = document.createElement('small');
         empty.className = 'notes';
-        empty.textContent = 'This character has no pictures yet. Add one above and it can '
-            + 'be tagged.';
+        empty.textContent = 'No pictures in that folder yet. Generate one, or drop files '
+            + 'in and press Refresh.';
         container.append(empty);
         return;
     }
+
+    // Read once for the whole grid rather than per row per field.
+    const allowed = valuesByField();
 
     const grid = document.createElement('div');
     grid.className = 'sillynpc-tag-grid';
@@ -1283,7 +1319,7 @@ function renderPictureTagsSection(char, container) {
         selects.className = 'sillynpc-tag-fields';
 
         for (const field of fields) {
-            const values = valuesForField(field);
+            const values = allowed[field] ?? [];
             const cell = document.createElement('label');
             cell.className = 'sillynpc-tag-field';
 
@@ -1303,9 +1339,28 @@ function renderPictureTagsSection(char, container) {
                 continue;
             }
 
-            const select = buildChoiceSelect(values, getImageTag(char, path, field));
+            /* --- what the filename already said, shown rather than assumed ---
+             *
+             * Forty files named for their values need no clicking at all, and a grid of
+             * forty empty dropdowns beside them would say the opposite. So a value the
+             * filename supplies appears in the box, marked as coming from the name, and
+             * choosing something is how you override it. Clearing the box goes back to
+             * the filename rather than to nothing, which is why the blank option says so.
+             */
+            const explicit = getImageTag(char, path, field);
+            const derived = tagsFromFilename(path, allowed)[field] ?? '';
+
+            const select = buildChoiceSelect(values, explicit);
+            if (!explicit && derived) {
+                // Not selected: the name is already the answer and picking it again would
+                // write a tag that says nothing new and would outlive a rename.
+                const blank = select.querySelector('option[value=""]');
+                if (blank) blank.textContent = `${derived} (from the file name)`;
+                select.classList.add('is-derived');
+            }
             select.addEventListener('change', () => {
                 setImageTag(char, path, field, select.value);
+                renderPictureTagsSection(char, container);
             });
             cell.append(select);
             selects.append(cell);
