@@ -95,6 +95,16 @@ export function renderStatusView(container) {
         onChange: onApply
     }));
 
+    container.append(buildSettingToggle({
+        key: 'statusTracker.characterColumns',
+        label: 'Characters Side By Side',
+        help: 'Lays the characters out in equal columns, as many as fit - so a wide chat or '
+            + 'the visual novel stage uses its width instead of leaving most of every line '
+            + 'empty. A character with a lot to show gets a wider column, down to one. Needs '
+            + 'the character rows of the default template.',
+        onChange: onApply
+    }));
+
     container.append(buildSettingSlider({
         key: 'statusTracker.summaryThreshold',
         label: 'Items Shown Per Collection',

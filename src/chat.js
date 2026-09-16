@@ -191,6 +191,7 @@ export function chatRenderSignature() {
            rather than wiring the control also covers a template arriving from an import, a
            preset, or a system switch. */
         tracker.template,
+        tracker.characterColumns,
         JSON.stringify(tracker.globalStats || []),
         JSON.stringify(tracker.playerStats || []),
         JSON.stringify(tracker.npcStats || []),

@@ -402,6 +402,8 @@ export const defaultSettings = {
         historyDepth: 25,
         /** Show each NPC's card portrait in the tracker box. */
         showNpcPortraits: true,
+        /** The characters in equal columns across the box rather than one per line. */
+        characterColumns: false,
         /**
          * Who decides which characters are in the scene.
          * 'speakers' - derived from who actually appears in the message (deterministic)

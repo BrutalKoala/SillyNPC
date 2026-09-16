@@ -1854,7 +1854,7 @@ i.fa, i.fas, i.fa-solid, i.fa-regular, i.fa-brands,
     box-sizing: border-box !important;
 }
 
-.sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands):not(.sillynpc-status-buttons-container):not(.sillynpc-status-add-btn):not(.sillynpc-status-settings-btn):not(.sillynpc-status-undo-btn):not(.sillynpc-status-meter):not(.sillynpc-status-meter-fill):not(.sillynpc-status-meter-text):not(.sillynpc-status-portrait):not(.sillynpc-status-divider) {
+.sillynpc-status-box *:not(.fa-solid):not(.fa-regular):not(.fa-brands):not(.sillynpc-status-buttons-container):not(.sillynpc-status-add-btn):not(.sillynpc-status-settings-btn):not(.sillynpc-status-undo-btn):not(.sillynpc-status-meter):not(.sillynpc-status-meter-fill):not(.sillynpc-status-meter-text):not(.sillynpc-status-portrait):not(.sillynpc-status-divider):not(.sillynpc-char-columns .sillynpc-status-characters):not(.sillynpc-char-columns .sillynpc-status-characters > :not(.sillynpc-status-char)) {
     all: revert !important;
     box-sizing: border-box !important;
     font-family: inherit !important;
@@ -2244,6 +2244,48 @@ span.sillynpc-review-to {
     margin-bottom: 3px;
     display: block;
     line-height: 1.6;
+}
+
+/*
+ * Characters Side By Side.
+ *
+ * Equal columns, each as wide as the widest character's row on one line (measured by
+ * fitCharacterColumns and handed over as --sillynpc-char-column), as many as fit. A row
+ * wider than the box gets the whole box. Before it is measured, 240px.
+ *
+ * The list is left out of the box's reset while this is on - the reset is "all: revert
+ * !important", which no grid rule can get past - so the rules here say everything the
+ * reset would otherwise have settled.
+ */
+.sillynpc-status-box.sillynpc-char-columns .sillynpc-status-characters {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--sillynpc-char-column, 240px)), 1fr)) !important;
+    column-gap: var(--sillynpc-space-lg, 16px) !important;
+    row-gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: none !important;
+    font: inherit !important;
+    color: inherit !important;
+    box-sizing: border-box !important;
+}
+
+/* Anything in the list that is not a character - a "Present characters" heading, the line
+   break after it - spans the whole row rather than taking a column of its own. Left out
+   of the reset for the same reason as the list. */
+.sillynpc-status-box.sillynpc-char-columns .sillynpc-status-characters > :not(.sillynpc-status-char) {
+    grid-column: 1 / -1 !important;
+}
+
+.sillynpc-status-box.sillynpc-char-columns .sillynpc-status-characters > br {
+    display: none !important;
+}
+
+/* While measuring: one column, as wide as its widest row wants. */
+.sillynpc-status-box.sillynpc-char-columns .sillynpc-status-characters.is-measuring {
+    display: block !important;
+    width: max-content !important;
 }
 
 .sillynpc-status-editable {

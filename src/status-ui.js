@@ -478,6 +478,45 @@ export function applyTrackerScale(box) {
 }
 
 /**
+ * Lays a box's characters out in columns, when the setting asks for it.
+ *
+ * The columns are as wide as the widest character's row would be on one line, capped at
+ * the box, and the grid fits as many of those as the width allows. So a scene of short
+ * rows gets several columns and one long row gets one - which is the point: the width is
+ * used without cutting anybody's line in half.
+ *
+ * Measured on the next frame, because a box that has only just been built is not in the
+ * page and has no widths. A box that still is not (a hidden message) keeps a fallback
+ * column width from the stylesheet.
+ *
+ * @param {HTMLElement} box A `.sillynpc-status-box`.
+ */
+export function fitCharacterColumns(box) {
+    if (!box || !getSettings().statusTracker?.characterColumns) return;
+    box.classList.add('sillynpc-char-columns');
+
+    let measured = false;
+    const measure = () => {
+        if (measured) return;
+        measured = true;
+        const list = box.querySelector('.sillynpc-status-characters');
+        const rows = list ? [...list.querySelectorAll('.sillynpc-status-char')] : [];
+        if (!list || rows.length === 0 || !box.isConnected) return;
+
+        list.classList.add('is-measuring');
+        const widest = Math.max(...rows.map(row => row.getBoundingClientRect().width));
+        list.classList.remove('is-measuring');
+
+        if (widest > 0) list.style.setProperty('--sillynpc-char-column', `${Math.ceil(widest)}px`);
+    };
+    /* A frame, so it lands before the box is first painted - and a timer as well, because a
+       window in the background gets no frames at all, and a box measured only on a frame
+       would keep the fallback width until the next redraw. Whichever comes first. */
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(measure);
+    setTimeout(measure, 50);
+}
+
+/**
  * Renders the status tracker UI box for a message.
  * Called AFTER character image injection.
  * @param {Element} mesEl
@@ -528,14 +567,50 @@ export function renderStatusTrackerBox(mesEl) {
     const past = settings.showOnlyAtBottom
         ? { state: loadStateFromMetadata(), exact: true, reason: 'latest' }
         : stateAtMessage(messageId);
-    const state = past.state;
-    // Only mark it when it genuinely differs from live; an exact reconstruction of the
-    // latest message is just the current state.
-    const reconstructed = past.reason !== 'latest';
+    const container = buildTrackerBox(past.state, {
+        mesEl,
+        view,
+        // Only mark it when it genuinely differs from live; an exact reconstruction of the
+        // latest message is just the current state.
+        reconstructed: past.reason !== 'latest',
+        exact: past.exact,
+    });
+    if (!container) return;
+
+    if (settings.renderPosition === 'top') {
+        textContainer.prepend(container);
+    } else {
+        textContainer.appendChild(container);
+    }
+}
+
+/**
+ * The tracker box for a state: its buttons, its contents and its editing, ready to insert.
+ *
+ * Split out of renderStatusTrackerBox because the chat is not the only thing that shows
+ * this box. The visual novel stage drew only buildStatusHtml - the contents - so the Undo,
+ * cast, Add character and Settings buttons, and the listeners that make a value editable,
+ * existed in the chat and nowhere on the stage. One builder means one box.
+ *
+ * @param {object} state The tracker state to draw.
+ * @param {object} [options]
+ * @param {Element|null} [options.mesEl] The message it belongs to. Add character and the
+ *     cast panel redraw that message's box when they are done.
+ * @param {'full'|'globals'} [options.view] The eye's state.
+ * @param {boolean} [options.reconstructed] Drawn from an older message's state.
+ * @param {boolean} [options.exact] Whether that reconstruction is exact.
+ * @param {() => void} [options.onRedraw] Also called after the cast panel or Add character
+ *     changes the scene, for a box that lives somewhere other than a message.
+ * @returns {HTMLElement|null} Null when there is nothing worth drawing.
+ */
+export function buildTrackerBox(state, {
+    mesEl = null, view = getTrackerView(), reconstructed = false, exact = true, onRedraw = null,
+} = {}) {
+    const settings = getSettings().statusTracker;
     const htmlToRender = buildStatusHtml(state,
         view === 'globals' ? { ...settings, showCharacters: false } : settings);
 
-    if (!hasVisibleContent(htmlToRender)) return;
+    if (!hasVisibleContent(htmlToRender)) return null;
 
     const theme = getSettings().menuStyle || 'default';
     const container = document.createElement('div');
@@ -579,7 +654,7 @@ export function renderStatusTrackerBox(mesEl) {
     makeActivatable(castBtn);
     castBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openCastPanel(() => renderStatusTrackerBox(mesEl));
+        openCastPanel(() => { if (mesEl) renderStatusTrackerBox(mesEl); onRedraw?.(); });
     });
     headerBtns.appendChild(castBtn);
 
@@ -589,7 +664,7 @@ export function renderStatusTrackerBox(mesEl) {
     makeActivatable(addCharBtn);
     addCharBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        showAddCharacterDropdown(addCharBtn, mesEl);
+        showAddCharacterDropdown(addCharBtn, mesEl, onRedraw);
     });
 
     const settingsBtn = document.createElement('div');
@@ -614,24 +689,20 @@ export function renderStatusTrackerBox(mesEl) {
     
     if (reconstructed) {
         container.classList.add('sillynpc-status-historical');
-        container.title = past.exact
+        container.title = exact
             ? 'The tracker as it stood at this message.'
             : 'Approximate: no record exists for the messages after this one.';
-        if (!past.exact) container.classList.add('sillynpc-status-approximate');
+        if (!exact) container.classList.add('sillynpc-status-approximate');
     }
 
     container.appendChild(box);
     
-    if (settings.renderPosition === 'top') {
-        textContainer.prepend(container);
-    } else {
-        textContainer.appendChild(container);
-    }
-
     attachInlineEditListeners(container);
+    fitCharacterColumns(box);
+    return container;
 }
 
-function showAddCharacterDropdown(btn, mesEl) {
+function showAddCharacterDropdown(btn, mesEl, onRedraw = null) {
     if (!btn) return;
     const existing = document.querySelector('.sillynpc-add-char-dropdown');
     if (existing) {
@@ -659,7 +730,8 @@ function showAddCharacterDropdown(btn, mesEl) {
         item.addEventListener('click', (e) => {
             e.stopPropagation();
             if (registerActiveCharacter(char.name)) {
-                renderStatusTrackerBox(mesEl);
+                if (mesEl) renderStatusTrackerBox(mesEl);
+                onRedraw?.();
             }
             dropdown.remove();
         });
