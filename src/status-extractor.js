@@ -16,6 +16,8 @@ import { mentionsName } from './mentions.js';
 import { charactersFromActivatedLore } from './activated-lore.js';
 import { liveFactsFor } from './api.js';
 import { recordUsage } from './usage.js';
+import { poolTags, strangerKind, setStrangerKinds } from './default-portraits.js';
+import { triggerReprocess } from './reprocess.js';
 import {
     loadStateFromMetadata,
     saveStateToMetadata,
@@ -159,7 +161,7 @@ function profileOwners() {
  *
  * @param {object} trackerSettings
  */
-export function buildExtractionSchema(trackerSettings) {
+export function buildExtractionSchema(trackerSettings, { strangers = [] } = {}) {
     // Takes the stat definitions rather than their names, so a field that says how it
     // should be written can pass that on. A free-text field used to arrive as nothing but
     // a name and `{ type: 'string' }`, which is how one grew into a running log.
@@ -272,8 +274,56 @@ export function buildExtractionSchema(trackerSettings) {
                 },
                 closed: { type: 'array', items: { type: 'string' } },
             } : {}),
+            // Only when there are strangers to ask about - see describeStrangers.
+            ...(strangers.length ? {
+                strangers: {
+                    type: 'object',
+                    properties: Object.fromEntries(strangers.map(name => [name, { type: 'string' }])),
+                },
+            } : {}),
         },
     };
+}
+
+/**
+ * The speakers in a message who have no card and no kind yet - the ones to ask about.
+ *
+ * Read off the rendered message, where the chat has already marked every speaker it could
+ * not match to a card. The persona is never a stranger.
+ *
+ * @returns {string[]}
+ */
+export function strangersToClassify(messageId) {
+    if (poolTags().length === 0 || typeof document === 'undefined') return [];
+    const mesEl = document.querySelector(`#chat .mes[mesid="${Number(messageId)}"]`);
+    if (!mesEl) return [];
+    const names = new Map();
+    for (const avatar of mesEl.querySelectorAll('.sillynpc-chat-avatar[data-default="true"]')) {
+        if (avatar.dataset.persona === 'true') continue;
+        const name = String(avatar.dataset.charName ?? '').trim();
+        if (name && strangerKind(name) === undefined) names.set(name.toLowerCase(), name);
+    }
+    return [...names.values()];
+}
+
+/**
+ * Asks the reader what kind of stranger each cardless speaker is, from the picture tags only.
+ *
+ * The tags are categories for fallback portraits. Which one a shopkeeper or a wolf belongs
+ * to cannot be read off their name, and nobody can tag for every description - but the
+ * reader is reading the reply anyway, and choosing from a short closed list is a small ask.
+ *
+ * @returns {string} '' when there is nobody to ask about.
+ */
+export function describeStrangers(strangers, tags = poolTags()) {
+    if (!strangers?.length || !tags.length) return '';
+    return [
+        '\n### STRANGERS',
+        `These speakers have no character card: ${strangers.map(n => JSON.stringify(n)).join(', ')}.`,
+        'Also return a "strangers" object giving each of them the one kind that fits them best,',
+        `chosen only from: ${tags.join(', ')}.`,
+        `For example: { ${JSON.stringify(strangers[0])}: ${JSON.stringify(tags[0])} }. If none of those fits, give "".`,
+    ].join('\n');
 }
 
 /**
@@ -652,7 +702,7 @@ function describeAbsentButNamed(state, messageText, trackerSettings) {
 
 // Exported for the tests: what reaches the model on every message is worth holding to
 // a shape, and the vocabulary in it is the whole point of this function.
-export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []) {
+export function buildUserPrompt(state, messageText, trackerSettings, leadUp = [], { strangers = [] } = {}) {
     // What is already open, so the reader is not asked to find it again every message.
     //
     // The active ones only. This listed every open thread, which made the block grow with
@@ -697,6 +747,7 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
         limits ? '\n### LIMITS\n' + limits : '',
         // Whatever else has asked to be told to the reader - see registerExtractionNotes.
         describeExtractionNotes(state, messageText),
+        describeStrangers(strangers),
         // The fields each collection actually has. Without this the model had only the
         // prompt's one example to go by, which showed a single field called name - so
         // that is all a new item ever arrived with.
@@ -1163,9 +1214,10 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // Before anything is applied. A later swipe of this message rebuilds from here
         // rather than from what this one leaves behind.
         rememberSwipeBase(messageId, state);
-        const schema = buildExtractionSchema(trackerSettings);
+        const strangers = strangersToClassify(messageId);
+        const schema = buildExtractionSchema(trackerSettings, { strangers });
         const leadUp = collectLeadUp(messageId, Number(trackerSettings.extractionContextMessages ?? 2));
-        const userPrompt = buildUserPrompt(state, String(messageText), trackerSettings, leadUp);
+        const userPrompt = buildUserPrompt(state, String(messageText), trackerSettings, leadUp, { strangers });
 
         debugLog('Extraction request for message', key);
         const raw = await requestExtraction(userPrompt, schema, trackerSettings);
@@ -1203,6 +1255,14 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // closing a wrong one is a click; holding them would mean a decision per message
         // about something that is only ever context.
         applyThreadsFromReply(parsed, messageId, String(messageText));
+
+        /* Strangers' kinds, recorded for everyone asked about - an answer that is missing or
+           not one of the tags counts as none fitting, so nobody waits for good. The chat is
+           redrawn so they get their face now rather than at the next redraw. */
+        if (strangers.length && setStrangerKinds(parsed.strangers, strangers)) {
+            debugLog('Strangers\' kinds', parsed.strangers);
+            triggerReprocess();
+        }
 
         // Profiles, for whichever fields have been unlocked. Outside applyUpdate on
         // purpose: these live on the card rather than in the state.

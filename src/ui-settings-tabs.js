@@ -505,13 +505,16 @@ export function renderDefaultView(view, rerender) {
         cell.appendChild(frame);
 
         // Free text rather than a fixed vocabulary: what a world is full of is the world's
-        // business. Matched against the words in a speaker's name and a card's category.
+        // business. A stranger's kind is chosen from these by the tracker's reader; a card
+        // still matches them against its name and category.
         const tags = document.createElement('input');
         tags.type = 'text';
         tags.className = 'text_pole sillynpc-pool-tags';
-        tags.placeholder = 'guard, soldier';
-        tags.title = 'Words that decide who can draw this face. A speaker whose name or '
-            + 'category contains one of them draws from the tagged faces only.';
+        tags.placeholder = 'monster, civilian';
+        tags.title = 'Kinds of people this face is for. When a speaker with no card appears, the '
+            + 'tracker picks their kind from all the tags here, and they wear a face tagged with '
+            + 'it - or an untagged one if none fits. A face tagged for one kind is never given '
+            + 'to another.';
         tags.value = (entry.tags || []).join(', ');
         tags.addEventListener('change', () => {
             entry.tags = tags.value.split(',').map(t => t.trim()).filter(Boolean);

@@ -142,6 +142,113 @@ export function steadyFace(name, category = '') {
     return eligible[Math.abs(hash31(name || '')) % eligible.length]?.src || '';
 }
 
+/* ─── What kind of stranger somebody is ──────────────────────────────────── */
+
+/**
+ * The tags on the pool, as the list a stranger's kind is chosen from.
+ *
+ * Tags are categories - monster, civilian, enemy - not words that appear in names. A name
+ * like "Shopkeeper" says nothing about which of them fits, so the kind is decided by the
+ * tracker's reader, which reads the reply anyway, from exactly this list.
+ *
+ * @returns {string[]} Distinct, lowercased, in the order they first appear.
+ */
+export function poolTags() {
+    const seen = new Set();
+    for (const entry of getPool()) {
+        for (const tag of Array.isArray(entry?.tags) ? entry.tags : []) {
+            const clean = String(tag ?? '').trim().toLowerCase();
+            if (clean) seen.add(clean);
+        }
+    }
+    return [...seen];
+}
+
+/**
+ * The kind the reader gave this stranger in this chat.
+ *
+ * @returns {string|undefined} A tag; '' when the reader found none fitting; undefined when
+ *   nobody has decided yet.
+ */
+export function strangerKind(name) {
+    const kinds = facesRecord()?.kinds;
+    const key = String(name ?? '').trim().toLowerCase();
+    return kinds && key && Object.prototype.hasOwnProperty.call(kinds, key) ? kinds[key] : undefined;
+}
+
+/**
+ * Records the reader's answer for the strangers it was asked about.
+ *
+ * Only a tag from the pool counts - anything else the model says becomes '' (none fitting),
+ * which is still an answer: that stranger stops waiting and draws from the untagged pictures.
+ * A stranger already decided keeps their kind, so their face does not change later.
+ *
+ * @param {Record<string, string>} answer The reply's "strangers" object.
+ * @param {string[]} asked The names that were asked about.
+ * @returns {boolean} Whether anything was recorded.
+ */
+export function setStrangerKinds(answer, asked) {
+    const names = (Array.isArray(asked) ? asked : []).map(n => String(n ?? '').trim()).filter(Boolean);
+    if (names.length === 0) return false;
+    const record = facesRecord({ create: true });
+    if (!record) return false;
+    if (!record.kinds || typeof record.kinds !== 'object') record.kinds = {};
+
+    const tags = new Set(poolTags());
+    const given = {};
+    for (const [key, value] of Object.entries(answer && typeof answer === 'object' ? answer : {})) {
+        given[String(key).trim().toLowerCase()] = String(value ?? '').trim().toLowerCase();
+    }
+
+    let changed = false;
+    for (const name of names) {
+        const key = name.toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(record.kinds, key)) continue;
+        record.kinds[key] = tags.has(given[key]) ? given[key] : '';
+        changed = true;
+    }
+    if (changed) {
+        faceVersion++;
+        getContext()?.saveMetadataDebounced?.();
+    }
+    return changed;
+}
+
+/**
+ * The pictures a stranger of this kind may wear: those tagged with it, or when none are, the
+ * untagged ones - never a picture tagged for some other kind, which is how a monster ended up
+ * behind a shopkeeper. Only when there are no untagged pictures either is the whole pool used,
+ * rather than no face at all.
+ */
+export function eligibleForKind(kind) {
+    const pool = getPool();
+    const want = String(kind ?? '').trim().toLowerCase();
+    const tagsOf = (entry) => (Array.isArray(entry?.tags) ? entry.tags : [])
+        .map(t => String(t ?? '').trim().toLowerCase()).filter(Boolean);
+    if (want) {
+        const tagged = pool.filter(entry => tagsOf(entry).includes(want));
+        if (tagged.length) return tagged;
+    }
+    const untagged = pool.filter(entry => tagsOf(entry).length === 0);
+    return untagged.length ? untagged : pool;
+}
+
+/**
+ * Whether a stranger in this message should wait for the reader rather than be given a face.
+ *
+ * Only while the reader will actually answer: the tracker on, reading each reply, some tags
+ * to choose from - and only for the newest message, the one about to be read. An older
+ * message will not be read again, so a stranger there with no kind is simply one with none.
+ */
+function waitsForReader(messageId) {
+    const tracker = getSettings().statusTracker;
+    if (!tracker?.enabled || tracker.extractionMode !== 'extract') return false;
+    if (poolTags().length === 0) return false;
+    const chat = getContext()?.chat;
+    const last = Array.isArray(chat) ? chat.length - 1 : -1;
+    return Number.isFinite(Number(messageId)) && Number(messageId) >= last;
+}
+
 /* ─── Who has which face ──────────────────────────────────────────────────── */
 
 /**
@@ -159,6 +266,8 @@ function facesRecord({ create = false } = {}) {
     }
     const record = metadata[FACES_KEY];
     if (!Array.isArray(record.runs)) record.runs = [];
+    // Deliberately not reset with the runs: redrawing faces does not change what anybody is.
+    if (record.kinds !== undefined && (typeof record.kinds !== 'object' || Array.isArray(record.kinds))) record.kinds = {};
     return record;
 }
 
@@ -201,14 +310,30 @@ export function clearRuns() {
 export function faceForStranger(name, messageId, { gap, random } = {}) {
     if (!name || getPool().length === 0) return '';
 
+    /* With a tagged pool, a stranger's face follows their kind, not their name. Until the
+       reader has said what they are, the plain default portrait - a guess drawn now would be
+       the wrong kind as often as not, and would then be kept for the whole run. */
+    const tagged = poolTags().length > 0;
+    const kind = tagged ? strangerKind(name) : undefined;
+    if (tagged && kind === undefined && waitsForReader(messageId)) return '';
+    const pick = tagged
+        ? (rand) => { const list = eligibleForKind(kind); return list[Math.floor(rand() * list.length)]?.src || ''; }
+        : (rand) => drawFace(name, '', rand);
+
     // Nothing to file a choice against, or nowhere to file it. Steady rather than
     // random: a random draw here would change the face on every redraw, which is the
     // one failure this module exists to prevent.
+    const steady = () => {
+        if (!tagged) return steadyFace(name);
+        const list = eligibleForKind(kind);
+        return list[Math.abs(hash31(name || '')) % list.length]?.src || '';
+    };
+
     const at = Number(messageId);
-    if (!Number.isFinite(at)) return steadyFace(name);
+    if (!Number.isFinite(at)) return steady();
 
     const record = facesRecord({ create: true });
-    if (!record) return steadyFace(name);
+    if (!record) return steady();
 
     const key = String(name).toLowerCase();
     const mine = record.runs.filter(run => run && run.name === key);
@@ -232,7 +357,7 @@ export function faceForStranger(name, messageId, { gap, random } = {}) {
         return recent.src;
     }
 
-    const src = drawFace(name, '', random);
+    const src = pick(random ?? Math.random);
     if (!src) return '';
     record.runs.push({ name: key, src, first: at, last: at });
     getContext()?.saveMetadataDebounced?.();
