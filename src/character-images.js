@@ -294,6 +294,28 @@ async function listFolder(folder) {
 }
 
 /**
+ * The name a folder really has on disk, when one exists under the same letters in any case.
+ *
+ * Windows ignores case in folder names, so asking for "Location - House Inside" when
+ * "Location - House inside" exists opens the one that exists - and SillyTavern can neither
+ * rename a folder nor delete an empty one, so its capitals can never be changed from here.
+ * Using the name as it really is keeps every stored path in agreement with the disk.
+ *
+ * @returns {Promise<string>} '' when there is no such folder, or the listing fails.
+ */
+async function folderOnDisk(name) {
+    try {
+        const response = await fetch('/api/images/folders', { method: 'POST', headers: getRequestHeaders() });
+        if (!response.ok) return '';
+        const folders = await response.json();
+        const wanted = String(name).toLowerCase();
+        return (Array.isArray(folders) ? folders : []).find(f => String(f).toLowerCase() === wanted) ?? '';
+    } catch {
+        return '';
+    }
+}
+
+/**
  * Moves everything in a card's folder to the folder for a new name, and re-points the card.
  *
  * SillyTavern has no move or rename for folders, so this is the migration's own sequence
@@ -318,22 +340,33 @@ async function listFolder(folder) {
  * @param {string} [options.prefix] Put before the name, as locations do.
  * @param {object[]} [options.others] Every other card with a folder. Characters by default.
  * @param {() => void} [options.save] Saves whatever the owner lives in.
- * @returns {Promise<{ folder: string, moved: number, left: string[], refused: string }>}
+ * @returns {Promise<{ folder: string, moved: number, left: string[], refused: string, note: string }>}
+ *   `note` says when the folder could not take the new name's capitals.
  */
 export async function moveFolder(owner, name, options = {}) {
     const save = options.save ?? saveSettings;
-    const target = folderNameFor(`${options.prefix ?? ''}${name ?? ''}`);
+    const wanted = folderNameFor(`${options.prefix ?? ''}${name ?? ''}`);
     const from = folderNameFor(options.from) || folderFor(owner);
-    const result = { folder: from, moved: 0, left: [], refused: '' };
-    if (!owner || !target) return { ...result, refused: 'no usable name' };
+    const result = { folder: from, moved: 0, left: [], refused: '', note: '' };
+    if (!owner || !wanted) return { ...result, refused: 'no usable name' };
 
     const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
-    // Windows folder names ignore case, so "elza" and "Elza" are already the same folder.
-    if (!from || same(from, target)) {
-        owner.imageFolder = target;
+    const capitalsNote = (kept) => `the folder is still called "${kept}": a folder of that name in different capitals `
+        + 'already exists, and SillyTavern cannot rename folders. Rename or delete it by hand to change the capitals.';
+
+    /* A change of capitals only. Windows sees one folder, so there is nothing to move - and
+       the stored folder must stay the name the disk has, or every picture path and tag stored
+       under it stops matching what the folder lists. */
+    if (!from || same(from, wanted)) {
+        const kept = from || (await folderOnDisk(wanted)) || wanted;
+        owner.imageFolder = kept;
         save();
-        return { ...result, folder: target };
+        return { ...result, folder: kept, note: kept === wanted ? '' : capitalsNote(kept) };
     }
+
+    // An existing folder under other capitals is the one Windows will open; use its real name.
+    const target = (await folderOnDisk(wanted)) || wanted;
+    if (target !== wanted) result.note = capitalsNote(target);
 
     const others = (options.others ?? getSettings().characters ?? []).filter(o => o && o !== owner);
     if (others.some(o => same(folderFor(o), from))) {

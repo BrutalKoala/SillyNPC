@@ -1164,7 +1164,8 @@ function renderEditor() {
         folderBeforeRename = folderFor(char);
         if (!from || !char.name.trim()) return;
         moveFolder(char, char.name, { from })
-            .then(({ moved, left, refused, folder }) => {
+            .then(({ moved, left, refused, folder, note }) => {
+                if (note) toastr.info(`About the picture folder: ${note}`, 'SillyNPC', { timeOut: 12000 });
                 if (refused) {
                     toastr.warning(`The pictures stay in user/images/${from}/: ${refused}.`, 'SillyNPC');
                     // The folder a refused move leaves in use is the old one.
