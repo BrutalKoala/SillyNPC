@@ -174,7 +174,9 @@ export async function generateLoreEntry(char, { onSave, template, facts, default
     footer.append(genBtn, saveCloseBtn);
     container.append(footer);
 
-    let createdUid = char.lorebook?.uid || null;
+    /* ?? rather than ||: an entry's uid can be 0 - the first entry of a lorebook - and
+       0 read as "no entry" made Generate and Regen do nothing at all for it. */
+    let createdUid = char.lorebook?.uid ?? null;
     let createdWorld = char.lorebook?.world || null;
 
     // Set while a generation is in flight so onClosing can veto the close.
@@ -218,7 +220,7 @@ export async function generateLoreEntry(char, { onSave, template, facts, default
     });
 
     genBtn.addEventListener('click', async () => {
-        if (!createdUid) return;
+        if (createdUid == null) return;
         genBtn.disabled = true;
         isGenerating = true;
 
@@ -258,7 +260,7 @@ export async function generateLoreEntry(char, { onSave, template, facts, default
     });
 
     saveCloseBtn.addEventListener('click', async () => {
-        if (!createdUid || !createdWorld) return;
+        if (createdUid == null || !createdWorld) return;
         try {
             saveCloseBtn.disabled = true;
             saveCloseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
