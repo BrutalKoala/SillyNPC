@@ -49,6 +49,49 @@ import { applyTimeRules } from './status-rules.js';
  * the model inventing keys like `energy_max` in the first place.
  */
 
+/**
+ * Extra notes for the reader, from whoever registered one.
+ *
+ * A registration rather than a list of things SillyNPC knows about, so something built
+ * beside the tracker - a registry of places the story has been, say - can tell the reader
+ * what it needs to without SillyNPC knowing it exists. Each provider is asked on every
+ * extraction and may answer nothing.
+ *
+ * @type {Array<(context: { state: object, messageText: string }) => ({ heading: string, text: string }|null|undefined)>}
+ */
+const extractionNoteProviders = [];
+
+/**
+ * Adds a note to the reader's prompt, placed after the limits. The provider is called with
+ * the state and the message being read, and returns `{ heading, text }` or nothing.
+ *
+ * @returns {() => void} Removes it again.
+ */
+export function registerExtractionNotes(provider) {
+    if (typeof provider !== 'function') return () => {};
+    extractionNoteProviders.push(provider);
+    return () => {
+        const at = extractionNoteProviders.indexOf(provider);
+        if (at !== -1) extractionNoteProviders.splice(at, 1);
+    };
+}
+
+/** Every registered note, as prompt sections. A provider that throws is skipped, not fatal. */
+function describeExtractionNotes(state, messageText) {
+    const sections = [];
+    for (const provider of extractionNoteProviders) {
+        try {
+            const note = provider({ state, messageText });
+            const heading = String(note?.heading ?? '').trim();
+            const text = String(note?.text ?? '').trim();
+            if (heading && text) sections.push(`\n### ${heading.toUpperCase()}\n${text}`);
+        } catch (err) {
+            debugLog('An extraction note could not be built', err);
+        }
+    }
+    return sections.join('\n');
+}
+
 /** Guards against an extraction triggering the events that would start another. */
 let extractionInFlight = false;
 
@@ -652,6 +695,8 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
             + 'them into the scene, include them in "characters" and report only what '
             + 'this message changed about them.\n' + absent : '',
         limits ? '\n### LIMITS\n' + limits : '',
+        // Whatever else has asked to be told to the reader - see registerExtractionNotes.
+        describeExtractionNotes(state, messageText),
         // The fields each collection actually has. Without this the model had only the
         // prompt's one example to go by, which showed a single field called name - so
         // that is all a new item ever arrived with.
