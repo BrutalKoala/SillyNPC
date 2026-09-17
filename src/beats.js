@@ -48,58 +48,87 @@ const BLOCK_TAGS = new Set(['P', 'BLOCKQUOTE', 'LI']);
 const BLOCK_SELECTOR = 'p, blockquote, li';
 
 function blockElements(textContainer) {
-    const candidates = [...textContainer.querySelectorAll(BLOCK_SELECTOR)]
-        .filter(el => BLOCK_TAGS.has(el.tagName));
-
-    /* Innermost wins: a candidate with no candidate inside it. Asked of each one directly
-       rather than by comparing every candidate with every other.
-     *
-     * Measured, because the comparison version was quadratic in a message's paragraphs and
-       that looked like the reason the app went sticky in a long chat. It was not - at a
-       realistic twelve paragraphs the two are within 5% of each other
-       (visual/beats-cost.html), and the real cost was reading every message at all, which
-       is fixed by caching on the caller's side. This stays because it is the plainer way
-       to say "innermost" and it does hold up on a very long message, not because it was
-       the bug. */
-    const innermost = candidates.filter(el => el.querySelector(BLOCK_SELECTOR) === null);
-    const pieces = [...innermost, ...widgetElements(textContainer)];
-    if (pieces.length === 0) return [textContainer];
-
-    // In reading order: a terminal screen between two paragraphs is read between them.
-    return pieces.sort((a, b) => (a.compareDocumentPosition(b) & 4 /* FOLLOWING */) ? -1 : 1);
+    const pieces = [];
+    collectPieces(textContainer, pieces);
+    return pieces.length ? pieces : [textContainer];
 }
 
 /**
- * What a self-contained piece of HTML in a message can be: a styled box, a code block, a
- * collapsible section, a table.
+ * Walks a message in reading order and keeps every piece somebody would see.
+ *
+ * **Nothing visible is left out.** A paragraph, quote or list item is a piece, as it always
+ * was - the innermost one, since a paragraph inside a quote is the paragraph. Anything else
+ * that shows something - a styled box a preset had the model draw, a table, a picture, a
+ * panel a regex script built, in whatever shape - is a piece of its own, shown as it is. This
+ * used to be a list of shapes (a <div> with no class, a <pre>...), and every user's prompts
+ * and regex scripts draw different ones; a list is always one shape short, and what it
+ * misses is the thing in the reply that was meant to be looked at.
+ *
+ * What is skipped, and why it is safe to:
+ * - hidden elements, which nobody sees in the chat either;
+ * - this extension's own additions - the tracker box, the review panel, raw status blocks;
+ * - other extensions' panels: an element carrying a class that the message could not have
+ *   written. SillyTavern prefixes every class a message writes with "custom-" (keeping
+ *   "fa-", "note-" and "monospace"), so any other class was added by code, not by the story.
+ *   Only when it holds no paragraph - a wrapper an extension puts round the text is walked
+ *   into, so wrapping a message never hides it.
+ *
+ * An element holding paragraphs *and* words of its own outside them is kept whole, so the
+ * loose words are not lost by reading only its paragraphs.
  */
-const WIDGET_SELECTOR = 'div, pre, details, table, figure, section, aside';
+function collectPieces(parent, pieces) {
+    for (const node of parent.children) {
+        if (isHidden(node) || isOurs(node)) continue;
 
-/**
- * The HTML pieces of a message that are not paragraphs - and would otherwise be lost.
- *
- * A preset can have the model write HTML straight into a reply: a terminal screen, a letter,
- * a phone, drawn with inline styles in a `<div>`. Its text is not in any paragraph, so it
- * was no beat at all, and the visual novel skipped it - the one thing in the reply that was
- * meant to be looked at.
- *
- * A piece counts when it holds text and no paragraph of its own (one that does is read
- * through its paragraphs), is not inside a paragraph, and is the outermost such piece - a
- * terminal made of nested boxes is one thing to show, not four.
- *
- * **Only markup the message itself wrote**: an element with no class attribute, or a
- * `<pre>`. What the model and regex scripts write is styled inline; what extensions put into
- * a message - this one's tracker box, other extensions' panels - carries classes. Without
- * that line every extension's panel would become a step in the story.
- */
-function widgetElements(textContainer) {
-    const widgets = [...textContainer.querySelectorAll(WIDGET_SELECTOR)].filter(el =>
-        (!el.hasAttribute('class') || el.tagName === 'PRE')
-        && !el.closest('[class*="sillynpc-"]')
-        && el.querySelector(BLOCK_SELECTOR) === null
-        && !el.parentElement?.closest(BLOCK_SELECTOR)
-        && String(el.textContent ?? '').trim() !== '');
-    return widgets.filter(el => !widgets.some(other => other !== el && other.contains(el)));
+        const hasBlocks = node.querySelector(BLOCK_SELECTOR) !== null;
+        if (BLOCK_TAGS.has(node.tagName) && !hasBlocks) { pieces.push(node); continue; }
+
+        if (hasBlocks) {
+            if (hasLooseContent(node)) pieces.push(node);
+            else collectPieces(node, pieces);
+            continue;
+        }
+
+        // A collapsible section's heading is not a step of its own; its paragraphs are.
+        if (!isMessageMarkup(node) || node.tagName === 'SUMMARY') continue;
+        if (showsSomething(node)) pieces.push(node);
+    }
+}
+
+/** Classes a message can carry, after SillyTavern's sanitiser has had it. */
+const MESSAGE_CLASS = /^(?:custom-|fa-|note-)|^monospace$/;
+
+function isMessageMarkup(el) {
+    const classes = [...(el.classList ?? [])];
+    return classes.every(name => MESSAGE_CLASS.test(name));
+}
+
+function isOurs(el) {
+    return /(?:^|\s)sillynpc-/.test(el.getAttribute?.('class') ?? '') && !BLOCK_TAGS.has(el.tagName)
+        || el.hasAttribute?.('data-sillynpc-hidden');
+}
+
+function isHidden(el) {
+    return el.hidden === true || /display\s*:\s*none/i.test(el.getAttribute?.('style') ?? '');
+}
+
+/** Words, a picture, a video or a table - something that takes up room on the screen. */
+function showsSomething(el) {
+    return String(el.textContent ?? '').trim() !== ''
+        || el.matches?.('img, video, svg, canvas, table')
+        || el.querySelector?.('img, video, svg, canvas, table') != null;
+}
+
+/** Text of its own, directly inside, beside the paragraphs it also holds. */
+function hasLooseContent(el) {
+    for (const child of el.childNodes) {
+        if (child.nodeType === 3 && child.nodeValue.trim()) return true;
+        if (child.nodeType === 1 && !BLOCK_TAGS.has(child.tagName)
+            && child.querySelector(BLOCK_SELECTOR) === null && !isHidden(child) && !isOurs(child)
+            && !['SUMMARY'].includes(child.tagName) && showsSomething(child)
+            && !['UL', 'OL'].includes(child.tagName)) return true;
+    }
+    return false;
 }
 
 /**
@@ -161,7 +190,9 @@ export function messageBeats(textContainer) {
      * ended up in the paragraph after theirs. */
     const blocks = blockElements(textContainer).filter(element =>
         String(element.textContent ?? '').trim() !== ''
-        || element.querySelector('.sillynpc-chat-avatar'));
+        || element.querySelector('.sillynpc-chat-avatar')
+        // A picture or a table with no words is still something to look at.
+        || (!BLOCK_TAGS.has(element.tagName) && element !== textContainer && showsSomething(element)));
 
     return blocks.map((element, index) => {
         const avatars = [...element.querySelectorAll('.sillynpc-chat-avatar')];
