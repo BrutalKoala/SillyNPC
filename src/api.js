@@ -12,7 +12,7 @@ import { triggerReprocess } from './reprocess.js';
 import { applyMacros, fillTemplate, modernisePlaceholders } from './macros.js';
 import { getSettings, saveSettings, defaultSettings, resolveImagePrompt } from './settings.js';
 import { recordUsage } from './usage.js';
-import { syncEntryIdentity, mergeKeywords } from './lorebook.js';
+import { syncEntryIdentity, mergeKeywords, namesFor } from './lorebook.js';
 import { escapeRegExp, describeConnection, resolveImageFolder } from './utils.js';
 import { loadStateFromMetadata } from './status-logic.js';
 
@@ -426,9 +426,14 @@ async function requestLore(prompt) {
  * @param {object} char Character object
  * @param {string} world Lorebook name
  * @param {number} uid Entry UID
+ * @param {object} [options]
+ * @param {string} [options.template] A prompt to use instead of the character one - a
+ *   location's lore is not a person's. Same placeholders, plus {{aliases}}.
+ * @param {string|(() => string)} [options.facts] What is established, instead of the
+ *   tracked stats a character has.
  * @returns {Promise<{ tags: string, content: string, followedFormat: boolean, excerpt: object }>}
  */
-export async function generateLoreContent(char, world, uid) {
+export async function generateLoreContent(char, world, uid, options = {}) {
     let existingLore = '';
     try {
         const worldData = await loadWorldInfo(world);
@@ -443,7 +448,8 @@ export async function generateLoreContent(char, world, uid) {
     const recentMessages = excerpt.text;
     const worldFacts = await retrieveWorldFacts(char.name);
 
-    const template = getSettings().generationPrompt;
+    const template = options.template || getSettings().generationPrompt;
+    const givenFacts = typeof options.facts === 'function' ? options.facts() : options.facts;
     /* Both spellings and SillyTavern's own macros, in one pass. The old [TAG] form is
        rewritten to {{tag}} first rather than replaced separately, so a [NAME] that happens
        to be inside the chat excerpt or the existing entry is left alone - it is somebody's
@@ -453,7 +459,9 @@ export async function generateLoreContent(char, world, uid) {
         lore: existingLore || '(No existing lore yet)',
         context: recentMessages,
         world: worldFacts || '(Nothing found in the Data Bank)',
-        facts: describeTrackedFacts(char) || '(Nothing tracked yet)',
+        facts: (givenFacts !== undefined ? String(givenFacts ?? '').trim() : describeTrackedFacts(char))
+            || '(Nothing tracked yet)',
+        aliases: namesFor(char).slice(1).join(', ') || '(none)',
     });
 
     // A template written before [WORLD] existed - which is most of them, including any you

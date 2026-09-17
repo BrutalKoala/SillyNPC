@@ -66,10 +66,19 @@ export function getChatLorebookName() {
     return (typeof name === 'string' && knownWorlds().includes(name)) ? name : '';
 }
 
-/** Every name this character answers to: their own, plus their aliases. */
+/**
+ * Every name this card answers to: its own, plus its aliases.
+ *
+ * An alias is a `{ pattern }` on a character, or a plain string - which is how a location
+ * keeps the other names the story has used for it, so a place's lore fires on those too.
+ */
 export function namesFor(char) {
     const names = [String(char.name ?? '').trim()].filter(Boolean);
     for (const alias of char.aliases || []) {
+        if (typeof alias === 'string') {
+            if (alias.trim()) names.push(alias.trim());
+            continue;
+        }
         // A regex alias is a matching rule, not a name an entry could be titled with.
         if (!alias?.pattern || alias.isRegex) continue;
         names.push(String(alias.pattern).trim());
@@ -196,14 +205,16 @@ function entryMatches(entry, names) {
  * own keywords, which is where a name usually ends up.
  *
  * @param {object} char
- * @param {{ silent?: boolean }} [options] silent suppresses the toast, for bulk syncing.
+ * @param {{ silent?: boolean, worlds?: string[] }} [options] silent suppresses the toast, for
+ *   bulk syncing. worlds are the lorebooks to search instead of the character scan list -
+ *   locations keep a list of their own.
  * @returns {Promise<boolean>} Whether a link was made.
  */
-export async function tryAutoSyncLorebook(char, { silent = false } = {}) {
+export async function tryAutoSyncLorebook(char, { silent = false, worlds: only = null } = {}) {
     if (!char.name) return false;
 
     // Worlds to scan: user selection -> current chat world -> first world name in list.
-    let worlds = getSettings().scanLorebooks || [];
+    let worlds = (Array.isArray(only) && only.length ? only : null) ?? getSettings().scanLorebooks ?? [];
     if (worlds.length === 0) {
         const chatWorld = getChatLorebookName();
         if (chatWorld) worlds = [chatWorld];

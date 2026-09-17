@@ -32,6 +32,13 @@ let lorebookDraft = null;
  */
 let onChange = () => {};
 
+/**
+ * What the block was given for this card: a lore prompt and facts of its own, the lorebook
+ * to pre-select, and the lorebooks Sync searches. Empty for a character, which uses the
+ * character settings. Set on every render, like onChange.
+ */
+let loreOptions = {};
+
 export function resetLorebookState() {
     lorebookMode = 'view'; lorebookDraft = null;
 }
@@ -39,6 +46,7 @@ export function resetLorebookState() {
 export async function renderLorebookSection(char, container, options = {}) {
     if (!container) return;
     if (options.onChange) onChange = options.onChange;
+    loreOptions = options.lore ?? {};
     container.className = 'sillynpc-editor-field sillynpc-lorebook-field';
     container.innerHTML = `<label>Lorebook</label>`;
 
@@ -57,8 +65,8 @@ export async function renderLorebookSection(char, container, options = {}) {
             <button type="button" class="menu_button gen-btn"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
         `;
         actions.querySelector('.inject-btn').addEventListener('click', () => { lorebookMode = 'picking'; lorebookDraft = { world: '', uid: null }; onChange(); });
-        actions.querySelector('.sync-btn').addEventListener('click', async () => { await tryAutoSyncLorebook(char); onChange(); });
-        actions.querySelector('.gen-btn').addEventListener('click', () => generateLoreEntry(char, { onSave: () => onChange() }));
+        actions.querySelector('.sync-btn').addEventListener('click', async () => { await tryAutoSyncLorebook(char, { worlds: loreOptions.worlds }); onChange(); });
+        actions.querySelector('.gen-btn').addEventListener('click', () => generateLoreEntry(char, { ...loreOptions, onSave: () => onChange() }));
         container.appendChild(actions);
     }
 }
@@ -196,7 +204,7 @@ async function buildLorebookView(char) {
 
     wrap.querySelector('.eject-btn').addEventListener('click', () => { char.lorebook = null; saveSettings(); onChange(); });
     wrap.querySelector('.change-btn').addEventListener('click', () => { lorebookMode = 'picking'; lorebookDraft = { ...char.lorebook }; onChange(); });
-    wrap.querySelector('.regen-btn').addEventListener('click', () => generateLoreEntry(char, { onSave: () => onChange() }));
+    wrap.querySelector('.regen-btn').addEventListener('click', () => generateLoreEntry(char, { ...loreOptions, onSave: () => onChange() }));
 
     return wrap;
 }

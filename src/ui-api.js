@@ -16,7 +16,7 @@ import {
     generateCharacterImageLogic 
 } from './api.js';
 
-export async function generateLoreEntry(char, { onSave } = {}) {
+export async function generateLoreEntry(char, { onSave, template, facts, defaultWorld } = {}) {
     if (!char.name) {
         toastr.warning('Please give the character a name first.', 'SillyNPC');
         return;
@@ -51,7 +51,7 @@ export async function generateLoreEntry(char, { onSave } = {}) {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = name;
-        if (name === (char.lorebook?.world || getSettings().defaultLorebook || getChatLorebookName())) opt.selected = true;
+        if (name === (char.lorebook?.world || defaultWorld || getSettings().defaultLorebook || getChatLorebookName())) opt.selected = true;
         worldSelect.append(opt);
     }
     worldField.append(worldLabel, worldSelect);
@@ -226,7 +226,7 @@ export async function generateLoreEntry(char, { onSave } = {}) {
             toastr.info('Generating tags and description...');
             
             const { tags, content, followedFormat, excerpt } =
-                await generateLoreContent(char, createdWorld, createdUid);
+                await generateLoreContent(char, createdWorld, createdUid, { template, facts });
 
             tagsInput.value = tags;
             descText.value = content;
