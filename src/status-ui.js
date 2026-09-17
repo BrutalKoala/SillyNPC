@@ -702,6 +702,42 @@ export function buildTrackerBox(state, {
     return container;
 }
 
+/**
+ * Where a menu opened from a button goes, in the window's coordinates.
+ *
+ * Below the button when there is room, above it when there is not, and never past either
+ * side. It always went below, a hundred pixels to the left, relative to the page - which
+ * put it off the bottom of the screen for a tracker box drawn at the foot of the window, as
+ * the visual novel stage draws it, so Add character appeared to do nothing.
+ *
+ * @param {{ top: number, bottom: number, left: number }} rect The button.
+ * @param {{ width: number, height: number }} size The menu.
+ * @param {{ width: number, height: number }} view The window.
+ * @returns {{ top: number, left: number }}
+ */
+export function placeMenu(rect, size, view, gap = 5) {
+    const below = rect.bottom + gap;
+    const top = below + size.height <= view.height
+        ? below
+        : Math.max(gap, rect.top - gap - size.height);
+    const left = Math.min(Math.max(gap, rect.left - 100), Math.max(gap, view.width - size.width - gap));
+    return { top, left };
+}
+
+/**
+ * Tells everything that shows the scene - the HUD, the chat's tracker boxes, the visual novel
+ * stage's box - that somebody joined or left it. Adding and removing saved the state and
+ * redrew only the one box that was clicked, so the others kept the old cast until something
+ * else happened to redraw them.
+ */
+function announceSceneChange() {
+    try {
+        eventSource.emit('sillynpc-status-updated', loadStateFromMetadata());
+    } catch (err) {
+        console.error(LOG_PREFIX, 'could not announce the scene change', err);
+    }
+}
+
 function showAddCharacterDropdown(btn, mesEl, onRedraw = null) {
     if (!btn) return;
     const existing = document.querySelector('.sillynpc-add-char-dropdown');
@@ -719,7 +755,7 @@ function showAddCharacterDropdown(btn, mesEl, onRedraw = null) {
 
     const dropdown = document.createElement('div');
     dropdown.className = 'sillynpc-add-char-dropdown list-group';
-    dropdown.style.cssText = 'position: absolute; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: var(--sillynpc-text-base); min-width: 150px;';
+    dropdown.style.cssText = 'position: fixed; background: var(--sillynpc-bg-primary); border: 1px solid var(--sillynpc-border); border-radius: 5px; padding: 5px; z-index: 1000; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: var(--sillynpc-text-base); min-width: 150px;';
 
     available.forEach(char => {
         const item = document.createElement('div');
@@ -732,6 +768,7 @@ function showAddCharacterDropdown(btn, mesEl, onRedraw = null) {
             if (registerActiveCharacter(char.name)) {
                 if (mesEl) renderStatusTrackerBox(mesEl);
                 onRedraw?.();
+                announceSceneChange();
             }
             dropdown.remove();
         });
@@ -746,13 +783,16 @@ function showAddCharacterDropdown(btn, mesEl, onRedraw = null) {
     };
     setTimeout(() => document.addEventListener('click', closeDropdown), 0);
 
-    const rect = btn.getBoundingClientRect();
-    if (rect) {
-        dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`;
-        dropdown.style.left = `${rect.left + window.scrollX - 100}px`;
-    }
-
+    // Placed once it is in the page and has a size to place.
+    dropdown.style.visibility = 'hidden';
     document.body.appendChild(dropdown);
+    const rect = btn.getBoundingClientRect();
+    const { top, left } = placeMenu(rect,
+        { width: dropdown.offsetWidth, height: dropdown.offsetHeight },
+        { width: window.innerWidth, height: window.innerHeight });
+    dropdown.style.top = `${top}px`;
+    dropdown.style.left = `${left}px`;
+    dropdown.style.visibility = '';
 }
 
 function injectCustomCSS(css) {
@@ -1355,6 +1395,8 @@ function attachInlineEditListeners(container) {
             if (removeActiveCharacter(name)) {
                 const mesEl = container.closest('.mes');
                 if (mesEl) renderStatusTrackerBox(mesEl);
+                // A box outside a message - the stage's - redraws from this, as do the rest.
+                announceSceneChange();
             }
         });
     });
