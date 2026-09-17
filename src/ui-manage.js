@@ -25,7 +25,7 @@ import { escapeHtml, offerDownload } from './utils.js';
 import { buildPortraitBlock, openLightbox } from './ui-portrait.js';
 import { taggedFields, getImageTag, setImageTag, tagsFromFilename, valuesByField }
     from './image-tags.js';
-import { folderFor, refreshCharacterImages } from './character-images.js';
+import { folderFor, refreshCharacterImages, moveFolder } from './character-images.js';
 import { renderLorebookSection, resetLorebookState } from './ui-lorebook-section.js';
 import { renderProfileView, renderProfileFields } from './ui-profile.js';
 import { renderThreadsView } from './ui-threads.js';
@@ -1151,9 +1151,37 @@ function renderEditor() {
        rewriting a lorebook file per character typed is not something to do to somebody's
        data. The old name survives as a keyword either way - mergeKeywords adds - which is
        right, because the chat above still says it. */
+    /* And so does the picture folder. Remembered when editing starts, because by the time
+       'change' fires the name - and a folder that was never stored, which follows the name -
+       has already moved on, and the old folder could no longer be found. */
+    let folderBeforeRename = folderFor(char);
+    nameInput.addEventListener('focus', () => { folderBeforeRename = folderFor(char); });
     nameInput.addEventListener('change', () => {
         renameLorebookEntry(char).catch(err =>
             console.error(LOG_PREFIX, 'Could not rename the lorebook entry', err));
+
+        const from = folderBeforeRename;
+        folderBeforeRename = folderFor(char);
+        if (!from || !char.name.trim()) return;
+        moveFolder(char, char.name, { from })
+            .then(({ moved, left, refused, folder }) => {
+                if (refused) {
+                    toastr.warning(`The pictures stay in user/images/${from}/: ${refused}.`, 'SillyNPC');
+                    // The folder a refused move leaves in use is the old one.
+                    char.imageFolder = from;
+                    saveSettings();
+                } else if (left.length) {
+                    toastr.warning(`Moved ${moved} file(s) to user/images/${folder}/. `
+                        + `${left.length} could not be moved and are still in user/images/${from}/.`, 'SillyNPC');
+                } else if (moved) {
+                    toastr.success(`Moved ${moved} file(s) to user/images/${folder}/.`, 'SillyNPC');
+                }
+                folderBeforeRename = folderFor(char);
+            })
+            .catch(err => {
+                console.error(LOG_PREFIX, 'Could not move the picture folder', err);
+                toastr.error(`The pictures could not be moved: ${err?.message ?? err}`, 'SillyNPC');
+            });
     });
     nameField.appendChild(nameInput);
     

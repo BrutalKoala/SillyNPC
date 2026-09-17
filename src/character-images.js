@@ -24,6 +24,9 @@ import { getRequestHeaders } from '../../../../../script.js';
 import { debugLog } from './constants.js';
 import { getSettings, saveSettings } from './settings.js';
 
+/** SillyTavern's media type flags for /api/images/list: pictures and videos. */
+const IMAGES_AND_VIDEOS = 0b011;
+
 /**
  * A character name, as the folder the server will actually create.
  *
@@ -141,10 +144,14 @@ export function imagePathFor(char, file) {
  * merely tolerated: looking at a character's page is what brings their folder into being, so
  * there is somewhere to drop files before there is anything to drop.
  *
+ * Pictures only unless asked. A character's gallery is drawn with `img`, where a video
+ * would be a broken frame; a location's background can be a video, so it asks for both.
+ *
  * @param {object} char
- * @returns {Promise<string[]>} Paths, ready to use as an `img` src.
+ * @param {{ videos?: boolean }} [options]
+ * @returns {Promise<string[]>} Paths, ready to use as an `img` (or `video`) src.
  */
-export async function listCharacterImages(char) {
+export async function listCharacterImages(char, { videos = false } = {}) {
     const folder = folderFor(char);
     if (!folder) return [];
 
@@ -152,7 +159,7 @@ export async function listCharacterImages(char) {
         const response = await fetch('/api/images/list', {
             method: 'POST',
             headers: getRequestHeaders(),
-            body: JSON.stringify({ folder, sortField: 'name', sortOrder: 'asc' }),
+            body: JSON.stringify({ folder, type: videos ? IMAGES_AND_VIDEOS : 0b001, sortField: 'name', sortOrder: 'asc' }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -176,12 +183,13 @@ export async function listCharacterImages(char) {
  * portrait is a decision, and a decision survives a refresh that finds new neighbours.
  *
  * @param {object} char
+ * @param {{ videos?: boolean }} [options] See listCharacterImages.
  * @returns {Promise<{ changed: boolean, images: string[] }>}
  */
-export async function refreshCharacterImages(char) {
+export async function refreshCharacterImages(char, options = {}) {
     if (!char) return { changed: false, images: [] };
 
-    const found = await listCharacterImages(char);
+    const found = await listCharacterImages(char, options);
     const before = Array.isArray(char.images) ? char.images : [];
 
     const same = before.length === found.length && before.every((p, i) => p === found[i]);
@@ -255,16 +263,104 @@ async function readAsBase64(path) {
     return dataUri.slice(comma + 1);
 }
 
-/** Whether a file is really there and really an image, before the original is deleted. */
+/**
+ * Whether a file is really there and really a picture or a video, before the original is
+ * deleted. Video because a location's background can be one, and moving a folder moves
+ * everything in it.
+ */
 async function copyLanded(path) {
     try {
         const response = await fetch(path, { cache: 'no-store' });
         if (!response.ok) return false;
         const blob = await response.blob();
-        return blob.size > 0 && String(blob.type || '').startsWith('image/');
+        const type = String(blob.type || '');
+        return blob.size > 0 && (type.startsWith('image/') || type.startsWith('video/'));
     } catch {
         return false;
     }
+}
+
+
+/** The file names in a folder, pictures and videos both. */
+async function listFolder(folder) {
+    const response = await fetch('/api/images/list', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        body: JSON.stringify({ folder, type: IMAGES_AND_VIDEOS, sortField: 'name', sortOrder: 'asc' }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} listing ${folder}`);
+    const files = await response.json();
+    return Array.isArray(files) ? files : [];
+}
+
+/**
+ * Moves everything in a card's folder to the folder for a new name, and re-points the card.
+ *
+ * SillyTavern has no move or rename for folders, so this is the migration's own sequence
+ * file by file: **copy, confirm the copy reads back, re-point, then delete the original.**
+ * An interruption never leaves a card pointing at a file that is not there. The old folder
+ * itself stays behind, empty - SillyTavern cannot delete a folder.
+ *
+ * It refuses, and changes nothing, when moving would take somebody else's pictures or
+ * pour these into somebody else's:
+ * - another card uses the old folder too (two characters that once shared a name);
+ * - another card already uses the new folder;
+ * - the new folder already has files in it.
+ *
+ * Works on anything shaped like a card - `imageFolder`, `images`, `imageUrl`, `imageTags` -
+ * so a location moves the same way a character does.
+ *
+ * @param {object} owner
+ * @param {string} name The name the folder should now follow.
+ * @param {object} [options]
+ * @param {string} [options.from] The folder before the rename, when the card's name has
+ *   already changed and it never stored one - otherwise it would be read from the new name.
+ * @param {string} [options.prefix] Put before the name, as locations do.
+ * @param {object[]} [options.others] Every other card with a folder. Characters by default.
+ * @param {() => void} [options.save] Saves whatever the owner lives in.
+ * @returns {Promise<{ folder: string, moved: number, left: string[], refused: string }>}
+ */
+export async function moveFolder(owner, name, options = {}) {
+    const save = options.save ?? saveSettings;
+    const target = folderNameFor(`${options.prefix ?? ''}${name ?? ''}`);
+    const from = folderNameFor(options.from) || folderFor(owner);
+    const result = { folder: from, moved: 0, left: [], refused: '' };
+    if (!owner || !target) return { ...result, refused: 'no usable name' };
+
+    const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+    // Windows folder names ignore case, so "elza" and "Elza" are already the same folder.
+    if (!from || same(from, target)) {
+        owner.imageFolder = target;
+        save();
+        return { ...result, folder: target };
+    }
+
+    const others = (options.others ?? getSettings().characters ?? []).filter(o => o && o !== owner);
+    if (others.some(o => same(folderFor(o), from))) {
+        return { ...result, refused: `"${from}" is also used by someone else, so it stays where it is` };
+    }
+    if (others.some(o => same(folderFor(o), target))) {
+        return { ...result, refused: `"${target}" already belongs to someone else` };
+    }
+    if ((await listFolder(target)).length > 0) {
+        return { ...result, refused: `"${target}" already has files in it` };
+    }
+
+    const files = await listFolder(from);
+    for (const file of files) {
+        try {
+            if (await moveOne(owner, `/user/images/${from}/${file}`, target)) result.moved++;
+        } catch (err) {
+            debugLog(`Could not move ${file} to ${target}`, err);
+            result.left.push(file);
+        }
+    }
+
+    /* The new folder from here on, even if a file stayed behind: the name has changed, and
+       new pictures belong under it. What was left is reported, so it can be moved by hand. */
+    owner.imageFolder = target;
+    save();
+    return { ...result, folder: target };
 }
 
 /**
