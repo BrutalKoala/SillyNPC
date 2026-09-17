@@ -153,7 +153,7 @@ export function imageForTag(char, field, value) {
  *
  * Forty pictures out of a generator, named for what they show, should not need forty
  * dropdowns. `happy.png` says Happy; `happy-2.png` says Happy and is the second of them;
- * `happy.rain.png` says Happy and Rain.
+ * `happy.rain.png` says Happy and Rain; `2.png` and `tier2.png` both say Tier 2.
  *
  * **A part only counts when some field in play actually declares it as a value.** That
  * rule does the whole of the work, and it is what makes this safe to turn on over pictures
@@ -181,22 +181,56 @@ export function tagsFromFilename(path, valuesByField) {
     if (!base) return found;
 
     for (const rawPart of base.split('.')) {
-        // "happy-2" and "happy - 2" are both the second Happy, not a value called happy-2.
-        const part = rawPart.replace(/[\s_-]*\d+$/, '').trim().toLowerCase();
-        if (!part) continue;
+        const whole = rawPart.trim().toLowerCase();
+        if (!whole) continue;
 
-        for (const [field, values] of Object.entries(valuesByField)) {
-            // First field wins a value two of them declare - the same precedence
-            // valuesForField uses, and the picker marks such a name as shared.
-            if (field in found) continue;
-            const match = (values || []).find(v => String(v).trim().toLowerCase() === part);
-            if (match !== undefined) {
-                found[field] = String(match);
-                break;
-            }
+        /* Numbers are values too - Tier runs 0 to 10.
+
+           Tried as written first, so "2" is Tier 2 and "tier2" is Tier 2. Only then is a
+           variant counter taken off - one set apart by "-", "_" or a space first: "calm-2"
+           is the second Calm and "tier2-3" the third Tier 2.
+
+           Digits run straight onto a word come off last of all, only when nothing above
+           matched. That order is what lets "tier2" mean Tier 2 while "calm2" still means
+           the second Calm - and pictures named that way were already on disk before
+           numbers could be values at all. */
+        let hit = matchPart(whole, valuesByField, found);
+        for (const counter of [/[\s_-]+\d+$/, /\d+$/]) {
+            if (hit) break;
+            const stripped = whole.replace(counter, '').trim();
+            if (stripped && stripped !== whole) hit = matchPart(stripped, valuesByField, found);
         }
+        if (hit) found[hit.field] = hit.value;
     }
     return found;
+}
+
+/**
+ * One part of a filename against the fields in play: a value as written, or a field's name
+ * with one of its values run straight on ("tier2") - which is how a filename says which
+ * field a number belongs to.
+ *
+ * First field wins a value two of them declare - the same precedence valuesForField uses,
+ * and the picker marks such a name as shared. A field an earlier part already named is
+ * skipped.
+ *
+ * @returns {{ field: string, value: string }|null}
+ */
+function matchPart(part, valuesByField, found) {
+    const fields = Object.entries(valuesByField).filter(([field]) => !(field in found));
+
+    for (const [field, values] of fields) {
+        const match = (values || []).find(v => String(v).trim().toLowerCase() === part);
+        if (match !== undefined) return { field, value: String(match) };
+    }
+    for (const [field, values] of fields) {
+        const prefix = String(field).toLowerCase().replace(/\s+/g, '');
+        if (!prefix || !part.startsWith(prefix)) continue;
+        const rest = part.slice(prefix.length);
+        const match = (values || []).find(v => String(v).trim().toLowerCase() === rest);
+        if (rest && match !== undefined) return { field, value: String(match) };
+    }
+    return null;
 }
 
 /**
