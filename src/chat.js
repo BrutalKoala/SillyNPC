@@ -7,7 +7,7 @@ import { escapeRegExp, personaFileFromAvatar } from './utils.js';
 import { processStatusUpdate, renderStatusTrackerBox, redrawStatusBoxes } from './status-ui.js';
 import {
     registerActiveCharacter, reconcileScenePresence, resolvePersonaSpeaker,
-    getPlayerImageUrl, getCurrentPersonaKey,
+    getPlayerImageUrl, getCurrentPersonaKey, getCastDecisions,
 } from './status-logic.js';
 import { faceFor, faceAssignmentVersion } from './default-portraits.js';
 // Re-exported from their new home: status-logic.js needs them and cannot import this
@@ -204,6 +204,11 @@ export function chatRenderSignature() {
         (cast.categories || []).join(','),
         (cast.include || []).join(','),
         (cast.exclude || []).join(','),
+        /* Who in this chat is you, and who is not a character at all. Saying "this is me" in
+           the cast panel changes the portrait beside that name - and without this the redraw
+           it asked for found nothing changed and declined, so the chat kept treating them as
+           a stranger until a page reload. */
+        JSON.stringify(getCastDecisions()),
     ].join('|');
 
     return `${characters}#${decoration}#${trackerBox}#${scope}`;
