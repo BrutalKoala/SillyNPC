@@ -1,3 +1,4 @@
+import { paletteIndexFor } from './hash.js';
 /**
  * Detect the extension folder name from this script's URL so the extension keeps
  * working regardless of what the user renamed the folder to.
@@ -324,11 +325,7 @@ export const SYSTEM_PROMPT = [
  * @returns {string} A hex colour from SPEAKER_PALETTE.
  */
 export function paletteColorFor(name) {
-    let index = 0;
-    for (const ch of String(name ?? '')) {
-        index = (index * 31 + ch.codePointAt(0)) % SPEAKER_PALETTE.length;
-    }
-    return SPEAKER_PALETTE[index];
+    return SPEAKER_PALETTE[paletteIndexFor(name, SPEAKER_PALETTE.length)];
 }
 
 /**

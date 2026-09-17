@@ -1,3 +1,4 @@
+import { fnv1a } from './hash.js';
 import { LOG_PREFIX, BUILT_IN_DEFAULT_AVATAR, paletteColorFor, debugLog } from './constants.js';
 import { getSettings } from './settings.js';
 import { getContext } from '../../../../st-context.js';
@@ -114,13 +115,8 @@ function imageKey(url) {
         ? text
         : text.slice(0, EDGE) + text.slice(-EDGE);
 
-    // FNV-1a, 32-bit. Small, no dependencies, and spreads a change of one character.
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < sample.length; i++) {
-        hash ^= sample.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return `${text.length}.${(hash >>> 0).toString(36)}`;
+    // FNV-1a: spreads a change of one character. See hash.js.
+    return `${text.length}.${fnv1a(sample).toString(36)}`;
 }
 
 /**

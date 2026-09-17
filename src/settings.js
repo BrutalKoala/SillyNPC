@@ -1,3 +1,4 @@
+import { paletteIndexFor } from './hash.js';
 import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import {
@@ -928,10 +929,8 @@ export function normalizeSettings(settings) {
             .map(c => String(c.color || '').trim().toLowerCase()).filter(Boolean));
         for (const char of settings.characters) {
             if (String(char.color || '').trim()) continue;
-            let start = 0;
-            for (const ch of String(char.name || '')) {
-                start = (start * 31 + ch.codePointAt(0)) % SPEAKER_PALETTE.length;
-            }
+            // Where paletteColorFor would put them, then the first free shade from there.
+            const start = paletteIndexFor(char.name || '', SPEAKER_PALETTE.length);
             let chosen = SPEAKER_PALETTE[start];
             for (let i = 0; i < SPEAKER_PALETTE.length; i++) {
                 const candidate = SPEAKER_PALETTE[(start + i) % SPEAKER_PALETTE.length];

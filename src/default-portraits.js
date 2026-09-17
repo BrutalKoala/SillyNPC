@@ -1,3 +1,4 @@
+import { hash31 } from './hash.js';
 import { getSettings, saveSettings } from './settings.js';
 import { persistGeneratedImage } from './api.js';
 import { debugLog } from './constants.js';
@@ -138,10 +139,7 @@ export function steadyFace(name, category = '') {
     const eligible = eligibleImages(name, category);
     if (eligible.length === 0) return '';
 
-    const text = String(name || '');
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) | 0;
-    return eligible[Math.abs(hash) % eligible.length]?.src || '';
+    return eligible[Math.abs(hash31(name || '')) % eligible.length]?.src || '';
 }
 
 /* ─── Who has which face ──────────────────────────────────────────────────── */

@@ -1,3 +1,4 @@
+import { djb2 } from './hash.js';
 import { 
     setExtensionPrompt,
     extension_prompt_types,
@@ -4220,9 +4221,7 @@ export async function saveCheckpoint(label = 'Manual save') {
  * an identical-looking state, and the length is checked alongside it.
  */
 function digestOf(text) {
-    let hash = 5381;
-    for (let i = 0; i < text.length; i++) hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
-    return hash;
+    return djb2(text);
 }
 
 /** Removes a checkpoint's file, ignoring one that has already gone. */
