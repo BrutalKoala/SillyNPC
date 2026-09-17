@@ -62,8 +62,44 @@ function blockElements(textContainer) {
        to say "innermost" and it does hold up on a very long message, not because it was
        the bug. */
     const innermost = candidates.filter(el => el.querySelector(BLOCK_SELECTOR) === null);
+    const pieces = [...innermost, ...widgetElements(textContainer)];
+    if (pieces.length === 0) return [textContainer];
 
-    return innermost.length ? innermost : [textContainer];
+    // In reading order: a terminal screen between two paragraphs is read between them.
+    return pieces.sort((a, b) => (a.compareDocumentPosition(b) & 4 /* FOLLOWING */) ? -1 : 1);
+}
+
+/**
+ * What a self-contained piece of HTML in a message can be: a styled box, a code block, a
+ * collapsible section, a table.
+ */
+const WIDGET_SELECTOR = 'div, pre, details, table, figure, section, aside';
+
+/**
+ * The HTML pieces of a message that are not paragraphs - and would otherwise be lost.
+ *
+ * A preset can have the model write HTML straight into a reply: a terminal screen, a letter,
+ * a phone, drawn with inline styles in a `<div>`. Its text is not in any paragraph, so it
+ * was no beat at all, and the visual novel skipped it - the one thing in the reply that was
+ * meant to be looked at.
+ *
+ * A piece counts when it holds text and no paragraph of its own (one that does is read
+ * through its paragraphs), is not inside a paragraph, and is the outermost such piece - a
+ * terminal made of nested boxes is one thing to show, not four.
+ *
+ * **Only markup the message itself wrote**: an element with no class attribute, or a
+ * `<pre>`. What the model and regex scripts write is styled inline; what extensions put into
+ * a message - this one's tracker box, other extensions' panels - carries classes. Without
+ * that line every extension's panel would become a step in the story.
+ */
+function widgetElements(textContainer) {
+    const widgets = [...textContainer.querySelectorAll(WIDGET_SELECTOR)].filter(el =>
+        (!el.hasAttribute('class') || el.tagName === 'PRE')
+        && !el.closest('[class*="sillynpc-"]')
+        && el.querySelector(BLOCK_SELECTOR) === null
+        && !el.parentElement?.closest(BLOCK_SELECTOR)
+        && String(el.textContent ?? '').trim() !== '');
+    return widgets.filter(el => !widgets.some(other => other !== el && other.contains(el)));
 }
 
 /**
@@ -96,6 +132,8 @@ function beatText(element, speaker) {
  * @property {boolean} isNarration No speaker at all - the narrator's voice.
  * @property {boolean} ambiguous Two speakers in one paragraph; nobody is "the" speaker.
  * @property {string} text The words, without a leading "Name:".
+ * @property {'paragraph'|'widget'} kind A paragraph, quote or list item - or a piece of
+ *   HTML the message drew, like a terminal screen, meant to be shown as it is.
  */
 
 /**
@@ -143,6 +181,7 @@ export function messageBeats(textContainer) {
             isNarration: avatars.length === 0,
             ambiguous: avatars.length > 1,
             text: beatText(element, speaker),
+            kind: BLOCK_TAGS.has(element.tagName) || element === textContainer ? 'paragraph' : 'widget',
         };
     });
 }
