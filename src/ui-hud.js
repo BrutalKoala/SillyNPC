@@ -605,8 +605,11 @@ export function portraitSizeFor(meterCount, style) {
  * @param {string} src
  */
 function showPortraitAtSize(face, src) {
-    const width = face.parentElement?.getBoundingClientRect().width || 0;
-    const wanted = Math.ceil(width * (window.devicePixelRatio || 1));
+    // The frame's larger side: the picture is cropped to cover it (object-fit: cover), so its
+    // shorter side must reach across whichever way the frame is longer.
+    const frame = face.parentElement?.getBoundingClientRect();
+    const across = Math.max(frame?.width || 0, frame?.height || 0);
+    const wanted = Math.ceil(across * (window.devicePixelRatio || 1));
     if (!wanted) return;
 
     portraitRendition(src, wanted).then(ready => {

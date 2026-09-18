@@ -99,7 +99,7 @@ function loadImageFromFile(file) {
  * than quality. Above the largest step the original is used as it is - by then it is being
  * drawn near its own size and there is nothing to gain.
  *
- * @param {number} wanted Pixels needed on the longer side, devicePixelRatio included.
+ * @param {number} wanted Pixels the picture's shorter side must reach, devicePixelRatio included.
  * @returns {number} The step to render at, or 0 to mean "use the original".
  */
 export function renditionStep(wanted) {
@@ -107,6 +107,58 @@ export function renditionStep(wanted) {
     const needed = Number(wanted);
     if (!Number.isFinite(needed) || needed <= 0) return 0;
     return STEPS.find(step => step >= needed) ?? 0;
+}
+
+/**
+ * The size to reduce a picture to so that it still covers a frame `step` pixels across.
+ *
+ * The frame crops (object-fit: cover), so it is the picture's *shorter* side that has to
+ * reach across it. This used to fit the longer side to the step instead: an 864x1184
+ * portrait in a circle 166 pixels across came out 140x192, and its 140-pixel width was
+ * stretched back up to 166 - the soft, grainy HUD portrait that kept coming back.
+ *
+ * @returns {{ width: number, height: number } | null} null when the picture is already
+ *   small enough that reducing it would only lose detail.
+ */
+export function renditionSize(naturalWidth, naturalHeight, step) {
+    const w = Number(naturalWidth), h = Number(naturalHeight), target = Number(step);
+    if (!(w > 0) || !(h > 0) || !(target > 0)) return null;
+    const shorter = Math.min(w, h);
+    if (shorter <= target) return null;
+    const scale = target / shorter;
+    return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}
+
+/**
+ * Reduces a picture in halving steps, then once more to the exact size.
+ *
+ * One jump from 864 pixels to 140 skips most of the picture: the browser samples a few
+ * pixels per output pixel and the rest are lost, which is what grain looks like. Halving
+ * each time keeps every step a gentle one.
+ *
+ * @returns {string} A PNG data URI - a portrait may have a transparent background, and a
+ *   JPEG would put a black rectangle behind the character.
+ */
+export function reduceInSteps(img, width, height) {
+    let source = img;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    const draw = (from, toW, toH) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = toW;
+        canvas.height = toH;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(from, 0, 0, toW, toH);
+        return canvas;
+    };
+    while (w / 2 >= width && h / 2 >= height) {
+        w = Math.round(w / 2);
+        h = Math.round(h / 2);
+        source = draw(source, w, h);
+    }
+    return draw(source, width, height).toDataURL('image/png');
 }
 
 /** One rendition per source and size. Portraits are redrawn constantly; the work is not. */
@@ -126,7 +178,8 @@ const renditions = new Map();
  * canvas would otherwise take the HUD out entirely.
  *
  * @param {string} url
- * @param {number} pixels Pixels wanted on the longer side, devicePixelRatio included.
+ * @param {number} pixels The frame's larger side in device pixels (devicePixelRatio included):
+ *   what the picture's shorter side has to cover.
  * @returns {Promise<string>} A data URI, or `url` unchanged.
  */
 export async function portraitRendition(url, pixels) {
@@ -145,11 +198,10 @@ export async function portraitRendition(url, pixels) {
                 el.onerror = () => reject(new Error('could not load'));
                 el.src = source;
             });
-            // Already smaller than the step: reducing it further would only lose detail.
-            if (Math.max(img.naturalWidth, img.naturalHeight) <= step) return source;
-            // PNG: a portrait may have a transparent background, and re-encoding one as
-            // JPEG puts a black rectangle behind the character.
-            return downscaleImage(img, true, step);
+            const size = renditionSize(img.naturalWidth, img.naturalHeight, step);
+            // Already small enough: reducing it further would only lose detail.
+            if (!size) return source;
+            return reduceInSteps(img, size.width, size.height);
         } catch (err) {
             debugLog('Could not size the portrait down; using it as it is', source, err);
             return source;
