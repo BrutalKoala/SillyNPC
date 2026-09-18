@@ -2330,6 +2330,16 @@ span.sillynpc-review-to {
     transform-origin: center center;
 }
 
+/* While it is being dragged: no transitions, and no blur. The blur is re-done over whatever
+   is behind the HUD - a video background included - every time it moves, which is what made
+   dragging lag. It comes back the moment the HUD is put down. */
+.sillynpc-hud-container.is-dragging {
+    transition: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    will-change: translate;
+}
+
 /* Clear of SillyTavern's top bar rather than 20px from the window edge, which put the
    HUD under it. The variable is SillyTavern's own and follows the user's font scale. */
 .sillynpc-hud-container.top-right    { top: calc(var(--topBarBlockSize, 34px) + 20px); right: 20px; }

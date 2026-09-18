@@ -953,6 +953,21 @@ function startDrag(e) {
     dragOffset.x = startX - rect.left;
     dragOffset.y = startY - rect.top;
 
+    /* Moved with `translate`, once a frame, and put down with left/top only on release.
+     *
+     * It used to write left/top on every mouse move. That is a layout per move, and the HUD
+     * has a blurred see-through background, so each one also re-blurred everything behind
+     * it - a video background included. Dragging lagged, and on a weaker machine it could
+     * stall. translate is moved by the compositor without layout, and the blur is switched
+     * off for the length of the drag (is-dragging), so a move costs almost nothing. */
+    let frame = 0;
+    let offsetX = 0;
+    let offsetY = 0;
+    const paint = () => {
+        frame = 0;
+        hudContainer.style.translate = `${offsetX}px ${offsetY}px`;
+    };
+
     const onMouseMove = (moveEvent) => {
         if (!isDragging) {
             if (!passedDragThreshold(moveEvent.clientX - startX, moveEvent.clientY - startY)) return;
@@ -961,31 +976,36 @@ function startDrag(e) {
             // leave the HUD anchored to its corner: pinning it on mousedown would strand
             // it at inline coordinates that the corner setting can no longer override.
             pinHudAt(rect);
+            hudContainer.classList.add('is-dragging');
         }
 
-        hudContainer.style.left = `${moveEvent.clientX - dragOffset.x}px`;
-        hudContainer.style.top = `${moveEvent.clientY - dragOffset.y}px`;
+        offsetX = moveEvent.clientX - startX;
+        offsetY = moveEvent.clientY - startY;
+        if (!frame) frame = requestAnimationFrame(paint);
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = (upEvent) => {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+        if (frame) { cancelAnimationFrame(frame); frame = 0; }
         if (!isDragging) return;
 
         const settings = getSettings().statusTracker;
         if (!settings.hud) settings.hud = { position: { x: null, y: null } };
 
-        const dropped = hudContainer?.getBoundingClientRect();
-        if (dropped) {
-            // The origin is top-left by now, so the visible box and left/top are the same
-            // coordinates and the clamp can compare them without converting anything.
-            const { x, y } = clampToViewport(dropped.left, dropped.top);
-            settings.hud.position.x = x;
-            settings.hud.position.y = y;
-            hudContainer.style.left = `${x}px`;
-            hudContainer.style.top = `${y}px`;
-            saveSettings();
-        }
+        // Where it was let go, from the pointer - not measured, and with the translate gone.
+        const dropX = (upEvent?.clientX ?? startX + offsetX) - dragOffset.x;
+        const dropY = (upEvent?.clientY ?? startY + offsetY) - dragOffset.y;
+        hudContainer.style.translate = '';
+        hudContainer.classList.remove('is-dragging');
+        // The origin is top-left by now, so the visible box and left/top are the same
+        // coordinates and the clamp can compare them without converting anything.
+        const { x, y } = clampToViewport(dropX, dropY);
+        settings.hud.position.x = x;
+        settings.hud.position.y = y;
+        hudContainer.style.left = `${x}px`;
+        hudContainer.style.top = `${y}px`;
+        saveSettings();
         // The click handler runs after mouseup, and has to see that this was a drag.
         setTimeout(() => { isDragging = false; }, 50);
     };
