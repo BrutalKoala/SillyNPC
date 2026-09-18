@@ -179,6 +179,13 @@ export const defaultSettings = {
      */
     profileHints: {},
     /**
+     * Your own wording for the texts the extension builds prompts from, by id - see
+     * prompt-texts.js. Absent or empty means the built-in text, like profileHints.
+     *
+     * @type {Record<string, string>}
+     */
+    promptTexts: {},
+    /**
      * Which connection writes lore. Empty means your main API.
      *
      * Its own setting rather than the tracker's: a small model chosen for returning JSON
@@ -811,6 +818,9 @@ export function normalizeSettings(settings) {
     // then belongs to the user forever.
     if (!settings.profileHints || typeof settings.profileHints !== 'object') {
         settings.profileHints = {};
+    }
+    if (!settings.promptTexts || typeof settings.promptTexts !== 'object' || Array.isArray(settings.promptTexts)) {
+        settings.promptTexts = {};
     }
 
     if (!String(settings.statusTracker.extractionPrompt || '').trim()) {

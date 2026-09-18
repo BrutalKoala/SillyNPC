@@ -1,3 +1,4 @@
+import { promptText, defaultPromptText } from './prompt-texts.js';
 import { setExtensionPrompt, extension_prompt_types, extension_prompt_roles, main_api } from '../../../../../script.js';
 import { textgenerationwebui_settings } from '../../../../textgen-settings.js';
 import { getContext } from '../../../../st-context.js';
@@ -83,11 +84,7 @@ export function buildBanMacros(phrases) {
 /** What is asked for when the sampler cannot be told. */
 export function buildBanInstruction(phrases) {
     if (!phrases.length) return '';
-    return [
-        '### PHRASES TO AVOID',
-        'Do not use these words or phrases, or close variations of them:',
-        ...phrases.map(phrase => `- ${phrase}`),
-    ].join('\n');
+    return promptText('banInstruction', { phrases: phrases.map(phrase => `- ${phrase}`).join('\n') });
 }
 
 /** Puts the ban in front of the model, whichever kind it can be, or takes it away. */
@@ -124,23 +121,8 @@ export function applyBanList() {
 /* ─── Finding what to ban ─────────────────────────────────────────────────── */
 
 /** What the reader is told when it goes looking. */
-export const BAN_SCAN_SYSTEM_PROMPT = [
-    'You are reviewing a roleplaying chat log for a writer who wants to stop their model',
-    'repeating itself.',
-    'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
-    '',
-    'Shape:',
-    '  { "phrases": ["..."], "notPeople": ["..."] }',
-    '',
-    '- "phrases" are wordings the narration leans on: stock descriptions, filler beats,',
-    '  and turns of phrase that appear again and again. Quote them exactly as written,',
-    '  short enough to be a phrase rather than a sentence.',
-    '- Do not list ordinary words, names, or anything specific to this story. Banning',
-    '  those would stop the model writing about its own setting.',
-    '- "notPeople" are labels written as if somebody were speaking - a word followed by a',
-    '  colon - that are not a character: dice terms, stat names, section headings.',
-    '- Both lists may be empty. An empty list is a real answer.',
-].join('\n');
+// The built-in wording; what is sent is promptText('banScanSystem'), which may be your own.
+export const BAN_SCAN_SYSTEM_PROMPT = defaultPromptText('banScanSystem');
 
 /**
  * Reads the recent chat and proposes what to ban.
@@ -166,17 +148,10 @@ export async function scanForBanCandidates() {
         return { phrases: [], notPeople: [], read: 0 };
     }
 
-    const prompt = [
-        '### CHAT LOG',
-        recent.map(m => String(m.mes)).join('\n\n'),
-        '',
-        '### TASK',
-        'List the phrases this narration leans on, and any labels it writes as speakers '
-            + 'that are not characters.',
-    ].join('\n');
+    const prompt = buildBanScanPrompt(recent.map(m => String(m.mes)).join('\n\n'));
 
     const raw = await requestExtraction(
-        prompt, null, settings.statusTracker, BAN_SCAN_SYSTEM_PROMPT, { usageKind: 'banscan' });
+        prompt, null, settings.statusTracker, promptText('banScanSystem'), { usageKind: 'banscan' });
     const parsed = coerceToUpdate(raw);
 
     if (!parsed || typeof parsed !== 'object') {
@@ -257,4 +232,9 @@ export function addNotPeople(labels) {
         : wanted.join('\n');
     saveSettings();
     return wanted.length;
+}
+
+/** What the scan is asked, given the chat log it reads. */
+export function buildBanScanPrompt(log) {
+    return promptText('banScanTask', { log });
 }

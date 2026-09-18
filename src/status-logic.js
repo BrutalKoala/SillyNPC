@@ -1,3 +1,4 @@
+import { promptText } from './prompt-texts.js';
 import { djb2 } from './hash.js';
 import { 
     setExtensionPrompt,
@@ -1420,7 +1421,7 @@ function summarizeCollection(collectionId, items, includeFull = false) {
  * For prompt injection, we now include the FULL collection list to support Full State Sync.
  */
 export function formatCompactStatus(state, fullDetail = false) {
-    let output = "[Current Scene Status]\n";
+    let output = promptText('sceneHeader') + '\n';
     
     /* Through the schema, not the stored object. A stat deleted in System Builder leaves its
        value behind in the chat, and this block used to send it to the story model on every
@@ -1598,9 +1599,7 @@ function describeNamedButUnlisted(state) {
        above" was the first wording, and "not in the scene list" is one careless reading away
        from "not in the scene" - which is the exact claim this block must not make. What the
        block is for is enough; why these names are in a separate paragraph is our business. */
-    return 'Also on file. Who these people are if the story uses them - being listed here is '
-        + 'not a cue to bring them in, and not a claim about where they are:\n'
-        + lines.join('\n');
+    return promptText('sceneOffstage', { people: lines.join('\n') });
 }
 
 /** The four profile fields on one line, or '' when none is written. */
@@ -1628,31 +1627,24 @@ function describeCastProfiles(state) {
         if (line) lines.push(`${actor.name} - ${line}`);
     }
 
-    return lines.length ? `Who they are:\n${lines.join('\n')}` : '';
+    return lines.length ? promptText('sceneProfiles', { people: lines.join('\n') }) : '';
 }
 
 /**
  * Builds the system instruction for the AI
  */
-function getStatusInstructions() {
+// Exported for the tests: the prompt texts are checked to send exactly what they did.
+export function getStatusInstructions() {
     const settings = getSettings().statusTracker;
     const currentState = committedState || loadStateFromMetadata();
-    
-    let prompt = `\n### STATUS TRACKER ACTIVE\n`;
-    prompt += `Update the following status realistically based on the latest events in the story.\n`;
-    prompt += `Current Status:\n${formatCompactStatus(currentState, true)}\n\n`;
-    
-    prompt += `IMPORTANT: The "Current Status" block is the authoritative source of truth. If an item or character is missing from it, they are no longer present or in possession. Do NOT re-add items that were recently removed unless the current message explicitly describes acquiring them again.\n\n`;
 
-    prompt += `Rules: ${applyMacros(settings.systemRules)}\n`;
-    
-    prompt += `\n### CRITICAL RULE: AVOID DOUBLE-DEDUCTING COSTS\n`;
-    prompt += `- Action/Spell Costs: If a resource, attribute, or item cost (e.g., Energy, Mana, HP, Ammo, Gold) was already deducted or used in a previous turn (for example, in the message prompting a roll or when the action was initiated), do NOT deduct it again when describing the outcome or resolution of that action.\n`;
-    prompt += `- The "Current Status" already reflects the prior deduction. Only apply NEW changes, damage, or costs that occur in the latest turn (e.g., backlash damage, new item usage).\n`;
-
-    prompt += `\n### UPDATE PROCESS\n`;
-    prompt += `1. Reasoning: Briefly explain the changes in 1-2 sentences (e.g., "The player took damage and used a potion."). Focus on stat changes, collection updates, and environment changes.\n`;
-    prompt += `2. JSON Update: Provide the updated status block wrapped in <status_update> tags.\n`;
+    // The wording of every section is an editable text - see prompt-texts.js.
+    let prompt = '\n' + promptText('storyIntro', {
+        status: formatCompactStatus(currentState, true),
+        rules: applyMacros(settings.systemRules),
+    }) + '\n';
+    prompt += '\n' + promptText('storyCosts') + '\n';
+    prompt += '\n' + promptText('storyProcess') + '\n';
 
     /* The ceilings actually in play, not the configured ones.
      *
@@ -1678,33 +1670,18 @@ function getStatusInstructions() {
         name => highestCeiling(currentState.characters, name));
 
     if (playerMaxes || npcMaxes) {
-        prompt += `\n### STAT LIMITS (Maximums)\n`;
-        if (playerMaxes) prompt += `- Player Max Stats: ${playerMaxes}\n`;
-        if (npcMaxes) prompt += `- NPC Max Stats: ${npcMaxes}\n`;
-        prompt += `Maintain values within these limits. If a stat format includes a max (e.g. "50/100"), ensure you update only the current value unless the maximum itself should change.\n`;
+        prompt += '\n' + promptText('storyLimits', { player: playerMaxes, npc: npcMaxes }) + '\n';
     }
-    
-    prompt += `\n### COLLECTION SYNC RULES\n`;
-    prompt += `Collections (e.g., inventory, spells, skills) MUST be updated via **Full State Sync** (replacement):\n`;
-    prompt += `- Both the 'player' and any object in the 'characters' array can have a 'collections' object.\n`;
-    prompt += `- Provide an ARRAY of ALL items that should be in the collection after the update.\n`;
-    prompt += `- CRITICAL: You MUST ALWAYS preserve and carry over ALL existing spells, skills, items, and accessories verbatim unless they are explicitly lost, destroyed, consumed, or discarded in the story context. NEVER omit existing items or spells from an active character's collections array, as omission equals complete deletion.\n`;
-    prompt += `- You can transfer items between actors by removing them from one collection and adding them to another in the same update.\n`;
-    prompt += `- Example: "inventory": [ { "name": "Sword", "quantity": 1 }, { "name": "Potion", "quantity": 2 } ]\n`;
-    
-    prompt += `\n### LEGACY DELTA RULES (Fallback)\n`;
-    prompt += `If you only need to make a small change, you may optionally use delta objects:\n`;
-    prompt += `- "add": [ { "name": "Item", "quantity": 1, ... } ] - Adds or increments quantity if it exists.\n`;
-    prompt += `- "remove": [ "Item Name" ] - Removes the item.\n`;
-    prompt += `- "update": [ { "name": "Item", "quantity": 5 } ] - Modifies specific fields of an existing item.\n`;
-    prompt += `- "clear": true - Resets the collection.\n`;
+
+    prompt += '\n' + promptText('storySync') + '\n';
+    prompt += '\n' + promptText('storyDelta') + '\n';
 
     // Add field definitions for collections to guide the AI
     if (settings.collections && settings.collections.length > 0) {
         // Filter collections to only those relevant to current actors
         const hasPlayer = !!currentState.player;
         const hasNPCs = currentState.characters && currentState.characters.length > 0;
-        
+
         const relevantCollections = settings.collections.filter(col => {
             if (col.target === 'all') return true;
             if (col.target === 'player' && hasPlayer) return true;
@@ -1713,53 +1690,33 @@ function getStatusInstructions() {
         });
 
         if (relevantCollections.length > 0) {
-            prompt += `\n### COLLECTION SCHEMAS\n`;
-            relevantCollections.forEach(col => {
+            const schemas = relevantCollections.map(col => {
                 const fieldInfo = col.fields.map(f => `${f.name} (${f.type}${f.isMultiline ? ', multiline' : ''})`).join(', ');
-                prompt += `- ${col.id} (${col.name}): ${fieldInfo}\n`;
-            });
+                return `- ${col.id} (${col.name}): ${fieldInfo}`;
+            }).join('\n');
+            prompt += '\n' + promptText('storySchemas', { schemas }) + '\n';
         }
     }
 
-    prompt += `\nIMPORTANT: Always include the FULL list of characters currently present in the scene in the "characters" array. If a character is no longer present, remove them from the list.\n`;
-    if (settings.sceneBindingStat) {
-        prompt += `IMPORTANT: If the scene or location changes, ONLY include characters in the 'characters' array who moved to the new scene. Omit any characters left behind.\n`;
-    }
-    prompt += `Format: At the absolute end of your response, you MUST provide the reasoning and the <status_update> tags. Do not use markdown code blocks inside the tags.\n`;
-    
+    prompt += '\n' + promptText('storyClosing', {
+        sceneChange: settings.sceneBindingStat ? promptText('storySceneChange') : '',
+    }) + '\n';
+
     return prompt;
 }
 
 /**
  * Builds a fake assistant response to prime the AI with the correct format
  */
-function getStatusExample() {
+// Exported for the tests, as getStatusInstructions is.
+export function getStatusExample() {
     const settings = getSettings().statusTracker;
     const inventoryCol = settings.collections.find(c => c.id === 'inventory');
     const primaryFieldName = inventoryCol?.fields?.find(f => f.isPrimary)?.name || 'name';
-    
-    const example = {
-        player: { 
-            stats: { "HP": "18/20" },
-            collections: { 
-                "inventory": [
-                    { [primaryFieldName]: "Iron Sword", "quantity": 1, "description": "Slightly rusted" },
-                    { [primaryFieldName]: "Apple", "quantity": 3, "description": "Red and juicy" },
-                    { [primaryFieldName]: "Rusty Dagger", "quantity": 1, "description": "Taken from the Goblin" }
-                ] 
-            }
-        },
-        characters: [
-            { 
-                "name": "Goblin", 
-                "stats": { "HP": "0", "Condition": "Dead" },
-                "collections": {
-                    "inventory": []
-                }
-            }
-        ]
-    };
-    return `The player ate a Health Potion but was still hit by the Goblin. The Goblin was subsequently defeated, and the player took their Rusty Dagger. Updated the inventory for both actors to show the transfer.\n<status_update>${JSON.stringify(example)}</status_update>`;
+
+    // Written out in the editable text, with the item's name field as a placeholder. Inside
+    // a JSON string there, so it goes in escaped as one.
+    return promptText('storyExample', { field: JSON.stringify(primaryFieldName).slice(1, -1) });
 }
 
 /**

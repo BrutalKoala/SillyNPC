@@ -1,3 +1,4 @@
+import { promptText, defaultPromptText, fillPromptText } from './prompt-texts.js';
 import { getContext } from '../../../../st-context.js';
 import { getSettings } from './settings.js';
 import { THREAD_KINDS } from './threads.js';
@@ -27,35 +28,8 @@ import { setPendingChanges, isItemDecided, getItemRules, DISMISSED_KEY, PLAYER_A
  * not involved and its context is untouched.
  */
 
-export const SCAN_SYSTEM_PROMPT = [
-    'You read a roleplay transcript and report what each character is CARRYING and KNOWS',
-    'at the END of it. You are taking an inventory, not writing a summary.',
-    '',
-    'Reply with ONE JSON object and nothing else. No explanation before it, no repeat of',
-    'it afterwards, no code fence. Stop as soon as the object is closed.',
-    '',
-    'Use ONLY the collection ids given under COLLECTIONS. Never invent a key such as',
-    '"holds" or "knows". Never use a character name as a top-level key - characters go in',
-    'the "characters" array, each with its own "name".',
-    'Every collection is an ARRAY of objects. Never an object, never a list of bare',
-    'strings, never true/false.',
-    '',
-    'THE ONE RULE THAT MATTERS:',
-    '- Report the FINAL state. Not everything the transcript ever mentioned.',
-    '- If something was acquired and later dropped, sold, spent, consumed, destroyed,',
-    '  stolen, given away, broken, or left behind - DO NOT LIST IT. It is gone.',
-    '- If a spell or skill was lost, forgotten, sealed or replaced by a better version,',
-    '  list only what remains.',
-    '- A thing merely talked about, offered, or seen is not owned.',
-    '',
-    'Other rules:',
-    '- Never list an item named under DO NOT PROPOSE. Those were already decided against.',
-    '- Ignore HP, mana, and every other number. Stats are not your job.',
-    '- Include a character only if the transcript shows what they carry or know.',
-    '- An abstract fact is not a skill. List a named ability, not "the importance of',
-    '  control" or "the history of the Council".',
-    '- If an item was upgraded and renamed, give the current name once, not both.',
-].join('\n');
+// The built-in wording; what is sent is promptText('scanSystem'), which may be your own.
+export const SCAN_SYSTEM_PROMPT = defaultPromptText('scanSystem');
 
 /**
  * A filled-in example of the exact reply wanted, in the ids and fields actually
@@ -231,24 +205,17 @@ export function estimateScan(trackerSettings = getSettings().statusTracker) {
     };
 }
 
-function buildScanPrompt(state, trackerSettings, history) {
+// Exported for the tests: the prompt texts are checked to send exactly what they did.
+export function buildScanPrompt(state, trackerSettings, history) {
     const dismissed = describeDismissed(state);
     return [
-        '### COLLECTIONS',
-        describeCollections(trackerSettings) || '(none configured)',
-        '',
-        '### REPLY EXACTLY IN THIS SHAPE',
-        buildOutputTemplate(trackerSettings),
-        '',
-        '### CURRENTLY RECORDED',
-        describeCurrentCollections(state) || '(nothing recorded yet)',
-        dismissed ? '\n### DO NOT PROPOSE\n' + dismissed : '',
-        '',
-        '### TRANSCRIPT',
-        history.text,
-        '',
-        '### TASK',
-        'List what each character holds and knows at the END of the transcript, as JSON.',
+        promptText('scanLayout', {
+            collections: describeCollections(trackerSettings) || '(none configured)',
+            shape: buildOutputTemplate(trackerSettings),
+            recorded: describeCurrentCollections(state) || '(nothing recorded yet)',
+        }),
+        dismissed ? '\n' + promptText('scanDismissed', { items: dismissed }) : '',
+        promptText('scanTask', { transcript: history.text }),
     ].filter(Boolean).join('\n');
 }
 
@@ -297,7 +264,7 @@ export async function scanHistoryForCollections(onProgress) {
                     // Falls back to the extraction connection when unset.
                     extractionProfileId: trackerSettings.scanProfileId || trackerSettings.extractionProfileId,
                 },
-                SCAN_SYSTEM_PROMPT, { usageKind: 'scan' });
+                promptText('scanSystem'), { usageKind: 'scan' });
         } catch (err) {
             console.error(LOG_PREFIX, `History scan pass ${index + 1} failed.`, err);
             failures.push(String(err?.message || err));
@@ -462,25 +429,17 @@ export function stripStats(parsed) {
  * what somebody is holding at the end; asking it for obligations in the same breath makes
  * both jobs vaguer, and the inventory is the one that already works.
  */
-export const THREAD_SCAN_SYSTEM_PROMPT = [
-    'You read a roleplay transcript and report what is still UNFINISHED at the end of it.',
-    '',
-    'Reply with ONE JSON object and nothing else. No explanation, no code fence.',
-    '  { "threads": [ { "kind": "...", "text": "...", "quote": "...", "who": "..." } ] }',
-    '',
-    'A thread is one of these, and nothing else:',
-    ...THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`),
-    '',
-    'THE RULES THAT MATTER:',
-    '- "quote" must be words that appear in the transcript. If you cannot quote it, do',
-    '  not list it. This is what separates something somebody said from something you',
-    '  have inferred.',
-    '- Report only what is still OUTSTANDING. A promise that was kept, a debt that was',
-    '  paid, a plan that was carried out - leave them out. They are finished.',
-    '- Do not list events, or what happened. Only what is owed, threatened, promised,',
-    '  hidden, planned, or due.',
-    '- Few is right. A long transcript usually leaves a handful of things hanging.',
-].join('\n');
+export function threadScanSystemPrompt() {
+    return promptText('threadScanSystem', { kinds: threadKindLines() });
+}
+
+// The built-in wording, as it is sent when nobody has edited it.
+export const THREAD_SCAN_SYSTEM_PROMPT = fillPromptText(defaultPromptText('threadScanSystem'), { kinds: threadKindLines() });
+
+/** The kinds of thread, one per line, for {{kinds}}. */
+function threadKindLines() {
+    return THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n');
+}
 
 /**
  * Reads the story so far and records what is still open.
@@ -515,21 +474,14 @@ export async function scanHistoryForThreads(onProgress) {
         let raw;
         try {
             raw = await requestExtraction(
-                [
-                    '### TRANSCRIPT',
-                    chunk.text,
-                    '',
-                    '### TASK',
-                    'List what is still unfinished at the end of this, quoting the line each',
-                    'one came from.',
-                ].join('\n'),
+                buildThreadScanPrompt(chunk.text),
                 null,
                 {
                     ...trackerSettings,
                     extractionMaxTokens: trackerSettings.scanMaxTokens ?? 3000,
                     extractionProfileId: trackerSettings.scanProfileId || trackerSettings.extractionProfileId,
                 },
-                THREAD_SCAN_SYSTEM_PROMPT, { usageKind: 'scan' });
+                threadScanSystemPrompt(), { usageKind: 'scan' });
         } catch (err) {
             console.error(LOG_PREFIX, `Thread scan pass ${index + 1} failed.`, err);
             failures.push(String(err?.message || err));
@@ -553,4 +505,9 @@ export async function scanHistoryForThreads(onProgress) {
         return { ok: false, reason: failures[0], failures: failures.length };
     }
     return { ok: true, opened, read, failures: failures.length };
+}
+
+/** What the thread scan is asked, given one part of the transcript. */
+export function buildThreadScanPrompt(transcript) {
+    return promptText('threadScanTask', { transcript });
 }

@@ -1,5 +1,6 @@
 import { getSettings, defaultSettings, recommendedImagePrompt } from './settings.js';
 import { SYSTEM_PROMPT, DIALOGUE_FORMAT_PROMPT, NARRATOR_RULES_PROMPT, PROFILE_FIELDS } from './constants.js';
+import { PROMPT_TEXTS } from './prompt-texts.js';
 
 /**
  * Every prompt the user can edit, in one list.
@@ -205,3 +206,20 @@ export function promptById(id) {
 export function availablePrompts() {
     return PROMPTS.filter(p => !p.available || p.available());
 }
+
+/**
+ * The wording the extension builds its prompts from, one entry per text in prompt-texts.js.
+ *
+ * Separate from PROMPTS because there are dozens and most people never want them: the
+ * Prompts tab keeps them folded under their own heading, grouped by what they belong to.
+ * Generated from the texts, so a text cannot exist without its box.
+ */
+export const BUILT_IN_PROMPTS = PROMPT_TEXTS.map(text => ({
+    id: `text-${text.id}`,
+    key: `promptTexts.${text.id}`,
+    label: text.label,
+    group: text.group,
+    help: `${text.help} Empty means the built-in wording.`,
+    recommended: () => text.text,
+    emptyNote: 'The built-in wording is sent.',
+}));

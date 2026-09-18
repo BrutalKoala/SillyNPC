@@ -4790,3 +4790,32 @@ textarea.sillynpc-profile-input {
 .sillynpc-tag-refresh {
     margin-bottom: var(--sillynpc-space-md);
 }
+
+/* The built-in wording on the Prompts tab: one fold, then a fold per area. Marked by the
+   summary line alone, so it reads as more of the same list rather than a new panel. */
+.sillynpc-prompt-builtins,
+.sillynpc-prompt-group {
+    margin-top: var(--sillynpc-space-lg);
+}
+
+.sillynpc-prompt-group {
+    margin-left: var(--sillynpc-space-md);
+    margin-top: var(--sillynpc-space-sm);
+}
+
+.sillynpc-prompt-builtins > summary,
+.sillynpc-prompt-group > summary {
+    cursor: pointer;
+    font-weight: bold;
+    padding: var(--sillynpc-space-xs) 0;
+}
+
+.sillynpc-prompt-builtins > summary {
+    font-size: var(--sillynpc-text-lg);
+}
+
+.sillynpc-prompt-builtins > summary:focus-visible,
+.sillynpc-prompt-group > summary:focus-visible {
+    outline: 2px solid var(--sillynpc-accent);
+    outline-offset: 2px;
+}

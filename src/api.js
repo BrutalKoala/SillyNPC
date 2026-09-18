@@ -1,3 +1,4 @@
+import { promptText, defaultPromptText } from './prompt-texts.js';
 import { chat, getRequestHeaders } from '../../../../../script.js';
 import { getContext } from '../../../../st-context.js';
 import { loadWorldInfo, saveWorldInfo, createWorldInfoEntry } from '../../../../world-info.js';
@@ -290,10 +291,8 @@ async function retrieveWorldFacts(name) {
 }
 
 /** What the lore writer is told it is, since it no longer inherits a character card. */
-const LORE_SYSTEM_PROMPT =
-    'You write reference entries for a roleplaying setting\'s world information. '
-    + 'Follow the requested format exactly. Reply with the entry and nothing else - no '
-    + 'preamble, no commentary, and never dialogue or narration.';
+// The built-in wording; what is sent is promptText('loreSystem'), which may be your own.
+export const LORE_SYSTEM_PROMPT = defaultPromptText('loreSystem');
 
 /**
  * The slice of story the lore writer is shown.
@@ -380,7 +379,7 @@ async function requestLore(prompt) {
             const result = await context.ConnectionManagerRequestService.sendRequest(
                 profileId,
                 [
-                    { role: 'system', content: LORE_SYSTEM_PROMPT },
+                    { role: 'system', content: promptText('loreSystem') },
                     { role: 'user', content: prompt },
                 ],
                 maxTokens,
@@ -395,7 +394,7 @@ async function requestLore(prompt) {
                 when: Date.now(),
             };
             const text = (typeof result === 'string' ? result : (result?.content ?? '')) || '';
-            recordUsage('lore', { prompt: LORE_SYSTEM_PROMPT + prompt, reply: text });
+            recordUsage('lore', { prompt: promptText('loreSystem') + prompt, reply: text });
             return text;
         } catch (err) {
             console.warn(LOG_PREFIX, 'Lore connection unavailable, using the main API:', err);
@@ -410,13 +409,13 @@ async function requestLore(prompt) {
     };
     const raw = await context.generateRawData({
         prompt,
-        systemPrompt: LORE_SYSTEM_PROMPT,
+        systemPrompt: promptText('loreSystem'),
         responseLength: maxTokens,
     });
     const text = (typeof raw === 'string' ? raw : (raw?.content ?? '')) || '';
     // Not awaited on purpose: counting asks the tokenizer, and a counter is not worth
     // making anyone wait for, nor worth failing a generation over.
-    recordUsage('lore', { prompt: LORE_SYSTEM_PROMPT + prompt, reply: text });
+    recordUsage('lore', { prompt: promptText('loreSystem') + prompt, reply: text });
     return text;
 }
 

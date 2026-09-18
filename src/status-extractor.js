@@ -1,3 +1,4 @@
+import { promptText } from './prompt-texts.js';
 import { getContext } from '../../../../st-context.js';
 import { applyMacros } from './macros.js';
 import { getSettings, saveSettings } from './settings.js';
@@ -317,13 +318,11 @@ export function strangersToClassify(messageId) {
  */
 export function describeStrangers(strangers, tags = poolTags()) {
     if (!strangers?.length || !tags.length) return '';
-    return [
-        '\n### STRANGERS',
-        `These speakers have no character card: ${strangers.map(n => JSON.stringify(n)).join(', ')}.`,
-        'Also return a "strangers" object giving each of them the one kind that fits them best,',
-        `chosen only from: ${tags.join(', ')}.`,
-        `For example: { ${JSON.stringify(strangers[0])}: ${JSON.stringify(tags[0])} }. If none of those fits, give "".`,
-    ].join('\n');
+    return '\n' + promptText('readerStrangers', {
+        names: strangers.map(n => JSON.stringify(n)).join(', '),
+        kinds: tags.join(', '),
+        example: `${JSON.stringify(strangers[0])}: ${JSON.stringify(tags[0])}`,
+    });
 }
 
 /**
@@ -717,8 +716,7 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
     const example = buildDeltaExample(trackerSettings);
     const absent = describeAbsentButNamed(state, messageText, trackerSettings);
     const context = leadUp.length
-        ? '\n### EARLIER MESSAGES (context only - already reflected in the state above)\n'
-            + leadUp.join('\n---\n')
+        ? '\n' + promptText('readerEarlier', { messages: leadUp.join('\n---\n') })
         : '';
     return [
         /* What the words in this prompt mean here, before any of them are used.
@@ -728,23 +726,14 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
          * cannot know that this setup's collections are "pictures" and "contacts" rather
          * than an inventory. This can, so it says so - and says the lists are closed, which
          * is what stops a model reporting a plausible stat nobody configured. */
-        '### WHAT YOU MAY CHANGE',
-        'The stats are exactly the ones named in the current state below. The collections '
-            + 'are exactly the ones listed under their own heading. There are no others: a '
-            + 'name that does not appear below does not exist here, whatever it is called '
-            + 'in other games.',
-        '\n### CURRENT STATE',
-        describeCurrentState(state, trackerSettings) || '(empty)',
+        promptText('readerChanges'),
+        '\n' + promptText('readerState', { state: describeCurrentState(state, trackerSettings) || '(empty)' }),
         /* Beside the state, because it is state. It used to sit after the limits and
            the field list, among the rules, where it read as an aside about shape rather
            than as more of what is already known. Same shape as the characters above it
            too - these are the same kind of thing and were drawn as a different one. */
-        absent ? '\n### KNOWN, BUT NOT IN THE SCENE\n'
-            + 'Named in the message and already tracked, but not on stage. This is what '
-            + 'is on file for them. Do not report them back: if the message puts one of '
-            + 'them into the scene, include them in "characters" and report only what '
-            + 'this message changed about them.\n' + absent : '',
-        limits ? '\n### LIMITS\n' + limits : '',
+        absent ? '\n' + promptText('readerOffstage', { characters: absent }) : '',
+        limits ? '\n' + promptText('readerLimits', { limits }) : '',
         // Whatever else has asked to be told to the reader - see registerExtractionNotes.
         describeExtractionNotes(state, messageText),
         describeStrangers(strangers),
@@ -753,32 +742,22 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
         // that is all a new item ever arrived with.
         // Before the field list, so it reads as part of what is already known rather
         // than as an instruction about shape.
-        schema ? '\n### COLLECTIONS AND THEIR FIELDS\n' + schema : '',
-        example ? '\n### A COLLECTION CHANGE LOOKS LIKE THIS\n' + example
-            + '\nOmit any field the message does not state. Do not guess a value.' : '',
+        schema ? '\n' + promptText('readerCollections', { fields: schema }) : '',
+        example ? '\n' + promptText('readerCollectionExample', { example }) : '',
         describeOpenProfileFields(state),
         buildMinimalExample(state, trackerSettings),
         context,
-        '\n### LATEST MESSAGE (apply what this one changes)',
-        messageText,
-        '\n### TASK',
-        'Return the updated state as JSON.',
+        '\n' + promptText('readerLatest', { message: messageText }),
+        '\n' + promptText('readerTask'),
         // Here rather than in the system prompt on purpose. A user's own extraction
         // prompt replaces the shipped one outright, so anything added there would never
         // reach anybody who has written their own - the trap that lost [CONTEXT] from the
         // image template. This section is assembled by the extension either way. It also
         // keeps the ask off the history scan, which builds its own prompt and has no use
         // for a clause per change across hundreds of messages.
-        trackerSettings.extractionReasons === false ? '' : [
-            'Also return a "why" object explaining every value you changed: one short',
-            'clause each, naming what in the latest message caused it.',
-            'Key it by the stat - "Time" for a world stat, "Player.Health" for the player,',
-            '"Elza.Health" for a character.',
-            // The line that may cure rather than explain: a change that has to name its
-            // cause is harder to invent than one that only has to be plausible.
-            'If you cannot point at something in the latest message, do not change the',
-            'value at all and do not list it.',
-        ].join('\n'),
+        // Its last line may cure rather than explain: a change that has to name its cause is
+        // harder to invent than one that only has to be plausible.
+        trackerSettings.extractionReasons === false ? '' : promptText('readerReasons'),
         // Threads. Also here rather than the system prompt, and for the same reason as the
         // reasons above: a user's own extraction prompt replaces the shipped one outright.
         //
@@ -787,22 +766,13 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
         // summaries lose the line that turns out to count - but "did somebody promise,
         // threaten, owe, confide, set a deadline or make a plan" is answerable from the
         // message alone.
-        trackerSettings.threadsEnabled !== true ? '' : [
-            '',
-            'Also return a "threads" array for anything in the latest message that opened',
-            'one of these and is not finished with:',
-            ...THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`),
-            'Each: { "kind": "...", "text": "what is outstanding, one line",',
-            '"quote": "the words from the message that opened it", "who": "who it is about" }.',
-            // The rule that keeps this from becoming invented plot. A quote can be checked
-            // against the message; a description cannot.
-            'The quote must be words that appear in the latest message. If you cannot quote',
-            'it, do not list it.',
-            'Most messages open nothing. An empty array is the usual answer.',
-            openText ? `Already open, do not list again:\n${openText}` : '',
-            'Return "closed" as an array of the quoted lines above that this message',
-            'resolved, if any.',
-        ].filter(Boolean).join('\n'),
+        //
+        // The quote rule in it is what keeps this from becoming invented plot. A quote can be
+        // checked against the message; a description cannot.
+        trackerSettings.threadsEnabled !== true ? '' : promptText('readerThreads', {
+            kinds: THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n'),
+            open: openText ? promptText('readerThreadsOpen', { threads: openText }) : '',
+        }),
     ].filter(Boolean).join('\n');
 }
 
@@ -935,14 +905,7 @@ function describeOpenProfileFields(state) {
     }
 
     if (!lines.length) return '';
-    return '\n### PROFILE FIELDS YOU MAY UPDATE\n'
-        + 'Their current values are in the state above. These describe who somebody IS, not '
-        + 'what is happening to them, and they change rarely - a scar, a haircut, a lasting '
-        + 'change of manner. Update one only when the latest message plainly shows it. '
-        + 'Omitting a field means unchanged, which is almost always the right answer. Any '
-        + 'profile field not listed here must not be changed. Return them under "profile" '
-        + 'on that character, beside "stats".\n'
-        + lines.join('\n');
+    return '\n' + promptText('readerProfileFields', { fields: lines.join('\n') });
 }
 
 /**
@@ -956,7 +919,8 @@ function describeOpenProfileFields(state) {
  * Placeholders where a value would be, so nothing here can be mistaken for a fact about the
  * scene - the same reasoning as buildDeltaExample, which does this for collections.
  */
-function buildMinimalExample(state, trackerSettings) {
+// Exported for the tests, as buildUserPrompt is.
+export function buildMinimalExample(state, trackerSettings) {
     const firstNamed = (list) => (list || []).map(s => s?.name).filter(Boolean)[0];
 
     const playerStat = firstNamed(trackerSettings.playerStats);
@@ -970,13 +934,13 @@ function buildMinimalExample(state, trackerSettings) {
             : `    { "name": ${JSON.stringify(name)} }`))
         : [];
 
-    return '\n### A MINIMAL REPLY LOOKS LIKE THIS\n{\n'
+    const example = '{\n'
         + '  "global": {},\n'
         + (playerStat
             ? `  "player": { "stats": { ${JSON.stringify(playerStat)}: "<new value>" } },\n`
             : '  "player": {},\n')
-        + `  "characters": [\n${characters.join(',\n')}\n  ]\n}\n`
-        + 'Everyone present is listed; only what changed carries a value.';
+        + `  "characters": [\n${characters.join(',\n')}\n  ]\n}`;
+    return '\n' + promptText('readerMinimalReply', { example });
 }
 
 /**

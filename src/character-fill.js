@@ -1,3 +1,4 @@
+import { promptText, defaultPromptText } from './prompt-texts.js';
 import { getContext } from '../../../../st-context.js';
 import { loadWorldInfo } from '../../../../world-info.js';
 import { fillTemplate } from './macros.js';
@@ -147,20 +148,8 @@ export function missingProfileFields(char) {
 }
 
 /** What the reader is told when filling in who somebody is. */
-export const PROFILE_SYSTEM_PROMPT = [
-    'You are filling in the profile of one character in a roleplaying session.',
-    'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
-    '',
-    'Shape:',
-    '  { "<field>": "<value>" }',
-    '',
-    '- Fill only the fields you are asked for. Omit any field the material does not',
-    '  support - a blank is an honest answer, and a guess becomes a fact the moment it',
-    '  is written to the sheet.',
-    '- Describe what this character IS, not what is happening to them right now. A profile',
-    '  outlives the scene it was written from.',
-    '- Third person. No preamble.',
-].join('\n');
+// The built-in wording; what is sent is promptText('profileSystem'), which may be your own.
+export const PROFILE_SYSTEM_PROMPT = defaultPromptText('profileSystem');
 
 /**
  * What there is to go on, before anything is sent.
@@ -212,7 +201,7 @@ export async function fillSources(char) {
 // exercises those directly passes whatever this does, which is how two mutations of exactly
 // that wiring went unnoticed.
 export function buildProfilePrompt(char, wanted, sources) {
-    const parts = [`Character: ${char.name}`];
+    const parts = [promptText('profileCharacter', { name: char.name })];
 
     // Named so the story cannot be mistaken for a description of them. The reader writes
     // most of what is in an excerpt, so their persona is the best-described person in it
@@ -222,15 +211,13 @@ export function buildProfilePrompt(char, wanted, sources) {
         /* The exception matters as much as the rule. Without it the warmth field, which
            asks how this character behaves toward the reader, reads as forbidden and comes
            back blank - two instructions cancelling each other with nothing to show for it. */
-        parts.push(`${persona.name} is the reader's own character, not the subject. `
-            + `Nothing about ${persona.name} belongs on ${char.name}'s profile, except how `
-            + `${char.name} behaves toward them.`);
+        parts.push(promptText('profilePersona', { persona: persona.name, name: char.name }));
     }
 
     // Everything except what is being rewritten. See describeProfile.
     const rewriting = new Set(wanted.map(f => f.id));
     const known = describeProfile(char, rewriting);
-    if (known) parts.push(`Already known about them, do not contradict it:\n${known}`);
+    if (known) parts.push(promptText('profileKnown', { known }));
 
     /* The story first, and said to be the better source.
 
@@ -248,26 +235,21 @@ export function buildProfilePrompt(char, wanted, sources) {
            The story is still first, which is the point: an entry is written to steer a
            scene and is often broad where a profile wants the particular. What changed is
            what to take from it. */
-        parts.push('Recent story, as one source among several. Take what is generally true '
-            + 'of this character from it, not what was true of them in the last few '
-            + 'minutes. Somebody frightened or angry in these messages is not permanently '
-            + `so.\n${sources.story}`);
+        parts.push(promptText('profileStory', { story: sources.story }));
     }
 
     if (sources.lore) {
-        parts.push((sources.story ? 'Their lorebook entry, as background' : 'Their lorebook entry')
-            + `:\n${sources.lore}`);
+        parts.push(promptText(sources.story ? 'profileLoreBackground' : 'profileLore', { lore: sources.lore }));
     }
 
     const facts = describeTrackedFacts(char, rewriting);
-    if (facts) parts.push(`What the tracker records about them:\n${facts}`);
+    if (facts) parts.push(promptText('profileFacts', { facts }));
 
-    parts.push(
-        'Fill in these fields:\n'
-        + wanted.map(field => `- ${field.id}: `
+    parts.push(promptText('profileAsk', {
+        fields: wanted.map(field => `- ${field.id}: `
             + fillTemplate(hintFor(field, getSettings().profileHints), { name: char.name }))
             .join('\n'),
-    );
+    }));
 
     return parts.join('\n\n');
 }
@@ -310,7 +292,7 @@ export async function fillProfile(char, { fields = null } = {}) {
 
     const prompt = buildProfilePrompt(char, wanted, sources);
     const raw = await requestExtraction(
-        prompt, null, getSettings().statusTracker, PROFILE_SYSTEM_PROMPT, { usageKind: 'fill' });
+        prompt, null, getSettings().statusTracker, promptText('profileSystem'), { usageKind: 'fill' });
     const answer = coerceToUpdate(raw);
 
     if (!answer || typeof answer !== 'object') {
@@ -396,20 +378,8 @@ export async function fillLore(char) {
 }
 
 /** What the reader is told when filling one character's fields. */
-export const FILL_SYSTEM_PROMPT = [
-    'You are filling in a character sheet for one character in a roleplaying session.',
-    'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
-    '',
-    'Shape:',
-    '  { "stats": { "<field>": "<value>" }, "collections": { "<id>": [ {...} ] } }',
-    '',
-    '- Fill only the fields you are asked for. Omit any field the material does not',
-    '  support - a blank is an honest answer, and a guess becomes a fact the moment it',
-    '  is written to the sheet.',
-    '- Write a value that has a maximum as "current/maximum", for example "8/10".',
-    '- Collections are optional. Include an item only where the material plainly says',
-    '  this character has it.',
-].join('\n');
+// The built-in wording; what is sent is promptText('fillSystem'), which may be your own.
+export const FILL_SYSTEM_PROMPT = defaultPromptText('fillSystem');
 
 /**
  * The material the reader is given about one character.
@@ -433,19 +403,12 @@ export function buildFillPrompt(char, missing, lore, trackerSettings, { collecti
     const schema = collections ? describeCollections(trackerSettings) : '';
 
     return [
-        '### CHARACTER',
-        char.name,
-        '',
-        '### FIELDS TO FILL',
-        defs.map(describe).join('\n') || '(none)',
-        schema ? '\n### BELONGINGS THEY MAY HAVE\n' + schema
-            + '\nOnly where the material plainly gives it to them.' : '',
-        facts ? '\n### ALREADY RECORDED ABOUT THEM\n' + facts : '',
-        lore ? '\n### THEIR LORE ENTRY\n' + lore : '',
-        '\n### RECENT MESSAGES',
-        buildLoreExcerpt(chat).text || '(no chat to read)',
-        '\n### TASK',
-        `Fill in what the material supports for ${char.name}, as JSON.`,
+        promptText('fillCharacter', { name: char.name, fields: defs.map(describe).join('\n') || '(none)' }),
+        schema ? '\n' + promptText('fillBelongings', { collections: schema }) : '',
+        facts ? '\n' + promptText('fillFacts', { facts }) : '',
+        lore ? '\n' + promptText('fillLore', { lore }) : '',
+        '\n' + promptText('fillRecent', { messages: buildLoreExcerpt(chat).text || '(no chat to read)' }),
+        '\n' + promptText('fillTask', { name: char.name }),
     ].filter(Boolean).join('\n');
 }
 
@@ -470,7 +433,7 @@ export async function fillData(char, { fields = true, collections = true } = {})
 
     const lore = await readLoreEntry(char);
     const prompt = buildFillPrompt(char, missing, lore, trackerSettings, { collections });
-    const raw = await requestExtraction(prompt, null, trackerSettings, FILL_SYSTEM_PROMPT, { usageKind: 'fill' });
+    const raw = await requestExtraction(prompt, null, trackerSettings, promptText('fillSystem'), { usageKind: 'fill' });
     const answer = coerceToUpdate(raw);
 
     if (!answer || typeof answer !== 'object') {

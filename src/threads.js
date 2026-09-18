@@ -1,3 +1,4 @@
+import { promptText } from './prompt-texts.js';
 import { getSettings } from './settings.js';
 import { mentionsName } from './mentions.js';
 
@@ -389,7 +390,5 @@ export function describeThreads(state, now) {
         return `- ${who}${t.text} ("${t.quote}")`;
     });
     // Said outright, for the same reason: this is what was already said, not what to say.
-    const header = 'Open threads (raised earlier in the story, already said - context, '
-        + 'not lines to repeat):';
-    return `${header}\n${lines.join('\n')}`;
+    return promptText('sceneThreads', { threads: lines.join('\n') });
 }
