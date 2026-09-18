@@ -7,7 +7,7 @@ import { findTemplateLabels, applyLabelFixes } from './template-labels.js';
 import { LOG_PREFIX, debugLog, BUILT_IN_DEFAULT_AVATAR } from './constants.js';
 import { stripAndPersist } from './status-history.js';
 import { renderReviewPanel } from './ui-change-review.js';
-import { stateAtMessage } from './status-snapshots.js';
+import { stateAtMessage, recordMessageEdit } from './status-snapshots.js';
 import { findCardForName } from './status-logic.js';
 import { getTrackerView } from './tracker-view.js';
 import { openCastPanel } from './ui-cast-panel.js';
@@ -697,7 +697,7 @@ export function buildTrackerBox(state, {
 
     container.appendChild(box);
     
-    attachInlineEditListeners(container);
+    attachInlineEditListeners(container, { state, mesEl, onRedraw });
     fitCharacterColumns(box);
     return container;
 }
@@ -1326,7 +1326,27 @@ export function buildStatusHtml(state, settings) {
     }
 }
 
-function attachInlineEditListeners(container) {
+/**
+ * Whether a box belongs to an older message rather than the newest.
+ *
+ * Worked out here from the message rather than trusted to the caller: the VN stage draws the
+ * box for whatever message it is showing and does not say whether that one is old.
+ */
+function isOlderMessage(mesEl) {
+    const id = Number(mesEl?.getAttribute?.('mesid'));
+    const chat = getContext()?.chat || [];
+    return Number.isInteger(id) && chat.length > 0 && id < chat.length - 1;
+}
+
+/**
+ * @param {HTMLElement} container
+ * @param {object} [drawn] What the box was drawn from.
+ * @param {object} [drawn.state] The state it shows - which, under an older message, is that
+ *   message's state, not the live one.
+ * @param {HTMLElement|null} [drawn.mesEl] The message it belongs to.
+ * @param {() => void} [drawn.onRedraw] Redraws a box that lives outside a message.
+ */
+function attachInlineEditListeners(container, { state: drawnState = null, mesEl = null, onRedraw = null } = {}) {
     container.querySelectorAll('.sillynpc-status-editable').forEach(el => {
         el.addEventListener('blur', () => {
             const type = el.dataset.type;
@@ -1341,6 +1361,27 @@ function attachInlineEditListeners(container) {
             if (newValue === String(el.dataset.initial ?? '')) return;
             el.dataset.initial = newValue;
 
+            /* A character is found by name in the state this box shows. It used to be found
+               by position in *today's* cast, so on an older message - or whenever the cast had
+               been reordered since - the edit could land on somebody else entirely. */
+            const shown = drawnState ?? loadStateFromMetadata();
+            const charName = type === 'character'
+                ? shown?.characters?.[parseInt(el.dataset.index)]?.name ?? ''
+                : '';
+
+            /* A box under an older message corrects what the record says *at that message*,
+               and nothing else - not later messages, not today's state. It used to change the
+               live state, so going back to the message showed its old value again and the edit
+               looked lost. See recordMessageEdit. */
+            if (isOlderMessage(mesEl)) {
+                const messageId = Number(mesEl.getAttribute('mesid'));
+                if (recordMessageEdit(messageId, { type, key, value: newValue, name: charName })) {
+                    renderStatusTrackerBox(mesEl);
+                    onRedraw?.();
+                }
+                return;
+            }
+
             /* One branch per data-type buildStatusHtml emits. The player's was missing from
                the day player stats were first drawn in this box: the box rendered them
                contenteditable like everything else, this built an empty update, and
@@ -1353,15 +1394,8 @@ function attachInlineEditListeners(container) {
                 // stats, rather than bare: applyUpdate reads `update.player.stats ||
                 // update.player`, and the bare form would collide with `name`.
                 updateObj.player = { stats: { [key]: newValue } };
-            } else if (type === 'character') {
-                const index = parseInt(el.dataset.index);
-                const state = loadStateFromMetadata();
-                if (state.characters[index]) {
-                    updateObj.characters = [{
-                        name: state.characters[index].name,
-                        stats: { [key]: newValue }
-                    }];
-                }
+            } else if (type === 'character' && charName) {
+                updateObj.characters = [{ name: charName, stats: { [key]: newValue } }];
             }
             // Labelled, so the change history says who made it. Without this a correction
             // typed by hand was filed as "AI update", which is the defect the player sheet
