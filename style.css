@@ -2341,11 +2341,19 @@ span.sillynpc-review-to {
 }
 
 /* Clear of SillyTavern's top bar rather than 20px from the window edge, which put the
-   HUD under it. The variable is SillyTavern's own and follows the user's font scale. */
-.sillynpc-hud-container.top-right    { top: calc(var(--topBarBlockSize, 34px) + 20px); right: 20px; }
-.sillynpc-hud-container.top-left     { top: calc(var(--topBarBlockSize, 34px) + 20px); left: 20px; flex-direction: row-reverse; }
-.sillynpc-hud-container.bottom-right { bottom: 20px; right: 20px; }
-.sillynpc-hud-container.bottom-left  { bottom: 20px; left: 20px; flex-direction: row-reverse; }
+   HUD under it. The variable is SillyTavern's own and follows the user's font scale.
+
+   Divided by the HUD's zoom (HUD Scale, see applyHudZoom in ui-hud.js): zoom scales the
+   element's own offsets too, and without this a larger HUD would stand further from the
+   corner the larger it got. */
+.sillynpc-hud-container {
+    --sillynpc-hud-edge: calc(20px / var(--sillynpc-hud-zoom, 1));
+    --sillynpc-hud-top: calc((var(--topBarBlockSize, 34px) + 20px) / var(--sillynpc-hud-zoom, 1));
+}
+.sillynpc-hud-container.top-right    { top: var(--sillynpc-hud-top); right: var(--sillynpc-hud-edge); }
+.sillynpc-hud-container.top-left     { top: var(--sillynpc-hud-top); left: var(--sillynpc-hud-edge); flex-direction: row-reverse; }
+.sillynpc-hud-container.bottom-right { bottom: var(--sillynpc-hud-edge); right: var(--sillynpc-hud-edge); }
+.sillynpc-hud-container.bottom-left  { bottom: var(--sillynpc-hud-edge); left: var(--sillynpc-hud-edge); flex-direction: row-reverse; }
 
 /* Persona images are 2:3 - SillyTavern renders the thumbnail at 96x144 - and this frame is
  * a circle, so `cover` keeps a square from the middle and discards the top and bottom. On a

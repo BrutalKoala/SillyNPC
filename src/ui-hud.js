@@ -18,22 +18,6 @@ let dragOffset = { x: 0, y: 0 };
 const HUD_VIEWPORT_MARGIN = 48;
 
 /**
- * The corner each anchor grows away from.
- *
- * The HUD is fixed by corner and then scaled. With a single top-left origin the scale
- * grows right and down from wherever the element starts, so only the top-left anchor
- * grew into the screen - every other corner pushed itself off the edge, by 67px
- * horizontally at scale 1.4. Matching the origin to the anchor makes the HUD grow
- * inwards from whichever corner it is pinned to.
- */
-const HUD_ORIGINS = {
-    'top-left': 'top left',
-    'top-right': 'top right',
-    'bottom-left': 'bottom left',
-    'bottom-right': 'bottom right',
-};
-
-/**
  * The corner classes, which are the ones that have to be cleared before another is set.
  *
  * Named rather than cleared wholesale. Three separate functions put classes on this
@@ -43,7 +27,7 @@ const HUD_ORIGINS = {
  * time the HUD updated. That is why choosing a portrait side or shape appeared to do
  * nothing at all unless the meter style happened to be re-applied afterwards.
  */
-const HUD_CORNERS = Object.keys(HUD_ORIGINS);
+const HUD_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
 /** How far the pointer must travel before a press on the portrait counts as a drag. */
 const DRAG_THRESHOLD = 5;
@@ -71,7 +55,7 @@ export function passedDragThreshold(dx, dy) {
  *
  * @param {number} x
  * @param {number} y
- * @param {{width: number, height: number}} box The box as seen, transform included.
+ * @param {{width: number, height: number}} box The box as seen, zoom included.
  * @param {{width: number, height: number}} viewport
  * @returns {{x: number, y: number}}
  */
@@ -88,7 +72,7 @@ export function clampHudPosition(x, y, box, viewport) {
  * Clamps a position so the HUD stays on screen.
  *
  * Measured from the rendered box rather than a flat margin, because the box is scaled:
- * getBoundingClientRect already accounts for the transform, so this is the size the user
+ * getBoundingClientRect already accounts for the zoom, so this is the size the user
  * actually sees.
  *
  * @returns {{x: number, y: number}}
@@ -105,6 +89,39 @@ function clampToViewport(x, y) {
     );
 }
 
+/** HUD Scale, as the zoom it is applied with. */
+function hudZoom() {
+    const zoom = Number(getSettings().statusTracker.hudScale);
+    return zoom > 0 ? zoom : 1;
+}
+
+/**
+ * Applies HUD Scale as zoom rather than transform: scale().
+ *
+ * A transform draws the HUD at its normal size and then stretches the result, which is
+ * what made the portrait soft however good the picture was - you compared the two ways
+ * side by side on your own screen and the stretched one was the blurry one. Zoom lays the
+ * HUD out at the larger size, so it is drawn sharp at the size you see.
+ *
+ * Zoom also scales the element's own left, top, right and bottom, and a translate. So
+ * positions are written divided by it (placeHud), and the corner offsets in the stylesheet
+ * divide by --sillynpc-hud-zoom.
+ */
+function applyHudZoom() {
+    const zoom = hudZoom();
+    hudContainer.style.transform = '';
+    hudContainer.style.transformOrigin = '';
+    hudContainer.style.zoom = String(zoom);
+    hudContainer.style.setProperty('--sillynpc-hud-zoom', String(zoom));
+}
+
+/** Puts the HUD's top-left corner at x, y in screen pixels. See applyHudZoom. */
+function placeHud(x, y) {
+    const zoom = hudZoom();
+    hudContainer.style.left = `${x / zoom}px`;
+    hudContainer.style.top = `${y / zoom}px`;
+}
+
 /** Re-clamps a dragged HUD after the window changes size. */
 function keepHudOnScreen() {
     const settings = getSettings().statusTracker;
@@ -115,8 +132,7 @@ function keepHudOnScreen() {
     const { x, y } = clampToViewport(pos.x, pos.y);
     settings.hud.position.x = x;
     settings.hud.position.y = y;
-    hudContainer.style.left = `${x}px`;
-    hudContainer.style.top = `${y}px`;
+    placeHud(x, y);
     saveSettings();
 }
 
@@ -141,14 +157,12 @@ export function initHUD() {
     // z-index comes from --sillynpc-z-hud so the HUD sits above the chat but below
     // SillyTavern's own panels, drawers and menus. An inline 10000 here used to beat
     // them all and cover whatever the user had just opened.
-    hudContainer.style.transformOrigin = HUD_ORIGINS[settings.hudPosition] || 'top left';
-    hudContainer.style.transform = `scale(${settings.hudScale})`;
+    applyHudZoom();
 
     // Restore position
     if (settings.hud?.position?.x !== null && settings.hud?.position?.y !== null) {
         const { x, y } = clampToViewport(settings.hud.position.x, settings.hud.position.y);
-        hudContainer.style.left = `${x}px`;
-        hudContainer.style.top = `${y}px`;
+        placeHud(x, y);
         hudContainer.style.right = 'auto';
         hudContainer.style.bottom = 'auto';
     }
@@ -385,16 +399,11 @@ export function updateHUD(updatedState = null) {
         hudContainer.classList.remove(...HUD_CORNERS);
         if (!hasManualPos) hudContainer.classList.add(settings.hudPosition);
         hudContainer.classList.add(themeClass);
-        // A dragged HUD is placed by left/top, so it genuinely does grow from its top-left.
-        hudContainer.style.transformOrigin = hasManualPos
-            ? 'top left'
-            : (HUD_ORIGINS[settings.hudPosition] || 'top left');
-        hudContainer.style.transform = `scale(${settings.hudScale})`;
+        applyHudZoom();
 
         if (hasManualPos) {
             const { x, y } = clampToViewport(settings.hud.position.x, settings.hud.position.y);
-            hudContainer.style.left = `${x}px`;
-            hudContainer.style.top = `${y}px`;
+            placeHud(x, y);
             hudContainer.style.right = 'auto';
             hudContainer.style.bottom = 'auto';
         } else {
@@ -587,7 +596,7 @@ export function portraitSizeFor(meterCount, style) {
  * browser one that is already close to the right size.
  *
  * The size is measured, not calculated. getBoundingClientRect reports the box after the
- * HUD's own transform, so a portrait 72 CSS pixels wide at hudScale 1.7 measures about 122
+ * HUD's own zoom, so a portrait 72 CSS pixels wide at hudScale 1.7 measures about 122
  * - the scale is already in the number and must not be multiplied in again. Only
  * devicePixelRatio is left to apply, and it is the one a display running at 125% or 150%
  * quietly makes matter.
@@ -915,25 +924,15 @@ function applyHudAppearance(container, settings) {
 }
 
 /**
- * Pins the HUD where it currently looks, in the coordinates left/top actually mean.
+ * Pins the HUD where it currently looks, leaving its corner anchor for left/top.
  *
- * The HUD is scaled, and the two ways of asking where it is disagree. A bounding rect
- * reports the box *after* `transform: scale()`; left and top place the box *before* it.
- * An un-dragged HUD is anchored to a corner and scaled from that same corner, so at a
- * scale of 2 those two answers sit a whole unscaled height apart. The drag measured the
- * grab against one and then moved the other, which is why it jumped the instant it was
- * touched - and jumped again on release, when the clamp read the transformed box back as
- * though it were a layout position.
- *
- * Moving the origin to the top-left makes the two agree from here on, and taking left/top
- * from the visible box is what stops moving the origin from moving the HUD.
+ * Taken from the visible box, so switching from a corner to a position does not move it.
+ * placeHud turns screen pixels into the left/top the zoomed element needs.
  *
  * @param {DOMRect} rect Where it looks right now.
  */
 function pinHudAt(rect) {
-    hudContainer.style.transformOrigin = 'top left';
-    hudContainer.style.left = `${rect.left}px`;
-    hudContainer.style.top = `${rect.top}px`;
+    placeHud(rect.left, rect.top);
     hudContainer.style.right = 'auto';
     hudContainer.style.bottom = 'auto';
     hudContainer.style.margin = '0';
@@ -953,20 +952,16 @@ function startDrag(e) {
     dragOffset.x = startX - rect.left;
     dragOffset.y = startY - rect.top;
 
-    /* Moved with `translate`, once a frame, and put down with left/top only on release.
+    /* Moved with `translate` on every move, and put down with left/top only on release.
      *
      * It used to write left/top on every mouse move. That is a layout per move, and the HUD
      * has a blurred see-through background, so each one also re-blurred everything behind
      * it - a video background included. Dragging lagged, and on a weaker machine it could
      * stall. translate is moved by the compositor without layout, and the blur is switched
      * off for the length of the drag (is-dragging), so a move costs almost nothing. */
-    let frame = 0;
     let offsetX = 0;
     let offsetY = 0;
-    const paint = () => {
-        frame = 0;
-        hudContainer.style.translate = `${offsetX}px ${offsetY}px`;
-    };
+    const zoom = hudZoom();
 
     const onMouseMove = (moveEvent) => {
         if (!isDragging) {
@@ -981,13 +976,15 @@ function startDrag(e) {
 
         offsetX = moveEvent.clientX - startX;
         offsetY = moveEvent.clientY - startY;
-        if (!frame) frame = requestAnimationFrame(paint);
+        // Straight away, on every move - not saved up for the next frame. Of the three ways
+        // you tried, this is the one that felt like a window. Divided by the zoom, which
+        // scales a translate too.
+        hudContainer.style.translate = `${offsetX / zoom}px ${offsetY / zoom}px`;
     };
 
     const onMouseUp = (upEvent) => {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
-        if (frame) { cancelAnimationFrame(frame); frame = 0; }
         if (!isDragging) return;
 
         const settings = getSettings().statusTracker;
@@ -1003,8 +1000,7 @@ function startDrag(e) {
         const { x, y } = clampToViewport(dropX, dropY);
         settings.hud.position.x = x;
         settings.hud.position.y = y;
-        hudContainer.style.left = `${x}px`;
-        hudContainer.style.top = `${y}px`;
+        placeHud(x, y);
         saveSettings();
         // The click handler runs after mouseup, and has to see that this was a drag.
         setTimeout(() => { isDragging = false; }, 50);
