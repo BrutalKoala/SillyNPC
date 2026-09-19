@@ -275,7 +275,7 @@ export function buildExtractionSchema(trackerSettings, { strangers = [] } = {}) 
                 },
                 closed: { type: 'array', items: { type: 'string' } },
             } : {}),
-            // Only when there are strangers to ask about - see describeStrangers.
+            // Only when there are strangers to ask about - see strangerValues.
             ...(strangers.length ? {
                 strangers: {
                     type: 'object',
@@ -314,15 +314,16 @@ export function strangersToClassify(messageId) {
  * to cannot be read off their name, and nobody can tag for every description - but the
  * reader is reading the reply anyway, and choosing from a short closed list is a small ask.
  *
- * @returns {string} '' when there is nobody to ask about.
+ * @returns {{ strangers: string, strangerKinds: string, strangerExample: string }} All empty
+ *   when there is nobody to ask about, which leaves the STRANGERS section out.
  */
-export function describeStrangers(strangers, tags = poolTags()) {
-    if (!strangers?.length || !tags.length) return '';
-    return '\n' + promptText('readerStrangers', {
-        names: strangers.map(n => JSON.stringify(n)).join(', '),
-        kinds: tags.join(', '),
-        example: `${JSON.stringify(strangers[0])}: ${JSON.stringify(tags[0])}`,
-    });
+export function strangerValues(strangers, tags = poolTags()) {
+    if (!strangers?.length || !tags.length) return { strangers: '', strangerKinds: '', strangerExample: '' };
+    return {
+        strangers: strangers.map(n => JSON.stringify(n)).join(', '),
+        strangerKinds: tags.join(', '),
+        strangerExample: `${JSON.stringify(strangers[0])}: ${JSON.stringify(tags[0])}`,
+    };
 }
 
 /**
@@ -711,69 +712,40 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
     // an exact repeat of any of the rest.
     const openText = activeThreads(state, currentMessageIndex())
         .map(t => `  - "${t.quote}"`).join('\n');
-    const limits = describeLimits(trackerSettings, state);
-    const schema = describeCollections(trackerSettings);
-    const example = buildDeltaExample(trackerSettings);
-    const absent = describeAbsentButNamed(state, messageText, trackerSettings);
-    const context = leadUp.length
-        ? '\n' + promptText('readerEarlier', { messages: leadUp.join('\n---\n') })
-        : '';
-    return [
-        /* What the words in this prompt mean here, before any of them are used.
-         *
-         * The system prompt above may be the shipped one or one somebody wrote themselves,
-         * and either way it has to talk about stats and collections in the abstract. It
-         * cannot know that this setup's collections are "pictures" and "contacts" rather
-         * than an inventory. This can, so it says so - and says the lists are closed, which
-         * is what stops a model reporting a plausible stat nobody configured. */
-        promptText('readerChanges'),
-        '\n' + promptText('readerState', { state: describeCurrentState(state, trackerSettings) || '(empty)' }),
-        /* Beside the state, because it is state. It used to sit after the limits and
-           the field list, among the rules, where it read as an aside about shape rather
-           than as more of what is already known. Same shape as the characters above it
-           too - these are the same kind of thing and were drawn as a different one. */
-        absent ? '\n' + promptText('readerOffstage', { characters: absent }) : '',
-        limits ? '\n' + promptText('readerLimits', { limits }) : '',
+    /* One text, 'reader' in prompt-texts.js: every section of this request, in order. What
+     * each section is for, since the wording is now yours to change:
+     *
+     * - WHAT YOU MAY CHANGE comes before any of the words it defines. The system prompt may be
+     *   the shipped one or your own, and either way talks about stats and collections in the
+     *   abstract; this says what they are here, and that the lists are closed - which is what
+     *   stops a model reporting a plausible stat nobody configured.
+     * - KNOWN, BUT NOT IN THE SCENE sits beside the state because it is state.
+     * - The collections' fields come before the example, so they read as part of what is
+     *   known. Without them a new item arrived with only the field the example showed.
+     * - The reasons and threads asks are here rather than in the system prompt: your own
+     *   extraction prompt replaces the shipped one outright, so anything added there would
+     *   never reach anybody who has written their own. The threads ask names speech acts,
+     *   which can be answered from one message, and its quote rule is what keeps it from
+     *   becoming invented plot - a quote can be checked against the message.
+     */
+    return promptText('reader', {
+        state: describeCurrentState(state, trackerSettings) || '(empty)',
+        offstage: describeAbsentButNamed(state, messageText, trackerSettings),
+        limits: describeLimits(trackerSettings, state),
         // Whatever else has asked to be told to the reader - see registerExtractionNotes.
-        describeExtractionNotes(state, messageText),
-        describeStrangers(strangers),
-        // The fields each collection actually has. Without this the model had only the
-        // prompt's one example to go by, which showed a single field called name - so
-        // that is all a new item ever arrived with.
-        // Before the field list, so it reads as part of what is already known rather
-        // than as an instruction about shape.
-        schema ? '\n' + promptText('readerCollections', { fields: schema }) : '',
-        example ? '\n' + promptText('readerCollectionExample', { example }) : '',
-        describeOpenProfileFields(state),
-        buildMinimalExample(state, trackerSettings),
-        context,
-        '\n' + promptText('readerLatest', { message: messageText }),
-        '\n' + promptText('readerTask'),
-        // Here rather than in the system prompt on purpose. A user's own extraction
-        // prompt replaces the shipped one outright, so anything added there would never
-        // reach anybody who has written their own - the trap that lost [CONTEXT] from the
-        // image template. This section is assembled by the extension either way. It also
-        // keeps the ask off the history scan, which builds its own prompt and has no use
-        // for a clause per change across hundreds of messages.
-        // Its last line may cure rather than explain: a change that has to name its cause is
-        // harder to invent than one that only has to be plausible.
-        trackerSettings.extractionReasons === false ? '' : promptText('readerReasons'),
-        // Threads. Also here rather than the system prompt, and for the same reason as the
-        // reasons above: a user's own extraction prompt replaces the shipped one outright.
-        //
-        // The ask names speech acts rather than asking what was important. "Will this
-        // matter later" is the question nobody can answer at the time - it is why
-        // summaries lose the line that turns out to count - but "did somebody promise,
-        // threaten, owe, confide, set a deadline or make a plan" is answerable from the
-        // message alone.
-        //
-        // The quote rule in it is what keeps this from becoming invented plot. A quote can be
-        // checked against the message; a description cannot.
-        trackerSettings.threadsEnabled !== true ? '' : promptText('readerThreads', {
-            kinds: THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n'),
-            open: openText ? promptText('readerThreadsOpen', { threads: openText }) : '',
-        }),
-    ].filter(Boolean).join('\n');
+        notes: describeExtractionNotes(state, messageText),
+        ...strangerValues(strangers),
+        collections: describeCollections(trackerSettings),
+        collectionExample: buildDeltaExample(trackerSettings),
+        profileFields: describeOpenProfileFields(state),
+        minimalReply: buildMinimalExample(state, trackerSettings),
+        earlier: leadUp.join('\n---\n'),
+        message: messageText,
+        reasons: trackerSettings.extractionReasons === false ? '' : 'on',
+        threads: trackerSettings.threadsEnabled === true ? 'on' : '',
+        threadKinds: THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n'),
+        openThreads: openText,
+    });
 }
 
 /**
@@ -904,8 +876,7 @@ function describeOpenProfileFields(state) {
         if (card) describe(card, actor.name);
     }
 
-    if (!lines.length) return '';
-    return '\n' + promptText('readerProfileFields', { fields: lines.join('\n') });
+    return lines.join('\n');
 }
 
 /**
@@ -940,7 +911,7 @@ export function buildMinimalExample(state, trackerSettings) {
             ? `  "player": { "stats": { ${JSON.stringify(playerStat)}: "<new value>" } },\n`
             : '  "player": {},\n')
         + `  "characters": [\n${characters.join(',\n')}\n  ]\n}`;
-    return '\n' + promptText('readerMinimalReply', { example });
+    return example;
 }
 
 /**

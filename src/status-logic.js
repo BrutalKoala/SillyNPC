@@ -1421,7 +1421,9 @@ function summarizeCollection(collectionId, items, includeFull = false) {
  * For prompt injection, we now include the FULL collection list to support Full State Sync.
  */
 export function formatCompactStatus(state, fullDetail = false) {
-    let output = promptText('sceneHeader') + '\n';
+    // The world, the player and each character, one line each. The heading and the sections
+    // after these lines are the 'sceneBlock' text in prompt-texts.js.
+    let output = '';
     
     /* Through the schema, not the stored object. A stat deleted in System Builder leaves its
        value behind in the chat, and this block used to send it to the story model on every
@@ -1506,21 +1508,17 @@ export function formatCompactStatus(state, fullDetail = false) {
     }
     
 
-    // Who these people actually are, for everyone the lines above just listed.
-    const who = describeCastProfiles(state);
-    if (who) output += `${who}\n`;
-
-    // And who the story just named without putting on stage.
-    const named = describeNamedButUnlisted(state);
-    if (named) output += `${named}\n`;
-
-    // What is still outstanding, riding the block that is already being sent. Nothing
-    // is retrieved to put it here - a thread was caught when it opened, which is the
-    // whole difference between this and searching a summary for it later.
-    const threads = describeThreads(state, currentMessageIndex());
-    if (threads) output += `${threads}\n`;
-
-    return output.trim();
+    return promptText('sceneBlock', {
+        status: output.trim(),
+        // Who these people actually are, for everyone the lines above just listed.
+        profiles: describeCastProfiles(state),
+        // And who the story just named without putting on stage.
+        offstage: describeNamedButUnlisted(state),
+        // What is still outstanding, riding the block that is already being sent. Nothing
+        // is retrieved to put it here - a thread was caught when it opened, which is the
+        // whole difference between this and searching a summary for it later.
+        threads: describeThreads(state, currentMessageIndex()),
+    }).trim();
 }
 
 /**
@@ -1599,7 +1597,7 @@ function describeNamedButUnlisted(state) {
        above" was the first wording, and "not in the scene list" is one careless reading away
        from "not in the scene" - which is the exact claim this block must not make. What the
        block is for is enough; why these names are in a separate paragraph is our business. */
-    return promptText('sceneOffstage', { people: lines.join('\n') });
+    return lines.join('\n');
 }
 
 /** The four profile fields on one line, or '' when none is written. */
@@ -1627,7 +1625,7 @@ function describeCastProfiles(state) {
         if (line) lines.push(`${actor.name} - ${line}`);
     }
 
-    return lines.length ? promptText('sceneProfiles', { people: lines.join('\n') }) : '';
+    return lines.join('\n');
 }
 
 /**
@@ -1637,14 +1635,6 @@ function describeCastProfiles(state) {
 export function getStatusInstructions() {
     const settings = getSettings().statusTracker;
     const currentState = committedState || loadStateFromMetadata();
-
-    // The wording of every section is an editable text - see prompt-texts.js.
-    let prompt = '\n' + promptText('storyIntro', {
-        status: formatCompactStatus(currentState, true),
-        rules: applyMacros(settings.systemRules),
-    }) + '\n';
-    prompt += '\n' + promptText('storyCosts') + '\n';
-    prompt += '\n' + promptText('storyProcess') + '\n';
 
     /* The ceilings actually in play, not the configured ones.
      *
@@ -1669,14 +1659,8 @@ export function getStatusInstructions() {
     const npcMaxes = describeMaxes(settings.npcStats,
         name => highestCeiling(currentState.characters, name));
 
-    if (playerMaxes || npcMaxes) {
-        prompt += '\n' + promptText('storyLimits', { player: playerMaxes, npc: npcMaxes }) + '\n';
-    }
-
-    prompt += '\n' + promptText('storySync') + '\n';
-    prompt += '\n' + promptText('storyDelta') + '\n';
-
     // Add field definitions for collections to guide the AI
+    let schemas = '';
     if (settings.collections && settings.collections.length > 0) {
         // Filter collections to only those relevant to current actors
         const hasPlayer = !!currentState.player;
@@ -1689,20 +1673,22 @@ export function getStatusInstructions() {
             return false;
         });
 
-        if (relevantCollections.length > 0) {
-            const schemas = relevantCollections.map(col => {
-                const fieldInfo = col.fields.map(f => `${f.name} (${f.type}${f.isMultiline ? ', multiline' : ''})`).join(', ');
-                return `- ${col.id} (${col.name}): ${fieldInfo}`;
-            }).join('\n');
-            prompt += '\n' + promptText('storySchemas', { schemas }) + '\n';
-        }
+        schemas = relevantCollections.map(col => {
+            const fieldInfo = col.fields.map(f => `${f.name} (${f.type}${f.isMultiline ? ', multiline' : ''})`).join(', ');
+            return `- ${col.id} (${col.name}): ${fieldInfo}`;
+        }).join('\n');
     }
 
-    prompt += '\n' + promptText('storyClosing', {
-        sceneChange: settings.sceneBindingStat ? promptText('storySceneChange') : '',
+    // One text, 'storyBlock' in prompt-texts.js, from the heading to the format line.
+    return '\n' + promptText('storyBlock', {
+        status: formatCompactStatus(currentState, true),
+        rules: applyMacros(settings.systemRules),
+        limits: playerMaxes || npcMaxes ? 'on' : '',
+        playerLimits: playerMaxes,
+        npcLimits: npcMaxes,
+        schemas,
+        sceneChange: settings.sceneBindingStat ? 'on' : '',
     }) + '\n';
-
-    return prompt;
 }
 
 /**

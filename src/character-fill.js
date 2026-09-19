@@ -201,7 +201,7 @@ export async function fillSources(char) {
 // exercises those directly passes whatever this does, which is how two mutations of exactly
 // that wiring went unnoticed.
 export function buildProfilePrompt(char, wanted, sources) {
-    const parts = [promptText('profileCharacter', { name: char.name })];
+    const values = { name: char.name };
 
     // Named so the story cannot be mistaken for a description of them. The reader writes
     // most of what is in an excerpt, so their persona is the best-described person in it
@@ -211,13 +211,13 @@ export function buildProfilePrompt(char, wanted, sources) {
         /* The exception matters as much as the rule. Without it the warmth field, which
            asks how this character behaves toward the reader, reads as forbidden and comes
            back blank - two instructions cancelling each other with nothing to show for it. */
-        parts.push(promptText('profilePersona', { persona: persona.name, name: char.name }));
+        values.persona = persona.name;
     }
 
     // Everything except what is being rewritten. See describeProfile.
     const rewriting = new Set(wanted.map(f => f.id));
     const known = describeProfile(char, rewriting);
-    if (known) parts.push(promptText('profileKnown', { known }));
+    values.known = known;
 
     /* The story first, and said to be the better source.
 
@@ -235,23 +235,20 @@ export function buildProfilePrompt(char, wanted, sources) {
            The story is still first, which is the point: an entry is written to steer a
            scene and is often broad where a profile wants the particular. What changed is
            what to take from it. */
-        parts.push(promptText('profileStory', { story: sources.story }));
+        values.story = sources.story;
     }
 
     if (sources.lore) {
-        parts.push(promptText(sources.story ? 'profileLoreBackground' : 'profileLore', { lore: sources.lore }));
+        values[sources.story ? 'loreBeside' : 'lore'] = sources.lore;
     }
 
-    const facts = describeTrackedFacts(char, rewriting);
-    if (facts) parts.push(promptText('profileFacts', { facts }));
+    values.facts = describeTrackedFacts(char, rewriting);
+    values.fields = wanted.map(field => `- ${field.id}: `
+        + fillTemplate(hintFor(field, getSettings().profileHints), { name: char.name }))
+        .join('\n');
 
-    parts.push(promptText('profileAsk', {
-        fields: wanted.map(field => `- ${field.id}: `
-            + fillTemplate(hintFor(field, getSettings().profileHints), { name: char.name }))
-            .join('\n'),
-    }));
-
-    return parts.join('\n\n');
+    // One text, 'profileRequest' in prompt-texts.js.
+    return promptText('profileRequest', values);
 }
 
 /**
@@ -402,14 +399,14 @@ export function buildFillPrompt(char, missing, lore, trackerSettings, { collecti
     const chat = getContext()?.chat || [];
     const schema = collections ? describeCollections(trackerSettings) : '';
 
-    return [
-        promptText('fillCharacter', { name: char.name, fields: defs.map(describe).join('\n') || '(none)' }),
-        schema ? '\n' + promptText('fillBelongings', { collections: schema }) : '',
-        facts ? '\n' + promptText('fillFacts', { facts }) : '',
-        lore ? '\n' + promptText('fillLore', { lore }) : '',
-        '\n' + promptText('fillRecent', { messages: buildLoreExcerpt(chat).text || '(no chat to read)' }),
-        '\n' + promptText('fillTask', { name: char.name }),
-    ].filter(Boolean).join('\n');
+    return promptText('fillRequest', {
+        name: char.name,
+        fields: defs.map(describe).join('\n') || '(none)',
+        collections: schema,
+        facts,
+        lore,
+        messages: buildLoreExcerpt(chat).text || '(no chat to read)',
+    });
 }
 
 /**

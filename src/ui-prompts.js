@@ -21,6 +21,7 @@ export function buildPromptEditor(entry, { onChange, showHome = false } = {}) {
         recommended: entry.recommended?.(),
         emptyNote: entry.emptyNote,
         builtIn: entry.showsBuiltIn ? entry.recommended?.() : undefined,
+        rows: entry.rows,
         showTokens: true,
         onChange,
     });

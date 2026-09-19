@@ -236,5 +236,5 @@ export function addNotPeople(labels) {
 
 /** What the scan is asked, given the chat log it reads. */
 export function buildBanScanPrompt(log) {
-    return promptText('banScanTask', { log });
+    return promptText('banScanRequest', { log });
 }

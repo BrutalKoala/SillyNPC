@@ -3,257 +3,262 @@ import { getSettings } from './settings.js';
 /**
  * The wording of every prompt the extension builds in code, as texts you can edit.
  *
- * The prompts with their own box (the Prompts tab's first entries) were always editable.
- * What was not is everything the extension assembles around them: the reader's section
- * headings and asks, the story model's tracker block, the scans, the fills. Each of those
- * is here, under an id, with its default exactly what the code used to send - so nothing
- * changes until somebody edits one.
+ * One text per thing that is sent: a message to a model, or one block put into the story's
+ * prompt. What reaches the model as one piece is one text here, so reading a text is reading
+ * what is sent, in order.
  *
- * {{placeholders}} are the parts made from your data (the state, a list of fields, the
- * message). A line whose placeholders all come out empty is left out, which is how a line
- * like "Already open, do not list again:" disappears when there is nothing to list.
- * Anything else in double braces is left alone, so SillyTavern's own macros survive.
+ * Inside a text:
+ *  - {{name}} is filled with your data - the state, the message, a list of fields.
+ *  - A section between a line {{#name}} and a line {{/name}} is sent only when {{name}} has
+ *    something in it. That is how the LIMITS section disappears when nothing has a limit.
+ *  - A line whose placeholders all come out empty is left out.
+ *  - Any other double-brace word is left alone, so SillyTavern's own macros survive.
  *
- * Kept free of imports beyond settings, so any prompt builder can use it without a cycle.
+ * Each default is exactly what the code used to send. Kept free of imports beyond settings,
+ * so any prompt builder can use it without a cycle.
  */
 
 const lines = (...parts) => parts.join('\n');
 
 /**
- * @type {Array<{ id: string, group: string, label: string, help: string, text: string }>}
+ * @type {Array<{ id: string, group: string, label: string, where: string, when: string,
+ *   placeholders: Record<string, string>, text: string }>}
  */
 export const PROMPT_TEXTS = [
-    // --- the tracker's reader, one message at a time ---
     {
-        id: 'readerChanges', group: 'Tracker reader', label: 'What you may change',
-        help: 'Opens the reader\'s prompt, before the state. Says the stats and collections are closed lists.',
-        text: lines('### WHAT YOU MAY CHANGE',
+        id: 'reader', group: 'Tracker reader', label: 'Reader request',
+        where: 'The request the tracker\'s reader gets for each new message, after your Extraction Instructions (which are its system prompt).',
+        when: 'Every message, when the tracker reads replies separately.',
+        placeholders: {
+            state: 'The scene as it stands, as JSON.',
+            offstage: 'Tracked characters the message names who are not on stage, with what is on file for them.',
+            limits: 'Ranges, allowed values and how each field is written, from System Builder.',
+            notes: 'Notes other extensions add, each with its own heading.',
+            strangers: 'Speakers without a card, when you have tagged fallback portraits.',
+            strangerKinds: 'Your portrait tags.',
+            strangerExample: 'One stranger paired with one tag.',
+            collections: 'Each collection and the fields its items have.',
+            collectionExample: 'A worked change in your own collection and field names.',
+            profileFields: 'Profile fields you have unlocked for the reader, as Name.field.',
+            minimalReply: 'The smallest reply, in your stat names and the cast present.',
+            earlier: 'The messages before this one, when you send any.',
+            message: 'The message being read.',
+            reasons: 'Switch: on when "Ask for reasons" is on.',
+            threads: 'Switch: on when threads are on.',
+            threadKinds: 'The kinds of thread, one per line.',
+            openThreads: 'The quotes of the threads already in play.',
+        },
+        text: lines(
+            '### WHAT YOU MAY CHANGE',
             'The stats are exactly the ones named in the current state below. The collections '
                 + 'are exactly the ones listed under their own heading. There are no others: a '
                 + 'name that does not appear below does not exist here, whatever it is called '
-                + 'in other games.'),
-    },
-    {
-        id: 'readerState', group: 'Tracker reader', label: 'Current state',
-        help: '{{state}} - the scene as it stands, as JSON.',
-        text: lines('### CURRENT STATE', '{{state}}'),
-    },
-    {
-        id: 'readerOffstage', group: 'Tracker reader', label: 'Known, but not in the scene',
-        help: 'Sent when the message names a tracked character who is not on stage. {{characters}} - what is on file for them.',
-        text: lines('### KNOWN, BUT NOT IN THE SCENE',
+                + 'in other games.',
+            '',
+            '### CURRENT STATE',
+            '{{state}}',
+            '{{#offstage}}',
+            '',
+            '### KNOWN, BUT NOT IN THE SCENE',
             'Named in the message and already tracked, but not on stage. This is what '
                 + 'is on file for them. Do not report them back: if the message puts one of '
                 + 'them into the scene, include them in "characters" and report only what '
                 + 'this message changed about them.',
-            '{{characters}}'),
-    },
-    {
-        id: 'readerLimits', group: 'Tracker reader', label: 'Limits',
-        help: '{{limits}} - ranges, allowed values and how each field is written, from System Builder.',
-        text: lines('### LIMITS', '{{limits}}'),
-    },
-    {
-        id: 'readerStrangers', group: 'Tracker reader', label: 'Strangers',
-        help: 'Sent when somebody without a card speaks and you have tagged fallback portraits. '
-            + '{{names}} - who they are, {{kinds}} - your portrait tags, {{example}} - one filled-in pair.',
-        text: lines('### STRANGERS',
-            'These speakers have no character card: {{names}}.',
+            '{{offstage}}',
+            '{{/offstage}}',
+            '{{#limits}}',
+            '',
+            '### LIMITS',
+            '{{limits}}',
+            '{{/limits}}',
+            '{{notes}}',
+            '{{#strangers}}',
+            '',
+            '### STRANGERS',
+            'These speakers have no character card: {{strangers}}.',
             'Also return a "strangers" object giving each of them the one kind that fits them best,',
-            'chosen only from: {{kinds}}.',
-            'For example: { {{example}} }. If none of those fits, give "".'),
-    },
-    {
-        id: 'readerCollections', group: 'Tracker reader', label: 'Collections and their fields',
-        help: '{{fields}} - each collection and the fields its items have.',
-        text: lines('### COLLECTIONS AND THEIR FIELDS', '{{fields}}'),
-    },
-    {
-        id: 'readerCollectionExample', group: 'Tracker reader', label: 'A collection change',
-        help: '{{example}} - a worked change in your own collection and field names.',
-        text: lines('### A COLLECTION CHANGE LOOKS LIKE THIS', '{{example}}',
-            'Omit any field the message does not state. Do not guess a value.'),
-    },
-    {
-        id: 'readerProfileFields', group: 'Tracker reader', label: 'Profile fields it may update',
-        help: 'Sent only when you have unlocked a profile field for the reader. {{fields}} - which ones, as Name.field.',
-        text: lines('### PROFILE FIELDS YOU MAY UPDATE',
+            'chosen only from: {{strangerKinds}}.',
+            'For example: { {{strangerExample}} }. If none of those fits, give "".',
+            '{{/strangers}}',
+            '{{#collections}}',
+            '',
+            '### COLLECTIONS AND THEIR FIELDS',
+            '{{collections}}',
+            '{{/collections}}',
+            '{{#collectionExample}}',
+            '',
+            '### A COLLECTION CHANGE LOOKS LIKE THIS',
+            '{{collectionExample}}',
+            'Omit any field the message does not state. Do not guess a value.',
+            '{{/collectionExample}}',
+            '{{#profileFields}}',
+            '',
+            '### PROFILE FIELDS YOU MAY UPDATE',
             'Their current values are in the state above. These describe who somebody IS, not '
                 + 'what is happening to them, and they change rarely - a scar, a haircut, a lasting '
                 + 'change of manner. Update one only when the latest message plainly shows it. '
                 + 'Omitting a field means unchanged, which is almost always the right answer. Any '
                 + 'profile field not listed here must not be changed. Return them under "profile" '
                 + 'on that character, beside "stats".',
-            '{{fields}}'),
-    },
-    {
-        id: 'readerMinimalReply', group: 'Tracker reader', label: 'A minimal reply',
-        help: '{{example}} - the smallest reply, in your own stat names and the cast present.',
-        text: lines('### A MINIMAL REPLY LOOKS LIKE THIS', '{{example}}',
-            'Everyone present is listed; only what changed carries a value.'),
-    },
-    {
-        id: 'readerEarlier', group: 'Tracker reader', label: 'Earlier messages',
-        help: '{{messages}} - the messages before the one being read, when you send any.',
-        text: lines('### EARLIER MESSAGES (context only - already reflected in the state above)', '{{messages}}'),
-    },
-    {
-        id: 'readerLatest', group: 'Tracker reader', label: 'Latest message',
-        help: '{{message}} - the message being read.',
-        text: lines('### LATEST MESSAGE (apply what this one changes)', '{{message}}'),
-    },
-    {
-        id: 'readerTask', group: 'Tracker reader', label: 'Task',
-        help: 'The ask, after the message.',
-        text: lines('### TASK', 'Return the updated state as JSON.'),
-    },
-    {
-        id: 'readerReasons', group: 'Tracker reader', label: 'Ask for reasons',
-        help: 'Sent when "Ask for reasons" is on.',
-        text: lines('Also return a "why" object explaining every value you changed: one short',
+            '{{profileFields}}',
+            '{{/profileFields}}',
+            '{{#minimalReply}}',
+            '',
+            '### A MINIMAL REPLY LOOKS LIKE THIS',
+            '{{minimalReply}}',
+            'Everyone present is listed; only what changed carries a value.',
+            '{{/minimalReply}}',
+            '{{#earlier}}',
+            '',
+            '### EARLIER MESSAGES (context only - already reflected in the state above)',
+            '{{earlier}}',
+            '{{/earlier}}',
+            '',
+            '### LATEST MESSAGE (apply what this one changes)',
+            '{{message}}',
+            '',
+            '### TASK',
+            'Return the updated state as JSON.',
+            '{{#reasons}}',
+            'Also return a "why" object explaining every value you changed: one short',
             'clause each, naming what in the latest message caused it.',
             'Key it by the stat - "Time" for a world stat, "Player.Health" for the player,',
             '"Elza.Health" for a character.',
             'If you cannot point at something in the latest message, do not change the',
-            'value at all and do not list it.'),
-    },
-    {
-        id: 'readerThreads', group: 'Tracker reader', label: 'Ask for threads',
-        help: 'Sent when threads are on. {{kinds}} - the kinds of thread, one per line. '
-            + '{{open}} - the "Already open" text below, when anything is open.',
-        text: lines('Also return a "threads" array for anything in the latest message that opened',
+            'value at all and do not list it.',
+            '{{/reasons}}',
+            '{{#threads}}',
+            'Also return a "threads" array for anything in the latest message that opened',
             'one of these and is not finished with:',
-            '{{kinds}}',
+            '{{threadKinds}}',
             'Each: { "kind": "...", "text": "what is outstanding, one line",',
             '"quote": "the words from the message that opened it", "who": "who it is about" }.',
             'The quote must be words that appear in the latest message. If you cannot quote',
             'it, do not list it.',
             'Most messages open nothing. An empty array is the usual answer.',
-            '{{open}}',
+            '{{#openThreads}}',
+            'Already open, do not list again:',
+            '{{openThreads}}',
+            '{{/openThreads}}',
             'Return "closed" as an array of the quoted lines above that this message',
-            'resolved, if any.'),
-    },
-    {
-        id: 'readerThreadsOpen', group: 'Tracker reader', label: 'Threads already open',
-        help: '{{threads}} - the quotes of the threads in play.',
-        text: lines('Already open, do not list again:', '{{threads}}'),
+            'resolved, if any.',
+            '{{/threads}}'),
     },
 
-    // --- the story model's tracker block, inline mode ---
     {
-        id: 'storyIntro', group: 'Story tracker block', label: 'Opening',
-        help: 'Inline mode only. {{status}} - the scene block, {{rules}} - your System Rules & Logic.',
-        text: lines('### STATUS TRACKER ACTIVE',
+        id: 'storyBlock', group: 'Story model', label: 'Tracker block',
+        where: 'Put into the story prompt, in the chat, telling the story model to write the status update itself.',
+        when: 'Every message, only when the tracker updates inline (not with a separate reader).',
+        placeholders: {
+            status: 'The scene block (see Scene block).',
+            rules: 'Your System Rules & Logic.',
+            limits: 'Switch: on when any stat has a maximum.',
+            playerLimits: 'The player\'s maximums.',
+            npcLimits: 'The characters\' maximums.',
+            schemas: 'Each collection in play and its fields.',
+            sceneChange: 'Switch: on when a scene stat is set.',
+        },
+        text: lines(
+            '### STATUS TRACKER ACTIVE',
             'Update the following status realistically based on the latest events in the story.',
             'Current Status:',
             '{{status}}',
             '',
             'IMPORTANT: The "Current Status" block is the authoritative source of truth. If an item or character is missing from it, they are no longer present or in possession. Do NOT re-add items that were recently removed unless the current message explicitly describes acquiring them again.',
             '',
-            'Rules: {{rules}}'),
-    },
-    {
-        id: 'storyCosts', group: 'Story tracker block', label: 'Double-deducting costs',
-        help: 'Inline mode only.',
-        text: lines('### CRITICAL RULE: AVOID DOUBLE-DEDUCTING COSTS',
+            'Rules: {{rules}}',
+            '',
+            '### CRITICAL RULE: AVOID DOUBLE-DEDUCTING COSTS',
             '- Action/Spell Costs: If a resource, attribute, or item cost (e.g., Energy, Mana, HP, Ammo, Gold) was already deducted or used in a previous turn (for example, in the message prompting a roll or when the action was initiated), do NOT deduct it again when describing the outcome or resolution of that action.',
-            '- The "Current Status" already reflects the prior deduction. Only apply NEW changes, damage, or costs that occur in the latest turn (e.g., backlash damage, new item usage).'),
-    },
-    {
-        id: 'storyProcess', group: 'Story tracker block', label: 'Update process',
-        help: 'Inline mode only.',
-        text: lines('### UPDATE PROCESS',
+            '- The "Current Status" already reflects the prior deduction. Only apply NEW changes, damage, or costs that occur in the latest turn (e.g., backlash damage, new item usage).',
+            '',
+            '### UPDATE PROCESS',
             '1. Reasoning: Briefly explain the changes in 1-2 sentences (e.g., "The player took damage and used a potion."). Focus on stat changes, collection updates, and environment changes.',
-            '2. JSON Update: Provide the updated status block wrapped in <status_update> tags.'),
-    },
-    {
-        id: 'storyLimits', group: 'Story tracker block', label: 'Stat limits',
-        help: 'Inline mode only, when any stat has a maximum. {{player}} and {{npc}} - the maximums in play.',
-        text: lines('### STAT LIMITS (Maximums)',
-            '- Player Max Stats: {{player}}',
-            '- NPC Max Stats: {{npc}}',
-            'Maintain values within these limits. If a stat format includes a max (e.g. "50/100"), ensure you update only the current value unless the maximum itself should change.'),
-    },
-    {
-        id: 'storySync', group: 'Story tracker block', label: 'Collection sync rules',
-        help: 'Inline mode only.',
-        text: lines('### COLLECTION SYNC RULES',
+            '2. JSON Update: Provide the updated status block wrapped in <status_update> tags.',
+            '{{#limits}}',
+            '',
+            '### STAT LIMITS (Maximums)',
+            '- Player Max Stats: {{playerLimits}}',
+            '- NPC Max Stats: {{npcLimits}}',
+            'Maintain values within these limits. If a stat format includes a max (e.g. "50/100"), ensure you update only the current value unless the maximum itself should change.',
+            '{{/limits}}',
+            '',
+            '### COLLECTION SYNC RULES',
             'Collections (e.g., inventory, spells, skills) MUST be updated via **Full State Sync** (replacement):',
             '- Both the \'player\' and any object in the \'characters\' array can have a \'collections\' object.',
             '- Provide an ARRAY of ALL items that should be in the collection after the update.',
             '- CRITICAL: You MUST ALWAYS preserve and carry over ALL existing spells, skills, items, and accessories verbatim unless they are explicitly lost, destroyed, consumed, or discarded in the story context. NEVER omit existing items or spells from an active character\'s collections array, as omission equals complete deletion.',
             '- You can transfer items between actors by removing them from one collection and adding them to another in the same update.',
-            '- Example: "inventory": [ { "name": "Sword", "quantity": 1 }, { "name": "Potion", "quantity": 2 } ]'),
-    },
-    {
-        id: 'storyDelta', group: 'Story tracker block', label: 'Delta rules',
-        help: 'Inline mode only.',
-        text: lines('### LEGACY DELTA RULES (Fallback)',
+            '- Example: "inventory": [ { "name": "Sword", "quantity": 1 }, { "name": "Potion", "quantity": 2 } ]',
+            '',
+            '### LEGACY DELTA RULES (Fallback)',
             'If you only need to make a small change, you may optionally use delta objects:',
             '- "add": [ { "name": "Item", "quantity": 1, ... } ] - Adds or increments quantity if it exists.',
             '- "remove": [ "Item Name" ] - Removes the item.',
             '- "update": [ { "name": "Item", "quantity": 5 } ] - Modifies specific fields of an existing item.',
-            '- "clear": true - Resets the collection.'),
-    },
-    {
-        id: 'storySchemas', group: 'Story tracker block', label: 'Collection schemas',
-        help: 'Inline mode only. {{schemas}} - each collection in play and its fields.',
-        text: lines('### COLLECTION SCHEMAS', '{{schemas}}'),
-    },
-    {
-        id: 'storyClosing', group: 'Story tracker block', label: 'Closing',
-        help: 'Inline mode only. {{sceneChange}} - the line below, when a scene stat is set.',
-        text: lines('IMPORTANT: Always include the FULL list of characters currently present in the scene in the "characters" array. If a character is no longer present, remove them from the list.',
-            '{{sceneChange}}',
+            '- "clear": true - Resets the collection.',
+            '{{#schemas}}',
+            '',
+            '### COLLECTION SCHEMAS',
+            '{{schemas}}',
+            '{{/schemas}}',
+            '',
+            'IMPORTANT: Always include the FULL list of characters currently present in the scene in the "characters" array. If a character is no longer present, remove them from the list.',
+            '{{#sceneChange}}',
+            'IMPORTANT: If the scene or location changes, ONLY include characters in the \'characters\' array who moved to the new scene. Omit any characters left behind.',
+            '{{/sceneChange}}',
             'Format: At the absolute end of your response, you MUST provide the reasoning and the <status_update> tags. Do not use markdown code blocks inside the tags.'),
     },
     {
-        id: 'storySceneChange', group: 'Story tracker block', label: 'Scene change',
-        help: 'Inline mode only, when a scene stat is set.',
-        text: 'IMPORTANT: If the scene or location changes, ONLY include characters in the \'characters\' array who moved to the new scene. Omit any characters left behind.',
-    },
-    {
-        id: 'storyExample', group: 'Story tracker block', label: 'Example reply',
-        help: 'Inline mode only: the made-up earlier reply that shows the format. {{field}} - the inventory\'s name field.',
+        id: 'storyExample', group: 'Story model', label: 'Example reply',
+        where: 'Put into the story prompt as a made-up earlier reply, showing the story model the status update format.',
+        when: 'Every message, only when the tracker updates inline.',
+        placeholders: { field: 'The name field of your inventory collection.' },
         text: 'The player ate a Health Potion but was still hit by the Goblin. The Goblin was subsequently defeated, and the player took their Rusty Dagger. Updated the inventory for both actors to show the transfer.\n'
             + '<status_update>{"player":{"stats":{"HP":"18/20"},"collections":{"inventory":[{"{{field}}":"Iron Sword","quantity":1,"description":"Slightly rusted"},{"{{field}}":"Apple","quantity":3,"description":"Red and juicy"},{"{{field}}":"Rusty Dagger","quantity":1,"description":"Taken from the Goblin"}]}},"characters":[{"name":"Goblin","stats":{"HP":"0","Condition":"Dead"},"collections":{"inventory":[]}}]}</status_update>',
     },
+    {
+        id: 'sceneBlock', group: 'Story model', label: 'Scene block',
+        where: 'Put into the story prompt, in the chat: who is here and what they have, so the story model writes with it.',
+        when: 'Every message while the tracker is on. Inside the Tracker block too, as its {{status}}, in inline mode.',
+        placeholders: {
+            status: 'The world, the player and each character present, with their stats and belongings.',
+            profiles: 'The profiles of everyone present.',
+            offstage: 'Characters whose lorebook entry fired but who are not in the scene.',
+            threads: 'The threads in play.',
+        },
+        text: lines(
+            '[Current Scene Status]',
+            '{{status}}',
+            '{{#profiles}}',
+            'Who they are:',
+            '{{profiles}}',
+            '{{/profiles}}',
+            '{{#offstage}}',
+            'Also on file. Who these people are if the story uses them - being listed here is '
+                + 'not a cue to bring them in, and not a claim about where they are:',
+            '{{offstage}}',
+            '{{/offstage}}',
+            '{{#threads}}',
+            'Open threads (raised earlier in the story, already said - context, not lines to repeat):',
+            '{{threads}}',
+            '{{/threads}}'),
+    },
 
-    // --- the scene block, sent to the story model every message ---
-    {
-        id: 'sceneHeader', group: 'Scene block', label: 'Heading',
-        help: 'The first line of the scene block.',
-        text: '[Current Scene Status]',
-    },
-    {
-        id: 'sceneProfiles', group: 'Scene block', label: 'Who they are',
-        help: '{{people}} - the profiles of everyone in the scene.',
-        text: lines('Who they are:', '{{people}}'),
-    },
-    {
-        id: 'sceneOffstage', group: 'Scene block', label: 'Also on file',
-        help: '{{people}} - characters whose lore fired but who are not in the scene.',
-        text: lines('Also on file. Who these people are if the story uses them - being listed here is '
-            + 'not a cue to bring them in, and not a claim about where they are:', '{{people}}'),
-    },
-    {
-        id: 'sceneThreads', group: 'Scene block', label: 'Open threads',
-        help: '{{threads}} - the threads in play.',
-        text: lines('Open threads (raised earlier in the story, already said - context, '
-            + 'not lines to repeat):', '{{threads}}'),
-    },
-
-    // --- banned phrases ---
     {
         id: 'banInstruction', group: 'Banned phrases', label: 'Phrases to avoid',
-        help: 'Sent when the ban list is sent as an instruction rather than to the sampler. {{phrases}} - the list.',
+        where: 'Put into the story prompt.',
+        when: 'Every message, when the ban list is on and sent as an instruction rather than to the sampler.',
+        placeholders: { phrases: 'Your banned phrases, one per line.' },
         text: lines('### PHRASES TO AVOID',
             'Do not use these words or phrases, or close variations of them:',
             '{{phrases}}'),
     },
     {
-        id: 'banScanSystem', group: 'Banned phrases', label: 'Scan: instructions',
-        help: 'What the scan for repeated phrases is told it is.',
+        id: 'banScanSystem', group: 'Banned phrases', label: 'Scan: system prompt',
+        where: 'The system prompt of the scan for repeated phrases.',
+        when: 'When you press Scan in the ban list.',
+        placeholders: {},
         text: lines('You are reviewing a roleplaying chat log for a writer who wants to stop their model',
             'repeating itself.',
             'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
@@ -271,18 +276,21 @@ export const PROMPT_TEXTS = [
             '- Both lists may be empty. An empty list is a real answer.'),
     },
     {
-        id: 'banScanTask', group: 'Banned phrases', label: 'Scan: task',
-        help: '{{log}} - the recent narration.',
+        id: 'banScanRequest', group: 'Banned phrases', label: 'Scan: request',
+        where: 'The request of the scan for repeated phrases.',
+        when: 'When you press Scan in the ban list.',
+        placeholders: { log: 'The recent narration.' },
         text: lines('### CHAT LOG', '{{log}}', '',
             '### TASK',
             'List the phrases this narration leans on, and any labels it writes as speakers '
                 + 'that are not characters.'),
     },
 
-    // --- scanning the story ---
     {
-        id: 'scanSystem', group: 'History scan', label: 'Belongings: instructions',
-        help: 'What the belongings scan is told it is.',
+        id: 'scanSystem', group: 'Scanning the story', label: 'Belongings: system prompt',
+        where: 'The system prompt of the scan that reads the story for what everybody holds and knows.',
+        when: 'When you run the history scan.',
+        placeholders: {},
         text: lines('You read a roleplay transcript and report what each character is CARRYING and KNOWS',
             'at the END of it. You are taking an inventory, not writing a summary.',
             '',
@@ -312,27 +320,33 @@ export const PROMPT_TEXTS = [
             '- If an item was upgraded and renamed, give the current name once, not both.'),
     },
     {
-        id: 'scanLayout', group: 'History scan', label: 'Belongings: what it is shown',
-        help: '{{collections}} - your collections, {{shape}} - the reply to copy, {{recorded}} - what is held now.',
+        id: 'scanRequest', group: 'Scanning the story', label: 'Belongings: request',
+        where: 'The request of the belongings scan, once per part of the story.',
+        when: 'When you run the history scan.',
+        placeholders: {
+            collections: 'Your collections.',
+            shape: 'The reply to copy, in your collection and field names.',
+            recorded: 'What everybody holds now.',
+            dismissed: 'Items you turned down before.',
+            transcript: 'The part of the story being read.',
+        },
         text: lines('### COLLECTIONS', '{{collections}}',
             '### REPLY EXACTLY IN THIS SHAPE', '{{shape}}',
-            '### CURRENTLY RECORDED', '{{recorded}}'),
-    },
-    {
-        id: 'scanDismissed', group: 'History scan', label: 'Belongings: do not propose',
-        help: '{{items}} - items you turned down before.',
-        text: lines('### DO NOT PROPOSE', '{{items}}'),
-    },
-    {
-        id: 'scanTask', group: 'History scan', label: 'Belongings: task',
-        help: '{{transcript}} - the part of the story being read.',
-        text: lines('### TRANSCRIPT', '{{transcript}}',
+            '### CURRENTLY RECORDED', '{{recorded}}',
+            '{{#dismissed}}',
+            '',
+            '### DO NOT PROPOSE',
+            '{{dismissed}}',
+            '{{/dismissed}}',
+            '### TRANSCRIPT', '{{transcript}}',
             '### TASK',
             'List what each character holds and knows at the END of the transcript, as JSON.'),
     },
     {
-        id: 'threadScanSystem', group: 'History scan', label: 'Threads: instructions',
-        help: '{{kinds}} - the kinds of thread, one per line.',
+        id: 'threadScanSystem', group: 'Scanning the story', label: 'Threads: system prompt',
+        where: 'The system prompt of the scan that reads the story for what is still unfinished.',
+        when: 'When you scan for threads.',
+        placeholders: { kinds: 'The kinds of thread, one per line.' },
         text: lines('You read a roleplay transcript and report what is still UNFINISHED at the end of it.',
             '',
             'Reply with ONE JSON object and nothing else. No explanation, no code fence.',
@@ -352,18 +366,21 @@ export const PROMPT_TEXTS = [
             '- Few is right. A long transcript usually leaves a handful of things hanging.'),
     },
     {
-        id: 'threadScanTask', group: 'History scan', label: 'Threads: task',
-        help: '{{transcript}} - the part of the story being read.',
+        id: 'threadScanRequest', group: 'Scanning the story', label: 'Threads: request',
+        where: 'The request of the thread scan, once per part of the story.',
+        when: 'When you scan for threads.',
+        placeholders: { transcript: 'The part of the story being read.' },
         text: lines('### TRANSCRIPT', '{{transcript}}', '',
             '### TASK',
             'List what is still unfinished at the end of this, quoting the line each',
             'one came from.'),
     },
 
-    // --- Fill: who somebody is ---
     {
-        id: 'profileSystem', group: 'Fill', label: 'Profile: instructions',
-        help: 'What Fill is told it is when writing a profile.',
+        id: 'profileSystem', group: 'Fill', label: 'Profile: system prompt',
+        where: 'The system prompt when Fill writes a character\'s profile.',
+        when: 'When you press Fill and a profile field is to be filled.',
+        placeholders: {},
         text: lines('You are filling in the profile of one character in a roleplaying session.',
             'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
             '',
@@ -378,53 +395,62 @@ export const PROMPT_TEXTS = [
             '- Third person. No preamble.'),
     },
     {
-        id: 'profileCharacter', group: 'Fill', label: 'Profile: the character',
-        help: '{{name}} - who is being filled in.',
-        text: 'Character: {{name}}',
+        id: 'profileRequest', group: 'Fill', label: 'Profile: request',
+        where: 'The request when Fill writes a character\'s profile.',
+        when: 'When you press Fill and a profile field is to be filled.',
+        placeholders: {
+            name: 'The character being filled in.',
+            persona: 'Your persona\'s name, when it is somebody else.',
+            known: 'The profile fields already written.',
+            story: 'The recent messages, when the character is in them.',
+            lore: 'Their lorebook entry, when there is no story to go on.',
+            loreBeside: 'Their lorebook entry, when the story is sent too.',
+            facts: 'What the tracker records about them.',
+            fields: 'The fields wanted, each with its hint (the Profile hints).',
+        },
+        text: lines('Character: {{name}}',
+            '{{#persona}}',
+            '',
+            '{{persona}} is the reader\'s own character, not the subject. '
+                + 'Nothing about {{persona}} belongs on {{name}}\'s profile, except how '
+                + '{{name}} behaves toward them.',
+            '{{/persona}}',
+            '{{#known}}',
+            '',
+            'Already known about them, do not contradict it:',
+            '{{known}}',
+            '{{/known}}',
+            '{{#story}}',
+            '',
+            'Recent story, as one source among several. Take what is generally true '
+                + 'of this character from it, not what was true of them in the last few '
+                + 'minutes. Somebody frightened or angry in these messages is not permanently so.',
+            '{{story}}',
+            '{{/story}}',
+            '{{#lore}}',
+            '',
+            'Their lorebook entry:',
+            '{{lore}}',
+            '{{/lore}}',
+            '{{#loreBeside}}',
+            '',
+            'Their lorebook entry, as background:',
+            '{{loreBeside}}',
+            '{{/loreBeside}}',
+            '{{#facts}}',
+            '',
+            'What the tracker records about them:',
+            '{{facts}}',
+            '{{/facts}}',
+            '',
+            'Fill in these fields:',
+            '{{fields}}'),
     },
     {
-        id: 'profilePersona', group: 'Fill', label: 'Profile: not your persona',
-        help: '{{persona}} - your persona\'s name, {{name}} - who is being filled in.',
-        text: '{{persona}} is the reader\'s own character, not the subject. '
-            + 'Nothing about {{persona}} belongs on {{name}}\'s profile, except how '
-            + '{{name}} behaves toward them.',
-    },
-    {
-        id: 'profileKnown', group: 'Fill', label: 'Profile: already known',
-        help: '{{known}} - the profile fields already written.',
-        text: lines('Already known about them, do not contradict it:', '{{known}}'),
-    },
-    {
-        id: 'profileStory', group: 'Fill', label: 'Profile: recent story',
-        help: '{{story}} - the recent messages, when they are in them.',
-        text: lines('Recent story, as one source among several. Take what is generally true '
-            + 'of this character from it, not what was true of them in the last few '
-            + 'minutes. Somebody frightened or angry in these messages is not permanently '
-            + 'so.', '{{story}}'),
-    },
-    {
-        id: 'profileLore', group: 'Fill', label: 'Profile: lorebook entry',
-        help: '{{lore}} - their entry, when there is no story to go on.',
-        text: lines('Their lorebook entry:', '{{lore}}'),
-    },
-    {
-        id: 'profileLoreBackground', group: 'Fill', label: 'Profile: lorebook entry, beside the story',
-        help: '{{lore}} - their entry, when the story is sent too.',
-        text: lines('Their lorebook entry, as background:', '{{lore}}'),
-    },
-    {
-        id: 'profileFacts', group: 'Fill', label: 'Profile: tracker facts',
-        help: '{{facts}} - what the tracker records about them.',
-        text: lines('What the tracker records about them:', '{{facts}}'),
-    },
-    {
-        id: 'profileAsk', group: 'Fill', label: 'Profile: the ask',
-        help: '{{fields}} - the fields wanted, each with its hint.',
-        text: lines('Fill in these fields:', '{{fields}}'),
-    },
-    {
-        id: 'fillSystem', group: 'Fill', label: 'Sheet: instructions',
-        help: 'What Fill is told it is when filling tracker fields and belongings.',
+        id: 'fillSystem', group: 'Fill', label: 'Sheet: system prompt',
+        where: 'The system prompt when Fill fills a character\'s tracker fields and belongings.',
+        when: 'When you press Fill and fields or belongings are to be filled.',
+        placeholders: {},
         text: lines('You are filling in a character sheet for one character in a roleplaying session.',
             'Reply with a JSON object and nothing else. No prose, no markdown, no code fences.',
             '',
@@ -439,41 +465,47 @@ export const PROMPT_TEXTS = [
             '  this character has it.'),
     },
     {
-        id: 'fillCharacter', group: 'Fill', label: 'Sheet: the character and fields',
-        help: '{{name}} - who, {{fields}} - the fields to fill.',
-        text: lines('### CHARACTER', '{{name}}', '### FIELDS TO FILL', '{{fields}}'),
-    },
-    {
-        id: 'fillBelongings', group: 'Fill', label: 'Sheet: belongings',
-        help: 'Sent when belongings are wanted. {{collections}} - your collections.',
-        text: lines('### BELONGINGS THEY MAY HAVE', '{{collections}}',
-            'Only where the material plainly gives it to them.'),
-    },
-    {
-        id: 'fillFacts', group: 'Fill', label: 'Sheet: already recorded',
-        help: '{{facts}} - what the tracker records about them.',
-        text: lines('### ALREADY RECORDED ABOUT THEM', '{{facts}}'),
-    },
-    {
-        id: 'fillLore', group: 'Fill', label: 'Sheet: lore entry',
-        help: '{{lore}} - their entry.',
-        text: lines('### THEIR LORE ENTRY', '{{lore}}'),
-    },
-    {
-        id: 'fillRecent', group: 'Fill', label: 'Sheet: recent messages',
-        help: '{{messages}} - the recent story.',
-        text: lines('### RECENT MESSAGES', '{{messages}}'),
-    },
-    {
-        id: 'fillTask', group: 'Fill', label: 'Sheet: task',
-        help: '{{name}} - who is being filled in.',
-        text: lines('### TASK', 'Fill in what the material supports for {{name}}, as JSON.'),
+        id: 'fillRequest', group: 'Fill', label: 'Sheet: request',
+        where: 'The request when Fill fills a character\'s tracker fields and belongings.',
+        when: 'When you press Fill and fields or belongings are to be filled.',
+        placeholders: {
+            name: 'The character being filled in.',
+            fields: 'The fields to fill, with their range and usual value.',
+            collections: 'Your collections, when belongings are wanted.',
+            facts: 'What the tracker already records about them.',
+            lore: 'Their lorebook entry.',
+            messages: 'The recent story.',
+        },
+        text: lines('### CHARACTER', '{{name}}', '### FIELDS TO FILL', '{{fields}}',
+            '{{#collections}}',
+            '',
+            '### BELONGINGS THEY MAY HAVE',
+            '{{collections}}',
+            'Only where the material plainly gives it to them.',
+            '{{/collections}}',
+            '{{#facts}}',
+            '',
+            '### ALREADY RECORDED ABOUT THEM',
+            '{{facts}}',
+            '{{/facts}}',
+            '{{#lore}}',
+            '',
+            '### THEIR LORE ENTRY',
+            '{{lore}}',
+            '{{/lore}}',
+            '',
+            '### RECENT MESSAGES',
+            '{{messages}}',
+            '',
+            '### TASK',
+            'Fill in what the material supports for {{name}}, as JSON.'),
     },
 
-    // --- lore ---
     {
-        id: 'loreSystem', group: 'Lore', label: 'Lore writer: instructions',
-        help: 'What the lore writer is told it is, before your Lore Prompt Template.',
+        id: 'loreSystem', group: 'Lore', label: 'Lore writer: system prompt',
+        where: 'The system prompt of the lore writer. Your Lore Prompt Template is its request.',
+        when: 'When a lorebook entry is generated.',
+        placeholders: {},
         text: 'You write reference entries for a roleplaying setting\'s world information. '
             + 'Follow the requested format exactly. Reply with the entry and nothing else - no '
             + 'preamble, no commentary, and never dialogue or narration.',
@@ -489,9 +521,13 @@ export function defaultPromptText(id) {
     return entry.text;
 }
 
+const SECTION = /^\s*\{\{([#/])(\w+)\}\}\s*$/;
+
 /**
- * Fills a text's placeholders, in one pass.
+ * Fills a text, in one pass.
  *
+ * A line that is only {{#name}} or {{/name}} opens or closes a section; the section is kept
+ * when that value has something in it, and the marker lines themselves are never sent.
  * One pass, so a value that itself contains {{something}} - a message quoting a macro - is
  * sent as written rather than filled again. Only the keys given are filled; any other
  * double-brace word is left for SillyTavern's own macros. A line whose placeholders all
@@ -500,11 +536,21 @@ export function defaultPromptText(id) {
 export function fillPromptText(template, values = {}) {
     const known = (key) => Object.prototype.hasOwnProperty.call(values, key);
     const value = (key) => String(values[key] ?? '');
-    return String(template).split('\n').flatMap(line => {
+    const open = [];
+    const out = [];
+    for (const line of String(template).split('\n')) {
+        const section = line.match(SECTION);
+        if (section) {
+            if (section[1] === '#') open.push(known(section[2]) && value(section[2]).trim() !== '');
+            else open.pop();
+            continue;
+        }
+        if (open.includes(false)) continue;
         const keys = [...line.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]).filter(known);
-        if (keys.length && keys.every(key => value(key) === '')) return [];
-        return [line.replace(/\{\{(\w+)\}\}/g, (whole, key) => (known(key) ? value(key) : whole))];
-    }).join('\n');
+        if (keys.length && keys.every(key => value(key) === '')) continue;
+        out.push(line.replace(/\{\{(\w+)\}\}/g, (whole, key) => (known(key) ? value(key) : whole)));
+    }
+    return out.join('\n');
 }
 
 /** The text for an id - yours when you have written one, the built-in one otherwise - filled. */

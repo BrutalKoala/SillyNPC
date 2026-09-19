@@ -4819,3 +4819,8 @@ textarea.sillynpc-profile-input {
     outline: 2px solid var(--sillynpc-accent);
     outline-offset: 2px;
 }
+
+/* A built-in text's help lists its placeholders one per line. */
+.sillynpc-prompt-group .sillynpc-setting .notes {
+    white-space: pre-line;
+}

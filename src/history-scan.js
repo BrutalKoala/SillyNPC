@@ -208,15 +208,13 @@ export function estimateScan(trackerSettings = getSettings().statusTracker) {
 // Exported for the tests: the prompt texts are checked to send exactly what they did.
 export function buildScanPrompt(state, trackerSettings, history) {
     const dismissed = describeDismissed(state);
-    return [
-        promptText('scanLayout', {
-            collections: describeCollections(trackerSettings) || '(none configured)',
-            shape: buildOutputTemplate(trackerSettings),
-            recorded: describeCurrentCollections(state) || '(nothing recorded yet)',
-        }),
-        dismissed ? '\n' + promptText('scanDismissed', { items: dismissed }) : '',
-        promptText('scanTask', { transcript: history.text }),
-    ].filter(Boolean).join('\n');
+    return promptText('scanRequest', {
+        collections: describeCollections(trackerSettings) || '(none configured)',
+        shape: buildOutputTemplate(trackerSettings),
+        recorded: describeCurrentCollections(state) || '(nothing recorded yet)',
+        dismissed,
+        transcript: history.text,
+    });
 }
 
 /**
@@ -509,5 +507,5 @@ export async function scanHistoryForThreads(onProgress) {
 
 /** What the thread scan is asked, given one part of the transcript. */
 export function buildThreadScanPrompt(transcript) {
-    return promptText('threadScanTask', { transcript });
+    return promptText('threadScanRequest', { transcript });
 }

@@ -220,8 +220,14 @@ export const BUILT_IN_PROMPTS = PROMPT_TEXTS.map(text => ({
     key: `promptTexts.${text.id}`,
     label: text.label,
     group: text.group,
-    help: `${text.help} Clearing the box goes back to the built-in wording.`,
+    help: [
+        `${text.where} ${text.when}`,
+        ...Object.entries(text.placeholders).map(([key, what]) => `{{${key}}} - ${what}`),
+        'A section between {{#name}} and {{/name}} lines is sent only when {{name}} has something '
+            + 'in it. Clearing the box goes back to the built-in wording.',
+    ].join('\n'),
     recommended: () => text.text,
     emptyNote: 'The built-in wording is sent.',
     showsBuiltIn: true,
+    rows: Math.min(18, Math.max(4, text.text.split('\n').length)),
 }));

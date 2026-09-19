@@ -106,7 +106,7 @@ export function buildSettingTextArea(options) {
 
     const textarea = document.createElement('textarea');
     textarea.className = 'text_pole sillynpc-setting-textarea';
-    textarea.rows = 6;
+    textarea.rows = options.rows ?? 6;
     textarea.style.marginTop = '6px';
     /* A setting whose empty value means "the built-in wording" shows that wording rather than
        an empty box - an empty box reads as "nothing is sent", which is the opposite. It is
