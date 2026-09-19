@@ -180,13 +180,14 @@ export const PROMPTS = [
         home: 'Characters',
         help: `What Fill is told to write in a character's ${field.label} field. Sent as one `
             + 'line among the fields being filled, so keep it to an instruction rather than '
-            + 'a description. Empty means the built-in wording. '
+            + 'a description. Clearing the box goes back to the built-in wording. '
             + '{{name}} is the character being filled in - not {{char}}, which is whoever '
             + 'the chat is with. '
             + "SillyTavern's own macros work here too - {{user}}, {{char}}, {{persona}}, "
             + '{{time}}, {{roll:d20}} and the rest. ',
         recommended: () => field.hint,
         emptyNote: 'The built-in wording is sent.',
+        showsBuiltIn: true,
     })),
 ];
 
@@ -219,7 +220,8 @@ export const BUILT_IN_PROMPTS = PROMPT_TEXTS.map(text => ({
     key: `promptTexts.${text.id}`,
     label: text.label,
     group: text.group,
-    help: `${text.help} Empty means the built-in wording.`,
+    help: `${text.help} Clearing the box goes back to the built-in wording.`,
     recommended: () => text.text,
     emptyNote: 'The built-in wording is sent.',
+    showsBuiltIn: true,
 }));

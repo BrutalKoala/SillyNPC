@@ -89,7 +89,7 @@ function storeOf(options) {
  *   for the settings where empty means something other than "send nothing".
  */
 export function buildSettingTextArea(options) {
-    const { key, label, help, onChange, recommended, showTokens = false, emptyNote = '' } = options;
+    const { key, label, help, onChange, recommended, showTokens = false, emptyNote = '', builtIn } = options;
     const { read, write } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
@@ -108,17 +108,29 @@ export function buildSettingTextArea(options) {
     textarea.className = 'text_pole sillynpc-setting-textarea';
     textarea.rows = 6;
     textarea.style.marginTop = '6px';
-    textarea.value = getNestedValue(read(), key) ?? '';
+    /* A setting whose empty value means "the built-in wording" shows that wording rather than
+       an empty box - an empty box reads as "nothing is sent", which is the opposite. It is
+       stored as empty while it matches, so an improved built-in text still reaches you. */
+    const stored = (value) => (builtIn !== undefined && value.trim() === String(builtIn).trim() ? '' : value);
+    const shown = getNestedValue(read(), key) ?? '';
+    textarea.value = builtIn !== undefined && !String(shown).trim() ? builtIn : shown;
     const tokens = showTokens
         ? buildTokenReadout(() => textarea.value, { note: emptyNote })
         : null;
 
     textarea.addEventListener('input', () => {
-        setNestedValue(read(), key, textarea.value);
+        setNestedValue(read(), key, stored(textarea.value));
         write();
         tokens?.refresh();
         onChange?.();
     });
+    if (builtIn !== undefined) {
+        textarea.addEventListener('blur', () => {
+            if (textarea.value.trim()) return;
+            textarea.value = builtIn;
+            tokens?.refresh();
+        });
+    }
     wrap.append(textarea);
     if (tokens) wrap.append(tokens.element);
 
@@ -146,7 +158,7 @@ export function buildSettingTextArea(options) {
             if (!ok) return;
 
             textarea.value = recommended;
-            setNestedValue(read(), key, recommended);
+            setNestedValue(read(), key, stored(String(recommended)));
             write();
             tokens?.refresh();
             onChange?.();
