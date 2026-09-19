@@ -425,7 +425,7 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                 <button type="button" class="menu_button stat-down-btn" title="Move down" ${index === stats.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
                 <button type="button" class="menu_button delete-btn"><i class="fa-solid fa-trash"></i></button>
             </div>
-            <div style="display:flex; gap:8px; width:100%; align-items:center;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px; width:100%; align-items:center;">
                 <small class="sillynpc-field-note">Format:</small>
                 <input type="text" class="text_pole stat-format" value="${escapeHtml(stat.format || '{{value}}')}" placeholder="e.g. HP: {{value}}" style="flex:1; font-size:var(--sillynpc-text-md); height:24px;">
                 ${isNumericStat(stat) ? `
@@ -474,6 +474,11 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
                            ${String(stat.format || '').includes('{{name}}') ? 'checked' : ''}
                            ${formatIsToggleable(stat.format) ? '' : 'disabled'}>
                     <small>Name</small>
+                </label>
+                <label class="sillynpc-check-group" style="margin-left:6px;"
+                       title="Only you change it. The tracker is told not to, and any change it reports is thrown away. Edit it by hand on the sheet or in the tracker box.">
+                    <input type="checkbox" class="stat-locked" ${stat.locked ? 'checked' : ''}>
+                    <small>Locked</small>
                 </label>
                 <input type="text" class="text_pole stat-options"
                        value="${escapeHtml((stat.options || []).join(', '))}"
@@ -575,6 +580,7 @@ function buildStatsEditor(label, settingsKey, onRefresh) {
             onRefresh();
         });
         row.querySelector('.stat-visible').addEventListener('change', (e) => { stat.visible = e.target.checked; saveSettings(); onRefresh(); });
+        row.querySelector('.stat-locked').addEventListener('change', (e) => { stat.locked = e.target.checked; saveSettings(); onRefresh(); });
         // A shortcut for writing Format, not a second mechanism: one place decides what
         // a field is labelled, and it is the box right there in the row.
         row.querySelector('.stat-show-name').addEventListener('change', (e) => {

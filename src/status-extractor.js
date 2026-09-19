@@ -30,6 +30,8 @@ import {
     getPlayerCard,
     findCardForName,
     statsInSystem,
+    sanitizeModelUpdate,
+    lockedStats,
 } from './status-logic.js';
 import { computeStateDiff, partitionChanges, buildUpdateFromChanges, attachReasons } from './status-diff.js';
 import { setPendingChanges, isItemDecided } from './status-review.js';
@@ -621,6 +623,16 @@ export function describeLimits(trackerSettings, state) {
 }
 
 
+/** The stats ticked Locked, one line per scope, or '' when there are none. */
+function describeLocked(trackerSettings) {
+    const locked = lockedStats(trackerSettings);
+    return [
+        locked.world.length ? `World: ${locked.world.join(', ')}` : '',
+        locked.player.length ? `Player: ${locked.player.join(', ')}` : '',
+        locked.characters.length ? `Characters: ${locked.characters.join(', ')}` : '',
+    ].filter(Boolean).join('\n');
+}
+
 /**
  * Builds the extraction prompt.
  *
@@ -732,6 +744,7 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
         state: describeCurrentState(state, trackerSettings) || '(empty)',
         offstage: describeAbsentButNamed(state, messageText, trackerSettings),
         limits: describeLimits(trackerSettings, state),
+        locked: describeLocked(trackerSettings),
         // Whatever else has asked to be told to the reader - see registerExtractionNotes.
         notes: describeExtractionNotes(state, messageText),
         ...strangerValues(strangers),
@@ -743,7 +756,6 @@ export function buildUserPrompt(state, messageText, trackerSettings, leadUp = []
         message: messageText,
         reasons: trackerSettings.extractionReasons === false ? '' : 'on',
         threads: trackerSettings.threadsEnabled === true ? 'on' : '',
-        threadKinds: THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n'),
         openThreads: openText,
     });
 }
@@ -1170,6 +1182,10 @@ export async function extractStateFromMessage(messageText, messageId, options = 
             );
             return { applied: false, reason: 'unparseable' };
         }
+
+        // No ceilings the stats do not have, and nothing for a locked stat. See
+        // sanitizeModelUpdate.
+        sanitizeModelUpdate(parsed, loadStateFromMetadata(), trackerSettings);
 
         // Presence first: applyUpdate refuses to introduce characters in speakers mode,
         // so anyone the extraction reports must be admitted to the scene before their

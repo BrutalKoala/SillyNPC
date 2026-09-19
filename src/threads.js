@@ -37,9 +37,13 @@ export const THREAD_KINDS = [
     { id: 'promise', label: 'Promise', hint: 'somebody undertook to do something', weight: 1.0 },
     { id: 'threat', label: 'Threat', hint: 'somebody said what would happen if', weight: 0.6 },
     { id: 'debt', label: 'Debt', hint: 'somebody owes or is owed', weight: 1.0 },
-    { id: 'secret', label: 'Secret', hint: 'something was told in confidence, or discovered', weight: 0.9 },
+    // Told, not discovered: "or discovered" made anything the narration revealed a standing
+    // secret, which read as a mystery to chase every turn.
+    { id: 'secret', label: 'Secret', hint: 'somebody was told something in confidence', weight: 0.9 },
     { id: 'deadline', label: 'Deadline', hint: 'something must happen by a time or an event', weight: 0.8 },
     { id: 'plan', label: 'Plan', hint: 'somebody set out to do something later', weight: 0.5 },
+    // Something to look forward to. Every other kind but plan leans towards trouble.
+    { id: 'invitation', label: 'Invitation', hint: 'somebody invited somebody, or an arrangement to meet was made', weight: 0.7 },
 ];
 
 const KIND_IDS = new Set(THREAD_KINDS.map(k => k.id));

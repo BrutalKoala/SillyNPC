@@ -102,6 +102,75 @@ export function resolveMaxValue(statDef) {
     return '';
 }
 
+const PLAIN_NUMBER = /^\s*-?\d+(?:\.\d+)?\s*$/;
+const NUMBER_OVER_NUMBER = /^\s*(-?\d+(?:\.\d+)?)\s*\/\s*-?\d+(?:\.\d+)?\s*$/;
+
+/**
+ * The locked stats' names, by scope - the ones only you change.
+ *
+ * @returns {{ world: string[], player: string[], characters: string[] }}
+ */
+export function lockedStats(trackerSettings = getSettings().statusTracker) {
+    const names = (list) => (list || []).filter(stat => stat?.locked && stat.name).map(stat => stat.name);
+    return {
+        world: names(trackerSettings.globalStats),
+        player: names(trackerSettings.playerStats),
+        characters: names(trackerSettings.npcStats),
+    };
+}
+
+/**
+ * What a model's reply may not do to the stats, taken out before it is applied.
+ *
+ * Only for replies from a model - the tracker's reader and the inline block. Your own edits
+ * never come through here, so typing "120/150" on the sheet still sets a ceiling.
+ *
+ * - A locked stat is dropped: you change it, the model does not.
+ * - A ceiling the stat does not have is dropped. A stat holding a plain number keeps a plain
+ *   number: "5/20" is stored as "5". Attributes that stayed plain until the first time they
+ *   changed and then came back as "4/20" were this - a model copying the "current/maximum"
+ *   form it saw elsewhere onto a score. A stat with a Starts max, or already holding a
+ *   ceiling, is left alone, and so is anything that is not a number over a number.
+ *
+ * @param {object} update Changed in place, and returned.
+ * @param {object} state The state the reply is applied to.
+ */
+export function sanitizeModelUpdate(update, state, trackerSettings = getSettings().statusTracker) {
+    if (!update || typeof update !== 'object') return update;
+
+    const clean = (stats, defs, stored) => {
+        if (!stats || typeof stats !== 'object') return;
+        for (const key of Object.keys(stats)) {
+            const def = (defs || []).find(d => String(d?.name).toLowerCase() === key.toLowerCase());
+            if (!def) continue;
+            if (def.locked) {
+                delete stats[key];
+                continue;
+            }
+            const incoming = String(stats[key] ?? '');
+            const held = stored?.[findMatchingStatKey(stored || {}, key) || key];
+            const ceiling = incoming.match(NUMBER_OVER_NUMBER);
+            if (ceiling && PLAIN_NUMBER.test(String(held ?? '')) && !resolveMaxValue(def)) {
+                stats[key] = ceiling[1];
+            }
+        }
+    };
+
+    clean(update.global, trackerSettings.globalStats, state?.global);
+    if (update.player && typeof update.player === 'object') {
+        // applyUpdate reads update.player.stats, or update.player itself when it is flat.
+        const playerStats = update.player.stats && typeof update.player.stats === 'object'
+            ? update.player.stats : update.player;
+        clean(playerStats, trackerSettings.playerStats, state?.player?.stats);
+    }
+    for (const actor of Array.isArray(update.characters) ? update.characters : []) {
+        const current = (state?.characters || [])
+            .find(c => String(c?.name).toLowerCase() === String(actor?.name).toLowerCase());
+        clean(actor?.stats, trackerSettings.npcStats, current?.stats);
+    }
+    return update;
+}
+
 /**
  * The ceiling to tell a model about.
  *
@@ -1576,14 +1645,19 @@ function describeNamedButUnlisted(state) {
             .map(([name, value]) => `${name}=${value}`)
             .join(', ');
 
-        /* Their belongings, at the same detail as anybody on stage. They had none at all
-           until now, which is the fault this block exists to prevent one step removed: the
-           narrator knew Nikolett was somebody without knowing she carries anything, so the
-           moment the story handed her something it was invented. Empty collections are
-           skipped here rather than shown as "(empty)" - that reassurance is worth its space
-           for the people in the room, and not for six who are not. */
+        /* Their belongings, by name. They had none at all once, which is the fault this block
+           exists to prevent one step removed: the narrator knew Nikolett was somebody without
+           knowing she carries anything, so the moment the story handed her something it was
+           invented. The names are what stops that.
+
+           Names only, not each item's description. A full write-up of every skill, sent on
+           every turn for somebody who is not there, kept their darkest abilities in front of
+           the narrator all the time - a reviewer traced a character's banned skills reaching
+           scenes he was absent from to exactly this. Anybody in the room still gets the full
+           detail. Empty collections are skipped: "(empty)" is worth its space for the people
+           in the room, not for six who are not. */
         const carried = Object.entries(card.statusCollections || {})
-            .map(([colId, items]) => summarizeCollection(colId, items, true))
+            .map(([colId, items]) => summarizeCollection(colId, items, false))
             .filter(Boolean);
 
         const profile = describeProfileInline(card);
@@ -1696,13 +1770,32 @@ export function getStatusInstructions() {
  */
 // Exported for the tests, as getStatusInstructions is.
 export function getStatusExample() {
+    /* Built from this setup's own stats and collections, with placeholders where values
+     * would be. It used to be a goblin fight with "quantity" and "description" fields
+     * written in, which taught every story model that status updates are about combat and
+     * that items have fields many setups do not. */
     const settings = getSettings().statusTracker;
-    const inventoryCol = settings.collections.find(c => c.id === 'inventory');
-    const primaryFieldName = inventoryCol?.fields?.find(f => f.isPrimary)?.name || 'name';
+    const state = committedState || loadStateFromMetadata();
+    const first = (list) => (list || []).map(s => s?.name).filter(Boolean)[0];
 
-    // Written out in the editable text, with the item's name field as a placeholder. Inside
-    // a JSON string there, so it goes in escaped as one.
-    return promptText('storyExample', { field: JSON.stringify(primaryFieldName).slice(1, -1) });
+    const player = {};
+    const playerStat = first(settings.playerStats);
+    if (playerStat) player.stats = { [playerStat]: '<new value>' };
+    const col = (settings.collections || []).find(c => c?.target !== 'npc');
+    if (col) {
+        const primary = (col.fields || []).find(f => f.isPrimary)?.name || 'name';
+        const item = { [primary]: '<item name>' };
+        for (const field of col.fields || []) {
+            if (field.name !== primary && field.type === 'number') item[field.name] = 1;
+        }
+        player.collections = { [col.id]: { add: [item], remove: ['<something used up>'] } };
+    }
+
+    const character = { name: first(state?.characters) || '<someone present>' };
+    const npcStat = first(settings.npcStats);
+    if (npcStat) character.stats = { [npcStat]: '<new value>' };
+
+    return promptText('storyExample', { update: JSON.stringify({ player, characters: [character] }) });
 }
 
 /**

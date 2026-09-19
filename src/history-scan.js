@@ -428,16 +428,11 @@ export function stripStats(parsed) {
  * both jobs vaguer, and the inventory is the one that already works.
  */
 export function threadScanSystemPrompt() {
-    return promptText('threadScanSystem', { kinds: threadKindLines() });
+    return promptText('threadScanSystem');
 }
 
 // The built-in wording, as it is sent when nobody has edited it.
-export const THREAD_SCAN_SYSTEM_PROMPT = fillPromptText(defaultPromptText('threadScanSystem'), { kinds: threadKindLines() });
-
-/** The kinds of thread, one per line, for {{kinds}}. */
-function threadKindLines() {
-    return THREAD_KINDS.map(k => `  ${k.id} - ${k.hint}`).join('\n');
-}
+export const THREAD_SCAN_SYSTEM_PROMPT = fillPromptText(defaultPromptText('threadScanSystem'));
 
 /**
  * Reads the story so far and records what is still open.
