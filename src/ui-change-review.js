@@ -77,14 +77,18 @@ function buildReviewPanel(messageId) {
     // differently from the stat. Shown rather than dropped: a reason that could not be
     // placed is evidence about a reader losing track of what it is changing, which is the
     // question this whole feature exists to answer.
+    /* Folded, since there are usually far more of these than there are rows. A reader that
+       restates the whole state explains every value it restates, and all but a handful of
+       those explain something that did not change - thirty lines above seven rows, burying
+       the decision the panel exists for. The evidence is still here, one click away. */
     const loose = getLooseNotes(messageId);
     if (loose.length) {
-        const notes = document.createElement('div');
+        const notes = document.createElement('details');
         notes.className = 'sillynpc-review-loose-notes';
-        const lead = document.createElement('small');
+        const lead = document.createElement('summary');
         lead.textContent = loose.length === 1
-            ? 'It also said, about nothing listed here:'
-            : `It also said ${loose.length} things about nothing listed here:`;
+            ? 'It also said one thing that matches no change here'
+            : `It also said ${loose.length} things that match no change here`;
         notes.appendChild(lead);
         for (const note of loose) {
             const line = document.createElement('small');
