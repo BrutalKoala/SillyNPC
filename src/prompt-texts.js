@@ -127,9 +127,8 @@ export const PROMPT_TEXTS = [
             '',
             '### TASK',
             'Return the updated state as JSON only - no code fences, no commentary.',
-            'Send what this message changed, not the state you were shown: leave out every stat,',
-            'collection and profile field it did not change. A collection changes by "add" and',
-            '"remove"; a list of everything somebody holds is not a change and costs a reply.',
+            'A collection changes by "add" and "remove"; a list of everything somebody holds is',
+            'not a change, and costs a reply.',
             'A value already written as two numbers and a slash, as in "8/10", keeps that form -',
             'write the numbers, never the words. A plain number stays a plain number: never add a',
             'slash and a maximum to it.',
@@ -162,7 +161,15 @@ export const PROMPT_TEXTS = [
             '{{/openThreads}}',
             'Return "closed" as an array of the quoted lines above that this message',
             'resolved, if any.',
-            '{{/threads}}'),
+            '{{/threads}}',
+            '',
+            /* Last, where a small model looks hardest, and after the two asks that add keys of
+               their own - put above them it was read, agreed with, and then forgotten by the
+               time the reply was being written. The reply that prompted this restated every
+               stat, every collection and every profile of three people, and explained all
+               twenty-nine of them. */
+            'Last of all: send the change, not the state. Every stat, collection and profile',
+            'field this message did not change is left out of your reply.'),
     },
 
     {
