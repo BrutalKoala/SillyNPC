@@ -1645,19 +1645,19 @@ function describeNamedButUnlisted(state) {
             .map(([name, value]) => `${name}=${value}`)
             .join(', ');
 
-        /* Their belongings, by name. They had none at all once, which is the fault this block
-           exists to prevent one step removed: the narrator knew Nikolett was somebody without
-           knowing she carries anything, so the moment the story handed her something it was
-           invented. The names are what stops that.
+        /* Their belongings, in full, as anybody in the room gets them. They had none at all
+           once, which is the fault this block exists to prevent one step removed: the narrator
+           knew Nikolett was somebody without knowing she carries anything, so the moment the
+           story handed her something it was invented.
 
-           Names only, not each item's description. A full write-up of every skill, sent on
-           every turn for somebody who is not there, kept their darkest abilities in front of
-           the narrator all the time - a reviewer traced a character's banned skills reaching
-           scenes he was absent from to exactly this. Anybody in the room still gets the full
-           detail. Empty collections are skipped: "(empty)" is worth its space for the people
-           in the room, not for six who are not. */
+           Names alone were tried, to keep an absent character's skill descriptions from being
+           pushed at the narrator every turn. That is the same fault one step further on: a
+           name with no description is invented the moment the story uses it, and this block
+           only ever holds people the story has just pulled in by their lore. Empty collections
+           are skipped - "(empty)" is worth its space for the people in the room, not for six
+           who are not. */
         const carried = Object.entries(card.statusCollections || {})
-            .map(([colId, items]) => summarizeCollection(colId, items, false))
+            .map(([colId, items]) => summarizeCollection(colId, items, true))
             .filter(Boolean);
 
         const profile = describeProfileInline(card);
