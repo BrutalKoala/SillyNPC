@@ -82,3 +82,55 @@ export function noteFieldNames(trackerSettings) {
         .map(stat => String(stat?.name ?? '').trim())
         .filter(name => name && !skipped.has(name.toLowerCase()));
 }
+
+/**
+ * The reply with its copied world note taken off the front, or null when there is none.
+ *
+ * Every earlier message the model reads now begins with one of these lines, so sooner or
+ * later it writes one itself - telling it not to helps and does not settle it. This is the
+ * part that settles it: the line is removed on arrival, before the message is drawn or
+ * saved, exactly as the tracker's own status block is.
+ *
+ * Narrow on purpose. A first line only counts as a note when it names one of your world
+ * fields with a colon AND is either wrapped in brackets or carries the separator - so a
+ * reply that opens with "Location: the old bridge" as prose is left alone.
+ *
+ * @param {string} text
+ * @param {string[]} names The world fields, as noteFieldNames gives them.
+ * @returns {string|null} The text without the line, or null to leave the message alone.
+ */
+export function withoutWorldNote(text, names) {
+    const lines = String(text ?? '').split('\n');
+    const first = (lines[0] ?? '').trim();
+    if (!first) return null;
+
+    const named = (names || []).some(name => new RegExp(
+        `(^|[\\[|(\\s])${String(name).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*:`, 'i').test(first));
+    if (!named) return null;
+    if (!/^[[(].*[\])]$/.test(first) && !first.includes('|')) return null;
+
+    return lines.slice(1).join('\n').replace(/^\s*\n/, '');
+}
+
+/**
+ * Takes the copied note off a message, its current swipe included.
+ *
+ * The swipe matters: SillyTavern keeps the text twice while a message has alternatives, and
+ * cleaning only one of them puts the line back the moment you swipe away and back.
+ *
+ * @param {{ mes?: string, swipes?: string[], swipe_id?: number }} message Changed in place.
+ * @param {string[]} names
+ * @returns {boolean} Whether anything was taken off.
+ */
+export function stripWorldNote(message, names) {
+    const cleaned = withoutWorldNote(message?.mes, names);
+    if (cleaned === null) return false;
+
+    const original = message.mes;
+    message.mes = cleaned;
+    if (Array.isArray(message.swipes)) {
+        const index = Number(message.swipe_id);
+        if (Number.isInteger(index) && message.swipes[index] === original) message.swipes[index] = cleaned;
+    }
+    return true;
+}

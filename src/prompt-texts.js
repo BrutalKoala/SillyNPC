@@ -236,8 +236,10 @@ export const PROMPT_TEXTS = [
         where: 'Added to the scene block, so the story model knows what those bracketed lines in the history are.',
         when: 'Every message, when "World state on each message" is on.',
         placeholders: {},
-        text: 'The line in square brackets at the top of each earlier message says when and where that '
-            + 'message happened. It is a note for you, not part of the story: never write one yourself.',
+        text: 'Each earlier message begins with a line in square brackets saying when and where it '
+            + 'happened. Those lines are added afterwards, by the extension, and are not part of what '
+            + 'anybody wrote. Read them; never write one. Your reply opens with the story itself, and '
+            + 'one written anyway is removed before it is shown.',
     },
     {
         id: 'sceneBlock', group: 'Story model', label: 'Scene block',
