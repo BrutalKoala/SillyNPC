@@ -257,6 +257,12 @@ export function buildExtractionSchema(trackerSettings, { strangers = [] } = {}) 
                     },
                 },
             },
+            /* Only when reasons are on, and for the reason threads are below: a schema names
+               what may come back, so a key it leaves out is a key the model is told not to
+               send. The ask would still be in the prompt and the answer would never arrive. */
+            ...(trackerSettings.extractionReasons === false ? {} : {
+                why: { type: 'object', additionalProperties: { type: 'string' } },
+            }),
             // Only when threads are on. A schema names what may come back, so a key it
             // does not mention is a key the model is told not to send - the ask would
             // still be in the prompt and the answer would never arrive, which is the
