@@ -433,6 +433,14 @@ export const defaultSettings = {
         extractionProfileId: '',
         /** Token budget for the extraction reply. */
         extractionMaxTokens: 1200,
+
+        /**
+         * What the reader is told to be: 0 for as steady as the model gets, higher for more
+         * variety. Empty leaves it to the model, which is what was sent before this existed.
+         * Only reaches a model through the tracker's own connection profile; the main API
+         * uses whatever its own settings say.
+         */
+        extractionTemperature: '',
         /**
          * How many preceding messages the extraction sees as context.
          *

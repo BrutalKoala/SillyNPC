@@ -346,7 +346,7 @@ export function buildSettingSlider(options) {
  * @returns {HTMLElement}
  */
 export function buildSettingNumber(options) {
-    const { key, label, help, suffix = '', onChange } = options;
+    const { key, label, help, suffix = '', onChange, step = 1, min = 0, max, allowEmpty = false, placeholder = '' } = options;
     const { read, write, defaults } = storeOf(options);
     const wrap = document.createElement('div');
     wrap.className = 'sillynpc-setting';
@@ -363,31 +363,43 @@ export function buildSettingNumber(options) {
 
     const field = document.createElement('input');
     field.type = 'number';
-    field.min = '0';
-    field.step = '1';
+    field.min = String(min);
+    field.step = String(step);
+    if (max !== undefined) field.max = String(max);
+    if (placeholder) field.placeholder = placeholder;
     field.className = 'text_pole sillynpc-number-input';
 
+    /* Whole numbers unless the step says otherwise - a temperature of 0.2 has to survive,
+       and a token budget of 1200.5 must not. allowEmpty is for a setting whose empty value
+       means something ("leave it to the model"), where falling back to the default would
+       quietly turn that choice into a number. */
+    const whole = Number.isInteger(Number(step));
+    const parse = (text) => {
+        const trimmed = String(text).trim();
+        if (trimmed === '') return allowEmpty ? '' : null;
+        const numeric = Number(trimmed);
+        if (!Number.isFinite(numeric) || numeric < min) return null;
+        const capped = max === undefined ? numeric : Math.min(numeric, max);
+        return whole ? Math.floor(capped) : capped;
+    };
+
     const schemaDefault = getNestedValue(defaults, key);
-    const raw = getNestedValue(read(), key) ?? schemaDefault ?? 0;
-    field.value = String(raw);
+    const raw = getNestedValue(read(), key) ?? schemaDefault ?? (allowEmpty ? '' : 0);
+    field.value = raw === '' ? '' : String(raw);
 
     // Store per keystroke so nothing is lost if the panel is rebuilt mid-edit, but tell
     // the caller only on commit - onChange re-renders the panel, which would rip the
     // field out from under the cursor on every digit.
     field.addEventListener('input', () => {
-        const numeric = Number(field.value);
-        if (field.value.trim() !== '' && Number.isFinite(numeric) && numeric >= 0) {
-            setNestedValue(read(), key, Math.floor(numeric));
-        }
+        const parsed = parse(field.value);
+        if (parsed !== null) setNestedValue(read(), key, parsed);
     });
 
     field.addEventListener('change', () => {
-        const numeric = Number(field.value);
-        const value = field.value.trim() !== '' && Number.isFinite(numeric) && numeric >= 0
-            ? Math.floor(numeric)
-            : Number(schemaDefault) || 0;
+        const parsed = parse(field.value);
+        const value = parsed !== null ? parsed : (allowEmpty ? '' : Number(schemaDefault) || 0);
         setNestedValue(read(), key, value);
-        field.value = String(value);
+        field.value = value === '' ? '' : String(value);
         write();
         onChange?.();
     });

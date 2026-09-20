@@ -796,6 +796,19 @@ function describeAnswer(answer) {
     if (typeof answer === 'string') return answer;
     try { return JSON.stringify(answer ?? ''); } catch { return ''; }
 }
+/**
+ * The temperature to ask for, or null to send none.
+ *
+ * Empty means none: the setting has to be able to say "leave it alone", which is what the
+ * extension did before it existed.
+ */
+export function readerTemperature(trackerSettings) {
+    const typed = String(trackerSettings?.extractionTemperature ?? '').trim();
+    if (typed === '') return null;
+    const numeric = Number(typed);
+    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 2 ? numeric : null;
+}
+
 export async function requestExtraction(userPrompt, schema, trackerSettings, systemPrompt = null, { usageKind = 'extraction' } = {}) {
     // A caller may pass its own - the history scan does. Otherwise the user's, if they
     // have written one, and the built-in if not.
@@ -804,6 +817,7 @@ export async function requestExtraction(userPrompt, schema, trackerSettings, sys
     const context = getContext();
     const profileId = trackerSettings.extractionProfileId;
     const maxTokens = Number(trackerSettings.extractionMaxTokens) || 1200;
+    const temperature = readerTemperature(trackerSettings);
 
     debugLog(`Extraction -> ${describeConnection(profileId)}, reply budget ${maxTokens}`);
 
@@ -817,10 +831,16 @@ export async function requestExtraction(userPrompt, schema, trackerSettings, sys
                 [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
                 maxTokens,
                 { extractData: true, includePreset: false },
-                // Structured output is opt-in: some backends return an empty object
-                // rather than reject a schema they dislike, which loses the update
-                // silently. The system prompt pins the shape without it.
-                (schema && trackerSettings.extractionUseSchema) ? { json_schema: schema } : {},
+                {
+                    // Structured output is opt-in: some backends return an empty object
+                    // rather than reject a schema they dislike, which loses the update
+                    // silently. The system prompt pins the shape without it.
+                    ...((schema && trackerSettings.extractionUseSchema) ? { json_schema: schema } : {}),
+                    // Sent only when you set one. Nothing of the story preset comes with the
+                    // request (includePreset is off), so with no temperature here the model's
+                    // own default decides - usually 1.0, which is loose for reading facts.
+                    ...(temperature === null ? {} : { temperature }),
+                },
             );
             const answer = typeof result === 'string' ? result : (result?.content ?? result ?? '');
             recordUsage(usageKind, { prompt: systemPrompt + userPrompt, reply: describeAnswer(answer) });

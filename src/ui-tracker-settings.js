@@ -2,7 +2,7 @@ import { getSettings, saveSettings, defaultSettings } from './settings.js';
 import { buildPromptEditor } from './ui-prompts.js';
 import { promptById } from './prompts.js';
 import { tidyTemplateLabels } from './ui-template-tidy.js';
-import { buildSettingToggle, buildSettingTextArea, buildSettingSlider, buildSettingSelect, updateExtensionTheme, repositionCloseButton } from './ui-shared.js';
+import { buildSettingToggle, buildSettingTextArea, buildSettingSlider, buildSettingSelect, buildSettingNumber, updateExtensionTheme, repositionCloseButton } from './ui-shared.js';
 import { loadStateFromMetadata, saveStateToMetadata, syncPlayerToMaster, applyCheckpointSchedule, getHistoryEntries, restoreHistoryEntry } from './status-logic.js';
 import { POPUP_TYPE, Popup } from '../../../../popup.js';
 import { eventSource } from '../../../../events.js';
@@ -167,6 +167,22 @@ export function renderStatusView(container) {
         step: 100,
         help: 'Raise this if updates come back truncated while tracking many stats.',
         onChange: onApply
+    }));
+
+    container.append(buildSettingNumber({
+        key: 'statusTracker.extractionTemperature',
+        label: 'Reader Temperature',
+        step: 0.05,
+        max: 2,
+        allowEmpty: true,
+        placeholder: 'the model\'s own',
+        help: 'How steady the reader is: 0 reads the same message the same way every time, '
+            + 'higher invents more. Around 0.2 suits a job whose answer is facts and JSON. '
+            + 'Empty sends none, leaving it to the model - usually 1.0, which is loose for '
+            + 'this. Sent only when the tracker has its own connection profile; through your '
+            + 'main API, that API\'s own settings decide. Nothing else from your story preset '
+            + 'is ever sent with an extraction.',
+        onChange: onApply,
     }));
 
     container.append(buildSettingToggle({
