@@ -63,8 +63,14 @@ export function mergeStatValue(oldVal, newVal, options = {}) {
      *    written the whole value, and a rule that helpfully appends "/350" to it means the
      *    ceiling can be changed but never removed - which is exactly what it meant.
      */
+    /* A number, or it is not a ceiling. A fill once wrote the words "current/maximum" into
+       a new character's Health - the model copied the shape it was shown instead of filling
+       it in - and from then on every value written to that field came back as
+       "Observe the party dynamics./maximum", because the word after the slash was being kept
+       as the ceiling. ceilingFromValue answers the same question for the prompts and the
+       meters, and says no to a date for the same reason. */
     const parts = strOld.split('/');
-    if (!verbatim && strOld.includes('/') && parts.length === 2 && parts[1].trim()) {
+    if (!verbatim && parts.length === 2 && ceilingFromValue(strOld) !== null) {
         return clampToCeiling(`${strNew.trim()}/${parts[1].trim()}`);
     }
 
@@ -2235,7 +2241,25 @@ export function capToLength(def, value) {
  * @param {*} existing
  * @returns {*}
  */
+/**
+ * The wording a prompt uses for a value, handed back as if it were one.
+ *
+ * "current/maximum" is what the fill prompt calls the shape of a value with a ceiling, and
+ * a model filling in a new character wrote exactly that into Health, Essence and every text
+ * field it had nothing to say about. Angle brackets are the other shape: the worked examples
+ * use "<new value>" and "<exact name>". Neither is ever a value somebody meant.
+ */
+function looksUnfilled(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return false;
+    return /^current\s*\/\s*maximum$/i.test(text) || /^<[^>]*>$/.test(text);
+}
+
 export function constrainToDefinition(def, incoming, existing) {
+    if (looksUnfilled(incoming)) {
+        debugLog(`Refused "${String(incoming).trim()}" for ${def?.name || 'a field'}: that is the prompt's wording, not a value`);
+        return existing;
+    }
     const kept = constrainToOptions(def, incoming, existing);
     // Only ever cut what was actually written. When the options guard refuses a value it
     // hands back the one already stored, and trimming that would rewrite something nobody
@@ -2940,12 +2964,19 @@ function updateCardOffstage(card, updChar, state, settings, { dryRun = false, al
     // the card already knows rather than from nothing.
     const actor = buildCharacterState(card.name, state, settings);
 
+    /* Through the same two guards the scene's cast gets. Written raw, this path let a value
+       no list allows onto a card - a Condition of "Unconscious" where the nine allowed words
+       do not include it - and let a bare number lose the ceiling the card already had. Being
+       off stage is about where somebody is, not about which rules their sheet follows. */
+    const defOf = (name) => (settings.npcStats || [])
+        .find(stat => String(stat?.name).toLowerCase() === String(name).toLowerCase());
     const validKeys = new Set((settings.npcStats || []).map(s => s.name.toLowerCase()));
     const sourceStats = updChar.stats || {};
     for (const [key, value] of Object.entries(sourceStats)) {
         const matched = findMatchingStatKey(actor.stats, key) || key;
         if (!validKeys.has(matched.toLowerCase())) continue;
-        actor.stats[matched] = String(value);
+        const merged = mergeStatValue(actor.stats[matched], String(value));
+        actor.stats[matched] = constrainToDefinition(defOf(matched), merged, actor.stats[matched]);
     }
 
     const collectionIds = new Set((settings.collections || []).map(c => c.id.toLowerCase()));
