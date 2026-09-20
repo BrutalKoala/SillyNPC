@@ -441,6 +441,21 @@ export const defaultSettings = {
          * uses whatever its own settings say.
          */
         extractionTemperature: '',
+
+        /**
+         * Whether each message of the history carries the world as it stood at that message,
+         * from the snapshot the tracker already saves. Off by default: it is the one setting
+         * that grows with the length of the context.
+         */
+        historyNotes: false,
+
+        /**
+         * The world fields left OUT of those notes, by name. Kept as what to leave out, so a
+         * field added later is shown without anybody going back to tick it.
+         *
+         * @type {string[]}
+         */
+        historyNoteSkip: [],
         /**
          * How many preceding messages the extraction sees as context.
          *

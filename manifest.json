@@ -4,6 +4,7 @@
     "requires": [],
     "optional": [],
     "js": "index.js",
+    "generate_interceptor": "sillyNpcHistoryNotes",
     "css": "style.css",
     "author": "BrutalKoala",
     "version": "0.6.0",

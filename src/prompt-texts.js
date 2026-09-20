@@ -225,6 +225,21 @@ export const PROMPT_TEXTS = [
         text: 'The afternoon passes quietly.\n<status_update>{{update}}</status_update>',
     },
     {
+        id: 'historyNote', group: 'Story model', label: 'World note on a past message',
+        where: 'Put at the top of each message in the history, made from the world snapshot saved on that message.',
+        when: 'Every message, when "World state on each message" is on.',
+        placeholders: { fields: 'The world fields you left ticked, as Name: value, in System Builder order.' },
+        text: '[{{fields}}]',
+    },
+    {
+        id: 'historyNoteRule', group: 'Story model', label: 'What the world notes are',
+        where: 'Added to the scene block, so the story model knows what those bracketed lines in the history are.',
+        when: 'Every message, when "World state on each message" is on.',
+        placeholders: {},
+        text: 'The line in square brackets at the top of each earlier message says when and where that '
+            + 'message happened. It is a note for you, not part of the story: never write one yourself.',
+    },
+    {
         id: 'sceneBlock', group: 'Story model', label: 'Scene block',
         where: 'Put into the story prompt, in the chat: who is here and what they have, so the story model writes with it.',
         when: 'Every message while the tracker is on. Inside the Tracker block too, as its {{status}}, in inline mode.',
@@ -233,6 +248,7 @@ export const PROMPT_TEXTS = [
             profiles: 'The profiles of everyone present.',
             offstage: 'Characters whose lorebook entry fired but who are not in the scene.',
             threads: 'The threads in play.',
+            rule: 'The note above about the world notes, when they are on.',
         },
         text: lines(
             '[Current Scene Status]',
@@ -250,7 +266,10 @@ export const PROMPT_TEXTS = [
             'Open threads (said earlier - background, not a to-do list; pick one up only when the',
             'scene naturally reaches it):',
             '{{threads}}',
-            '{{/threads}}'),
+            '{{/threads}}',
+            '{{#rule}}',
+            '{{rule}}',
+            '{{/rule}}'),
     },
 
     {

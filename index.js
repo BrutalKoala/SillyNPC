@@ -17,6 +17,8 @@ import {
     invalidateChatRender,
 } from './src/chat.js';
 import { redrawStatusBoxes } from './src/status-ui.js';
+import { noteHistory, noteFieldNames } from './src/history-notes.js';
+import { promptText } from './src/prompt-texts.js';
 import {
     createCharacter, addAlias, addCharacterToChat,
     CAST_KEY, setChatCast, getAllCategories, UNCATEGORISED,
@@ -333,6 +335,29 @@ async function offerChatScope() {
     setChatCast({ categories: chosen, include: [], exclude: [] });
     triggerReprocess();
 }
+
+/**
+ * SillyTavern's generation interceptor, named in manifest.json.
+ *
+ * Called with a copy of the history just before the prompt is built, and only for a story
+ * generation - never for a dry run, and never for the tracker's own request. Each message
+ * carries its own world snapshot, which is what the note is made of; see history-notes.js.
+ *
+ * It never aborts and never throws outward: a note is not worth losing a reply over.
+ */
+globalThis.sillyNpcHistoryNotes = function sillyNpcHistoryNotes(chat) {
+    try {
+        const tracker = getSettings().statusTracker;
+        if (!tracker?.enabled || !tracker.historyNotes) return;
+        const added = noteHistory(chat, {
+            names: noteFieldNames(tracker),
+            render: (fields) => promptText('historyNote', { fields }),
+        });
+        if (added) debugLog(`World notes on ${added} messages of the history`);
+    } catch (err) {
+        console.warn(LOG_PREFIX, 'Could not put the world notes on the history', err);
+    }
+};
 
 jQuery(async () => {
     try {
