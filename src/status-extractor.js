@@ -30,6 +30,7 @@ import {
     getPlayerCard,
     findCardForName,
     statsInSystem,
+    takeRefusedValues,
     sanitizeModelUpdate,
     lockedStats,
 } from './status-logic.js';
@@ -1249,7 +1250,13 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         // removals and implausible jumps can be held back for a look rather than
         // becoming fact.
         const currentState = loadStateFromMetadata();
+        /* Anything refused before this run belongs to an older one; the dry run below sees
+           this whole reply, so what it turns down is this message's. */
+        takeRefusedValues();
         const wouldBe = applyUpdate(parsed, { dryRun: true });
+        const refused = takeRefusedValues().map(({ field, wanted, allowed, kept }) =>
+            `${field}: "${wanted}" is not one of ${allowed.join(', ')} - kept "${kept}"`);
+        if (refused.length) debugLog('Values refused by their allowed lists', refused);
         const proposed = computeStateDiff(currentState, wouldBe, trackerSettings);
         // Standing decisions are applied before the split, not after. Filtering only the
         // pending half would let a protected item be deleted outright by anyone whose
@@ -1292,7 +1299,7 @@ export async function extractStateFromMessage(messageText, messageId, options = 
         recordAppliedChanges(messageId, applied);
 
         if (pending.length > 0) {
-            setPendingChanges(messageId, pending, unmatched);
+            setPendingChanges(messageId, pending, unmatched, refused);
             debugLog(`${pending.length} change(s) awaiting review on message ${key}`);
         }
 

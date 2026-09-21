@@ -2185,6 +2185,22 @@ export function allowedValues(def) {
  * @param {*} existing What is there now.
  * @returns {*} The value to store.
  */
+/**
+ * Values refused since the last time anybody asked, as lines to show.
+ *
+ * A word that is not on a field's list is thrown away and the old value kept, which is
+ * right - a vocabulary nothing enforces is not one. But it happened in the console only,
+ * and from outside it looks exactly like a reader that never reports that field: a fight
+ * starts, the reader says "Tense", the list allows nine other words, and Condition sits at
+ * "Happy" with nothing said. The reply is still refused; now it is said out loud.
+ */
+const refused = [];
+
+/** The refusals since the last call, and clears them. */
+export function takeRefusedValues() {
+    return refused.splice(0, refused.length);
+}
+
 export function constrainToOptions(def, incoming, existing) {
     const allowed = allowedValues(def);
     if (!allowed.length) return incoming;
@@ -2197,6 +2213,7 @@ export function constrainToOptions(def, incoming, existing) {
 
     debugLog(`"${wanted}" is not an allowed value for ${def?.name || 'this field'} `
         + `(${allowed.join(', ')}); kept "${existing ?? ''}"`);
+    refused.push({ field: def?.name || 'a field', wanted, allowed, kept: String(existing ?? '') });
     return existing;
 }
 

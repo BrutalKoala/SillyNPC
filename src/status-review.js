@@ -38,6 +38,7 @@ export function getPendingChanges(messageId) {
 
 /** Where reasons that matched no row are kept, so the panel can still show them. */
 const LOOSE_NOTES_KEY = 'sillynpc_review_notes';
+const REFUSED_KEY = 'sillynpc_review_refused';
 
 /**
  * Reasons the reader gave that belong to no row on this message.
@@ -55,13 +56,28 @@ export function getLooseNotes(messageId) {
 }
 
 /**
+ * Values this message's reply had turned down for not being on a field's allowed list.
+ *
+ * Worth a line of its own in the panel: from outside, a refused value and a field the
+ * reader never mentions look identical - the value on the sheet does not move either way.
+ *
+ * @param {string|number} messageId
+ * @returns {string[]}
+ */
+export function getRefusedValues(messageId) {
+    const lines = messageAt(messageId)?.extra?.[REFUSED_KEY];
+    return Array.isArray(lines) ? lines : [];
+}
+
+/**
  * Records rows for review and persists them with the chat.
  *
  * @param {string|number} messageId
  * @param {Array<object>} changes
  * @param {string[]} [looseNotes] Reasons that matched no row.
+ * @param {string[]} [refused] Values a field's allowed list turned down.
  */
-export function setPendingChanges(messageId, changes, looseNotes = []) {
+export function setPendingChanges(messageId, changes, looseNotes = [], refused = []) {
     const message = messageAt(messageId);
     if (!message) return false;
     if (!message.extra || typeof message.extra !== 'object') message.extra = {};
@@ -73,6 +89,9 @@ export function setPendingChanges(messageId, changes, looseNotes = []) {
     // leaving them behind would put a stale note above the next set of changes.
     if (!changes?.length || !looseNotes?.length) delete message.extra[LOOSE_NOTES_KEY];
     else message.extra[LOOSE_NOTES_KEY] = looseNotes;
+
+    if (!changes?.length || !refused?.length) delete message.extra[REFUSED_KEY];
+    else message.extra[REFUSED_KEY] = refused;
 
     // Coalesced with the history record written for the same message: a full chat file
     // is well over a megabyte on a long story, and there is no reason to write it twice.

@@ -248,16 +248,21 @@ function reasonKeysFor(change) {
  *
  * @param {Array<object>} changes Mutated in place.
  * @param {Record<string, string>} why As returned by the reader.
- * @returns {string[]} The reasons that matched nothing, so they can be shown rather than
- *   silently dropped - a key spelled wrongly is exactly when the reason is worth reading.
+ * @returns {string[]} The reasons that matched nothing, each with the key it arrived under,
+ *   so they can be shown rather than silently dropped. The key is half the evidence: a
+ *   reason that will not attach is usually filed under a name no row has, and without it
+ *   the panel shows a list of sentences with nothing to say about where they belong.
  */
 export function attachReasons(changes, why) {
     if (!why || typeof why !== 'object' || Array.isArray(why)) return [];
 
     const remaining = new Map();
+    const asWritten = new Map();
     for (const [key, text] of Object.entries(why)) {
         const clause = String(text ?? '').trim();
-        if (clause) remaining.set(reasonKey(key), clause);
+        if (!clause) continue;
+        remaining.set(reasonKey(key), clause);
+        asWritten.set(reasonKey(key), String(key).trim());
     }
 
     // Qualified first, so a bare label cannot claim a row a fuller key was meant for.
@@ -272,7 +277,7 @@ export function attachReasons(changes, why) {
         }
     }
 
-    return [...remaining.values()];
+    return [...remaining.entries()].map(([key, clause]) => `${asWritten.get(key) || key}: ${clause}`);
 }
 
 export function partitionChanges(changes, trackerSettings) {

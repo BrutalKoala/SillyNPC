@@ -1,4 +1,4 @@
-import { getPendingChanges, resolvePendingChanges, getLooseNotes } from './status-review.js';
+import { getPendingChanges, resolvePendingChanges, getLooseNotes, getRefusedValues } from './status-review.js';
 import { getSettings } from './settings.js';
 
 /**
@@ -97,6 +97,28 @@ function buildReviewPanel(messageId) {
             notes.appendChild(line);
         }
         panel.appendChild(notes);
+    }
+
+    /* What a field's own vocabulary turned down. Shown because the sheet looks the same
+       whether the reader said nothing about a field or said something it was not allowed to
+       say, and those call for opposite answers: one is a reader to fix, the other a word to
+       add in System Builder. */
+    const refused = getRefusedValues(messageId);
+    if (refused.length) {
+        const box = document.createElement('details');
+        box.className = 'sillynpc-review-loose-notes sillynpc-review-refused';
+        const lead = document.createElement('summary');
+        lead.textContent = refused.length === 1
+            ? 'One value was refused: it is not on that field\'s list'
+            : `${refused.length} values were refused: they are not on their field's list`;
+        box.appendChild(lead);
+        for (const line of refused) {
+            const row = document.createElement('small');
+            row.className = 'sillynpc-review-loose-note';
+            row.textContent = line;
+            box.appendChild(row);
+        }
+        panel.appendChild(box);
     }
 
     const list = document.createElement('div');
