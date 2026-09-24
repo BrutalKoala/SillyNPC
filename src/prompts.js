@@ -209,6 +209,54 @@ export function availablePrompts() {
 }
 
 /**
+ * When each group of built-in texts is sent at all.
+ *
+ * Eighteen boxes with no cadence between them read as eighteen things happening on every
+ * message, which is how the tab came to look like a list of prompts nobody could account
+ * for. Most of these fire when a button is pressed and two of them cannot fire in a given
+ * setup at all.
+ */
+const GROUP_RUNS = {
+    'Tracker reader': 'One request per message, to whichever model reads the story for the tracker.',
+    'Story model': 'Put into the story\'s own prompt, every message.',
+    'Banned phrases': 'The list goes out with every message; the scan runs when you look for phrases.',
+    'Scanning the story': 'Only when you press Scan on the tracker.',
+    'Fill': 'Only when you press Fill on a character or on the player sheet.',
+    'Lore': 'Only when you generate a lorebook entry.',
+};
+
+/**
+ * Why a text cannot be sent in the setup as it stands, or '' when it can.
+ *
+ * Said rather than hidden, unlike `available` above: these are wordings, and somebody
+ * reading or editing one wants to know it is dormant, not to find the box missing. A text
+ * that only fires on a button is not dormant and says nothing here - its group already
+ * says when the button is.
+ */
+const TEXT_IDLE = {
+    reader: () => (getSettings().statusTracker.extractionMode === 'extract' ? ''
+        : 'Not sent now: the tracker updates inline, so the story model writes the status itself '
+        + 'and nothing reads the reply separately.'),
+    sceneBlock: () => (getSettings().statusTracker.extractionMode === 'extract' ? ''
+        : 'Not sent now: in inline mode the Tracker block below carries the state instead.'),
+    storyBlock: () => (getSettings().statusTracker.extractionMode !== 'extract' ? ''
+        : 'Not sent now: the tracker reads replies with a separate model, so the story model is '
+        + 'never asked for a status block. Only the Scene block goes to it.'),
+    storyExample: () => (getSettings().statusTracker.extractionMode !== 'extract' ? ''
+        : 'Not sent now: it goes with the Tracker block, which inline mode sends and yours does not.'),
+    historyNote: () => (getSettings().statusTracker.historyNotes
+        ? '' : 'Not sent now: "World state on each message" is off.'),
+    historyNoteRule: () => (getSettings().statusTracker.historyNotes
+        ? '' : 'Not sent now: "World state on each message" is off.'),
+    banInstruction: () => (getSettings().banListEnabled
+        ? '' : 'Not sent now: the ban list is off.'),
+    threadScanSystem: () => (getSettings().statusTracker.threadsEnabled
+        ? '' : 'Not used now: threads are off.'),
+    threadScanRequest: () => (getSettings().statusTracker.threadsEnabled
+        ? '' : 'Not used now: threads are off.'),
+};
+
+/**
  * The wording the extension builds its prompts from, one entry per text in prompt-texts.js.
  *
  * Separate from PROMPTS because there are dozens and most people never want them: the
@@ -226,6 +274,8 @@ export const BUILT_IN_PROMPTS = PROMPT_TEXTS.map(text => ({
         'A section between {{#name}} and {{/name}} lines is sent only when {{name}} has something '
             + 'in it. Clearing the box goes back to the built-in wording.',
     ].join('\n'),
+    runs: GROUP_RUNS[text.group] || '',
+    idle: TEXT_IDLE[text.id] || (() => ''),
     recommended: () => text.text,
     emptyNote: 'The built-in wording is sent.',
     showsBuiltIn: true,

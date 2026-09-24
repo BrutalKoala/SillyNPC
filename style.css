@@ -2111,11 +2111,21 @@ span.sillynpc-review-to {
 }
 
 /* A deletion is the one thing that cannot be undone by simply waiting, so it reads as a
-   warning and starts unticked. */
+   warning - and, when a scan rebuilt the list rather than the reader naming the item, it
+   also starts unticked. */
 .sillynpc-review-row.kind-item-remove .sillynpc-review-icon,
 .sillynpc-review-row.kind-item-remove .sillynpc-review-why {
     color: var(--sillynpc-danger);
     opacity: 0.85;
+}
+
+/* The name of the thing going away, struck through: the row says "Chocolate -> (gone)",
+   and at a glance that read the same as any other row. Now the difference is in the
+   words, not only in the icon's colour. */
+.sillynpc-review-row.kind-item-remove .sillynpc-review-label {
+    text-decoration: line-through;
+    text-decoration-color: var(--sillynpc-danger);
+    text-decoration-thickness: 1px;
 }
 
 .sillynpc-review-row.kind-item-add .sillynpc-review-icon {
@@ -4836,6 +4846,28 @@ textarea.sillynpc-profile-input {
 /* A built-in text's help lists its placeholders one per line. */
 .sillynpc-prompt-group .sillynpc-setting .notes {
     white-space: pre-line;
+}
+
+/* When a group is sent at all - under its heading, before the boxes, because "every
+   message" and "only when you press Scan" are the difference between eighteen prompts
+   and five. */
+.sillynpc-prompt-cadence {
+    display: block;
+    margin: 0 0 var(--sillynpc-space-xs) var(--sillynpc-space-md);
+    opacity: 0.85;
+}
+
+/* A text that cannot fire in this setup. Dimmed rather than hidden: it is still yours to
+   read and edit, and the note above it says why nothing is sending it. */
+.sillynpc-prompt-idle-note {
+    display: block;
+    margin-left: var(--sillynpc-space-md);
+    color: var(--sillynpc-danger);
+    opacity: 0.9;
+}
+
+.sillynpc-prompt-idle > .sillynpc-setting {
+    opacity: 0.72;
 }
 
 /* Folded: a reader that restates the whole state explains every value it restates, so

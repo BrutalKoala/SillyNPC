@@ -304,7 +304,7 @@ export async function scanHistoryForCollections(onProgress) {
     // Characters with no card have nowhere to keep what a scan learns. Naming them is
     // the difference between a considered limit and a silent loss.
     const skipped = wouldBe.offstageSkipped || [];
-    const changes = computeStateDiff(state, wouldBe, trackerSettings)
+    const changes = computeStateDiff(state, wouldBe, trackerSettings, { fromReplace: true })
         .filter(row => row.kind !== 'stat' && row.kind !== 'stat-max')
         // A row covered by a standing decision never reaches the panel. Both kinds are
         // honoured, not just additions: a scan reading three hundred messages is exactly

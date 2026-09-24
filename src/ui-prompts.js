@@ -132,12 +132,33 @@ function buildBuiltInSection(onApply) {
         const title = document.createElement('summary');
         title.textContent = group;
         fold.append(title);
+
+        /* When this group runs at all. Without it every box reads as something sent on
+           every message, which is true of five of the eighteen. */
+        const runs = BUILT_IN_PROMPTS.find(e => e.group === group)?.runs;
+        if (runs) {
+            const cadence = document.createElement('small');
+            cadence.className = 'notes sillynpc-prompt-cadence';
+            cadence.textContent = runs;
+            fold.append(cadence);
+        }
         fold.addEventListener('toggle', () => {
             if (!fold.open || fold.dataset.built) return;
             fold.dataset.built = 'true';
             for (const entry of BUILT_IN_PROMPTS.filter(e => e.group === group)) {
                 const section = document.createElement('div');
                 section.className = 'sillynpc-prompt-section';
+                /* Labelled, not hidden. A text that cannot fire in this setup is still
+                   yours to read and edit - and knowing it is dormant is the answer to
+                   "why is this here", which a missing box does not give. */
+                const idle = entry.idle?.() || '';
+                if (idle) {
+                    section.classList.add('sillynpc-prompt-idle');
+                    const says = document.createElement('small');
+                    says.className = 'notes sillynpc-prompt-idle-note';
+                    says.textContent = idle;
+                    section.append(says);
+                }
                 section.append(buildPromptEditor(entry, { onChange: onApply }));
                 fold.append(section);
             }

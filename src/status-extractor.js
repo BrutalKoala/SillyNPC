@@ -188,22 +188,27 @@ export function buildExtractionSchema(trackerSettings, { strangers = [] } = {}) 
         const relevant = (trackerSettings.collections || [])
             .filter(c => c.target === 'all' || c.target === target);
         if (!relevant.length) return null;
+        const itemShape = (col) => ({
+            type: 'object',
+            properties: Object.fromEntries((col.fields || []).map(f => [
+                f.name,
+                { type: f.type === 'number' ? 'number' : (f.type === 'boolean' ? 'boolean' : 'string') },
+            ])),
+        });
         return {
             type: 'object',
             properties: Object.fromEntries(relevant.map(col => [col.id, {
                 type: 'object',
                 properties: {
-                    add: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            properties: Object.fromEntries((col.fields || []).map(f => [
-                                f.name,
-                                { type: f.type === 'number' ? 'number' : (f.type === 'boolean' ? 'boolean' : 'string') },
-                            ])),
-                        },
-                    },
+                    add: { type: 'array', items: itemShape(col) },
                     remove: { type: 'array', items: { type: 'string' } },
+                    /* The third verb, which the reader could not reach.
+                       A schema names what may come back, so leaving "update" out told the
+                       model not to send one - while the inline prompt documented all three
+                       and applyCollectionUpdate handled all three. A half-drunk potion had
+                       no way to be reported, so it arrived as an "add" that merged field by
+                       field, or not at all. */
+                    update: { type: 'array', items: itemShape(col) },
                 },
             }])),
         };
@@ -356,6 +361,12 @@ export function strangerValues(strangers, tags = poolTags()) {
  * @param {object} trackerSettings
  * @returns {string}
  */
+/** A note, ending in a full stop, however the person who wrote it left it. */
+function endsSentence(text) {
+    const trimmed = String(text ?? '').trim();
+    return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 export function describeCollections(trackerSettings) {
     const lines = [];
     for (const col of trackerSettings.collections || []) {
@@ -368,8 +379,14 @@ export function describeCollections(trackerSettings) {
             // is added is the only chance the library gets to learn its description.
             const library = !f.isPrimary && f.isMultiline && isStaticField(f)
                 ? ' [write it when adding; kept in the library afterwards]' : '';
+            /* What the field is for, in the owner's words. A collection could say what it
+               held and a stat could say how it was written, and a collection's fields had
+               nowhere to say anything at all - so "value (number)" reached the reader as a
+               number called Cost with nothing saying what it costs. */
+            const says = String(f.hint ?? '').trim();
             return `${f.name}${type}${choices}`
-                + `${f.isPrimary ? ' [identifies the item]' : ''}${library}`;
+                + `${f.isPrimary ? ' [identifies the item]' : ''}${library}`
+                + `${says ? ` - ${endsSentence(says)}` : ''}`;
         }).join(', ');
 
         /* The label and the note, not just the id. An id is a key - "pictures" tells the
@@ -383,7 +400,7 @@ export function describeCollections(trackerSettings) {
         const note = String(col.hint ?? '').trim();
 
         lines.push(`- ${title} for ${col.target || 'all'}`
-            + `${note ? ` - ${note.replace(/\s*$/, '').replace(/\.?$/, '.')}` : ''}`
+            + `${note ? ` - ${endsSentence(note)}` : ''}`
             + ` Fields: ${fields || 'name'}`);
     }
     return lines.join('\n');
@@ -423,7 +440,18 @@ export function buildDeltaExample(trackerSettings) {
         }
     }
 
-    const shape = { [col.id]: { add: [item], remove: ['<exact name of something lost>'] } };
+    /* All three verbs. The example is the only place the reply's shape is shown in the
+       user's own names, so a verb missing from it is a verb the reader does not use. */
+    const changed = { [primary]: '<exact name>', ...Object.fromEntries(
+        Object.entries(item).filter(([key]) => key !== primary).slice(0, 1)
+            .map(([key]) => [key, '<its new value>'])) };
+    const shape = {
+        [col.id]: {
+            add: [item],
+            remove: ['<exact name of something lost>'],
+            ...(Object.keys(changed).length > 1 ? { update: [changed] } : {}),
+        },
+    };
     return JSON.stringify(shape, null, 2);
 }
 
@@ -442,46 +470,31 @@ function summariseCollections(actor, target, trackerSettings) {
         const out = {};
         for (const col of cols) {
             const primary = (col.fields || []).find(f => f.isPrimary)?.name || 'name';
-            const qtyField = (col.fields || []).find(f => f.type === 'number'
-                && ['quantity', 'qty', 'count'].includes(f.name));
-            // Shown as objects rather than names. Collections used to render as bare
-            // strings - "spells": ["Fireball"] - so the model never saw that an item
-            // has a weight or a description, and had no shape to copy when adding one.
-            // Empty fields are dropped: they say nothing, and a long inventory of
-            // mostly-blank objects would crowd out the message being read.
+            /* Shown as objects rather than names, and whole. Collections used to render as
+               bare strings - "spells": ["Fireball"] - so the model never saw that an item
+               has a cost or a description, and had no shape to copy when adding one.
+
+               Nothing is withheld any more. Descriptions used to be left out on the grounds
+               that a static field is owned by the item library and written back over
+               whatever the reader returns (getMergedItem), so the reader could not change
+               one - which is true, and was the wrong conclusion. It cannot change a
+               description; it has to READ one to judge what a message did with the thing.
+               Choosing whether somebody just ate {"name":"Fekete Bomba","quantity":1} with
+               nothing to say what that is, is guessing, and a reader that has to guess what
+               an item is will also guess at its description and write one back.
+
+               A zero is sent for the same reason: a spell that costs nothing and a spell
+               whose cost nobody has filled in are different facts, and dropping the zero
+               made them one. Only a field that is genuinely empty is left out, because an
+               empty field has nothing to say. */
             out[col.id] = (actor?.collections?.[col.id] || []).map(item => {
                 const name = item?.[primary] ?? item?.name ?? '';
                 if (!name) return null;
                 const shown = { [primary]: String(name) };
                 for (const field of col.fields || []) {
                     if (field.name === primary) continue;
-                    /* Long text that belongs to the item rather than to whoever holds it.
-
-                       Static is the load-bearing half and means something exact: the value
-                       is kept once in the item library and copied onto every copy of that
-                       item, and getMergedItem writes it back over whatever the reader
-                       returns. So sending it repeats the same sentence on everybody carrying
-                       a cellphone, to describe something the reader cannot change anyway.
-
-                       Static alone would be too blunt. Under the default rule everything
-                       that is not a number is static, so a spell's cost and element would go
-                       with it - and the cost is what the reader deducts when a message says
-                       somebody cast something without naming a figure. That trades
-                       correctness for a few hundred characters.
-
-                       Multi narrows it, and it is worth being straight about what that flag
-                       actually declares: it means "edit this in a box I can write several
-                       lines in", which is a statement about the editor, not about meaning.
-                       It is used here as a proxy for "long enough to be worth not repeating",
-                       and it is a good one because nobody asks for a textarea to hold a
-                       number or a word. Both ways of being wrong are mild and visible: a long
-                       field with Multi unticked is still sent, costing what it costs, and a
-                       short one with Multi ticked is withheld from a reader that could not
-                       have changed it. Both checkboxes now say this in System Builder. */
-                    if (field.isMultiline && isStaticField(field)) continue;
                     const value = item?.[field.name];
                     if (value === undefined || value === null || value === '') continue;
-                    if (field.type === 'number' && Number(value) === 0) continue;
                     shown[field.name] = value;
                 }
                 return shown;

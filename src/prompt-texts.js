@@ -93,6 +93,19 @@ export const PROMPT_TEXTS = [
             '### COLLECTIONS AND THEIR FIELDS',
             '{{collections}}',
             '{{/collections}}',
+            '{{#collections}}',
+            '',
+            '### WHEN A COLLECTION CHANGES',
+            'The lists above are the only record of what anybody has. If the latest message '
+                + 'shows one of them changing, say so - nothing else will.',
+            '- used up, eaten, drunk, spent, handed over, lost, destroyed: "remove"',
+            '- acquired, found, bought, taken, given, learned, taught: "add", with every '
+                + 'field the message states',
+            '- something already held is different now: "update", its name and the fields '
+                + 'that changed',
+            'Restraint is about restating, not about reporting. An item this message plainly '
+                + 'moves is a change, and leaving it out is an error rather than caution.',
+            '{{/collections}}',
             '{{#collectionExample}}',
             '',
             '### A COLLECTION CHANGE LOOKS LIKE THIS',
@@ -127,8 +140,8 @@ export const PROMPT_TEXTS = [
             '',
             '### TASK',
             'Return the updated state as JSON only - no code fences, no commentary.',
-            'A collection changes by "add" and "remove"; a list of everything somebody holds is',
-            'not a change, and costs a reply.',
+            'A collection changes by "add", "remove" and "update"; a list of everything somebody',
+            'holds is not a change, and costs a reply.',
             'A value already written as two numbers and a slash, as in "8/10", keeps that form -',
             'write the numbers, never the words. A plain number stays a plain number: never add a',
             'slash and a maximum to it.',

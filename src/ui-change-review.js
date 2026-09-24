@@ -1,5 +1,6 @@
 import { getPendingChanges, resolvePendingChanges, getLooseNotes, getRefusedValues } from './status-review.js';
 import { getSettings } from './settings.js';
+import { acceptedByDefault } from './status-diff.js';
 
 /**
  * The inline review panel.
@@ -50,7 +51,7 @@ function buildReviewPanel(messageId) {
     const rows = pending.map((change, index) => ({
         index,
         change,
-        accepted: change.kind !== 'item-remove',   // deletions default to "no"
+        accepted: acceptedByDefault(change),   // see status-diff.js
         dismiss: false,                            // never off by default: see buildRow
         value: String(change.after ?? ''),
         // Where it lands, editable before it does.
@@ -269,6 +270,11 @@ function buildRow(row) {
     const label = document.createElement('span');
     label.className = 'sillynpc-review-label';
     label.textContent = change.label;
+    if (change.kind === 'item-remove') {
+        label.title = change.fromReplace
+            ? 'A scan rebuilt this list and this item was not in it. Tick it to remove the item.'
+            : 'The reader says this is gone. Untick it to keep the item.';
+    }
 
     const from = document.createElement('span');
     from.className = 'sillynpc-review-from';
